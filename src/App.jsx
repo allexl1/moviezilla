@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info } from 'lucide-react';
+import { Search, Play, Star, X, Film, Info, Server } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
+
+const SERVERS = [
+  { name: 'Server 1 (VidSrc ICU)', url: (id) => `https://vidsrc.icu/embed/movie/${id}` },
+  { name: 'Server 2 (Embed.su)',   url: (id) => `https://embed.su/embed/movie/${id}` },
+  { name: 'Server 3 (2Embed)',     url: (id) => `https://www.2embed.cc/embed/${id}` },
+  { name: 'Server 4 (VidSrc CC)',  url: (id) => `https://vidsrc.cc/v2/embed/movie/${id}` },
+];
 
 export default function App() {
   const [trending, setTrending] = useState([]);
@@ -14,6 +21,7 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [activeServer, setActiveServer] = useState(0);
 
   useEffect(() => {
     if (!API_KEY) return;
@@ -49,6 +57,7 @@ export default function App() {
   const openMovie = (movie) => {
     setSelectedMovie(movie);
     setIsPlaying(false);
+    setActiveServer(0);
   };
 
   return (
@@ -143,22 +152,42 @@ export default function App() {
 
       {/* Modal / Video Player */}
       {selectedMovie && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md">
-          <div className="relative w-full max-w-4xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl">
-            <button 
-              onClick={() => setSelectedMovie(null)}
-              className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/30">
+              <div className="flex items-center gap-2 overflow-x-auto pr-4">
+                <span className="text-xs uppercase tracking-wider text-white/40 flex items-center gap-1.5 font-medium ml-1 mr-2">
+                  <Server className="w-3.5 h-3.5" /> Source:
+                </span>
+                {SERVERS.map((server, idx) => (
+                  <button
+                    key={server.name}
+                    onClick={() => { setActiveServer(idx); setIsPlaying(true); }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+                      activeServer === idx && isPlaying
+                        ? 'bg-white text-black font-semibold'
+                        : 'bg-white/5 text-white/70 hover:bg-white/15'
+                    }`}
+                  >
+                    {server.name}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => setSelectedMovie(null)}
+                className="w-8 h-8 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-all cursor-pointer shrink-0 ml-2"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             {isPlaying ? (
               <div className="aspect-video w-full bg-black">
                 <iframe
-                  src={`https://vidsrc.to/embed/movie/${selectedMovie.id}`}
+                  src={SERVERS[activeServer].url(selectedMovie.id)}
                   className="w-full h-full border-0"
                   allowFullScreen
-                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  allow="autoplay; encrypted-media; picture-in-picture"
                   title="Player"
                 />
               </div>
