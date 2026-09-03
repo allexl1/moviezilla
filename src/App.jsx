@@ -295,9 +295,7 @@ export default function App() {
               <div className="cine-grid-cards">
                 {items.map((media) => {
                   const title = media.title || media.name;
-                  const poster = media.poster_path?.startsWith('http')
-                    ? media.poster_path
-                    : tmdb.getImageUrl(media.poster_path, 'w500');
+                  const poster = tmdb.getImageUrl(media.poster_path, 'w500');
                   const rating = media.vote_average ? media.vote_average.toFixed(1) : null;
                   const year = (media.release_date || media.first_air_date || '').split('-')[0];
 
