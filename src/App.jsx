@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info, Loader2 } from 'lucide-react';
+import { Search, Play, Star, X, Film, Info, Loader2, CheckCircle2 } from 'lucide-react';
 import Player from './components/Player';
 import { resolveVideoSource } from './services/sourceResolver';
 
@@ -19,7 +19,8 @@ export default function App() {
   // Playback & Resolver State
   const [activeSource, setActiveSource] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
-  const [resolveError, setResolveError] = useState(null);
+  const [resolveStatus, setResolveStatus] = useState('');
+  const [isFallbackNotice, setIsFallbackNotice] = useState(false);
 
   useEffect(() => {
     if (!API_KEY) return;
@@ -54,21 +55,30 @@ export default function App() {
   const openMovie = (movie) => {
     setSelectedMovie(movie);
     setActiveSource(null);
-    setResolveError(null);
+    setIsFallbackNotice(false);
+    setResolveStatus('');
   };
 
   const handleStartStream = async (movieToPlay = selectedMovie) => {
     if (!movieToPlay) return;
     setIsResolving(true);
-    setResolveError(null);
+    setIsFallbackNotice(false);
+    setResolveStatus('Checking direct sources...');
 
     try {
-      const source = await resolveVideoSource(movieToPlay, 'default');
+      const source = await resolveVideoSource(movieToPlay, (progress) => {
+        if (progress.status === 'resolving') {
+          setResolveStatus(`Connecting to ${progress.providerName}...`);
+        } else if (progress.status === 'resolved' && progress.isFallback) {
+          setIsFallbackNotice(true);
+        }
+      });
       setActiveSource(source);
     } catch (err) {
-      setResolveError(err.message || 'Unable to resolve video stream source.');
+      console.error('[MovieZilla] Resolution failed:', err);
     } finally {
       setIsResolving(false);
+      setResolveStatus('');
     }
   };
 
@@ -102,7 +112,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Shelves & Hero */}
+      {/* Main Content */}
       <main className="pt-24 pb-20 px-6 max-w-7xl mx-auto">
         {searchQuery.trim().length > 2 ? (
           <div className="mt-8">
@@ -177,14 +187,21 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal Dialog with Custom Player or Embed Fallback */}
+      {/* Modal Dialog */}
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
-              <span className="text-sm font-semibold tracking-tight text-white/90 truncate ml-2">
-                {selectedMovie.title}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold tracking-tight text-white/90 truncate ml-2">
+                  {selectedMovie.title}
+                </span>
+                {activeSource && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/15 text-white/60">
+                    {activeSource.type === 'embed' ? 'Fallback Stream' : 'MovieZilla Native'}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setSelectedMovie(null);
@@ -198,7 +215,13 @@ export default function App() {
 
             {activeSource ? (
               activeSource.type === 'embed' ? (
-                <div className="aspect-video w-full bg-black">
+                <div className="relative aspect-video w-full bg-black">
+                  {isFallbackNotice && (
+                    <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full glass-panel border border-white/20 bg-black/70 backdrop-blur-md text-[11px] text-white/70 shadow-lg">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>Direct source unavailable — playing via VidLink</span>
+                    </div>
+                  )}
                   <iframe
                     src={activeSource.url}
                     className="w-full h-full border-0"
@@ -233,12 +256,6 @@ export default function App() {
                     {selectedMovie.overview}
                   </p>
 
-                  {resolveError && (
-                    <div className="mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">
-                      {resolveError}
-                    </div>
-                  )}
-
                   <button
                     onClick={() => handleStartStream(selectedMovie)}
                     disabled={isResolving}
@@ -246,7 +263,8 @@ export default function App() {
                   >
                     {isResolving ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin text-black" /> Loading Stream...
+                        <Loader2 className="w-4 h-4 animate-spin text-black" />
+                        <span>{resolveStatus || 'Resolving source...'}</span>
                       </>
                     ) : (
                       <>

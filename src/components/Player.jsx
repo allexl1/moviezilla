@@ -19,7 +19,6 @@ export default function Player({ source }) {
   const controlsTimeoutRef = useRef(null);
   const hlsInstanceRef = useRef(null);
 
-  // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -29,16 +28,14 @@ export default function Player({ source }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [qualityLevels, setQualityLevels] = useState([]);
-  const [currentQuality, setCurrentQuality] = useState(-1); // -1 = Auto
+  const [currentQuality, setCurrentQuality] = useState(-1);
 
-  // UI state
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
   const [savedResumeTime, setSavedResumeTime] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Initialize playback and HLS
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !source || source.type === 'embed') return;
@@ -46,7 +43,6 @@ export default function Player({ source }) {
     setErrorMessage(null);
     setIsLoading(true);
 
-    // Check localStorage for saved position
     const savedTime = parseFloat(localStorage.getItem(source.progressKey) || '0');
     if (savedTime > 15) {
       setSavedResumeTime(savedTime);
@@ -54,7 +50,6 @@ export default function Player({ source }) {
       setSavedResumeTime(0);
     }
 
-    // Clean up previous HLS instance if active
     if (hlsInstanceRef.current) {
       hlsInstanceRef.current.destroy();
       hlsInstanceRef.current = null;
@@ -86,22 +81,21 @@ export default function Player({ source }) {
           if (data.fatal) {
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                setErrorMessage('Network error: Unable to load video manifest or stream chunks.');
+                setErrorMessage('Network error: Unable to load video segments.');
                 hls.startLoad();
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                setErrorMessage('Media decode error. Attempting automatic recovery...');
+                setErrorMessage('Media error encountered. Recovering...');
                 hls.recoverMediaError();
                 break;
               default:
-                setErrorMessage('Fatal stream error: The requested HLS source could not be played.');
+                setErrorMessage('Stream error: HLS media cannot be loaded.');
                 hls.destroy();
                 break;
             }
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Native iOS Safari HLS handling
         video.src = source.url;
         video.addEventListener('loadedmetadata', () => {
           setIsLoading(false);
@@ -123,7 +117,6 @@ export default function Player({ source }) {
     };
   }, [source]);
 
-  // Handle video events
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -139,13 +132,9 @@ export default function Player({ source }) {
 
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
-
-      // Save playback position periodically
       if (video.currentTime > 5 && video.duration && video.currentTime < video.duration - 10) {
         localStorage.setItem(source.progressKey, String(video.currentTime));
       }
-
-      // Calculate buffered progress
       if (video.buffered.length > 0) {
         setBuffered(video.buffered.end(video.buffered.length - 1));
       }
@@ -158,7 +147,7 @@ export default function Player({ source }) {
 
     const onError = () => {
       setIsLoading(false);
-      setErrorMessage('Video failed to load. Please verify source availability.');
+      setErrorMessage('Video failed to load.');
     };
 
     video.addEventListener('play', onPlay);
@@ -182,7 +171,7 @@ export default function Player({ source }) {
     };
   }, [source]);
 
-  // Keyboard controls
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
       const video = videoRef.current;
@@ -193,10 +182,10 @@ export default function Player({ source }) {
         togglePlay();
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        seekRelative(10);
+        video.currentTime = Math.min(video.currentTime + 10, duration);
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        seekRelative(-10);
+        video.currentTime = Math.max(video.currentTime - 10, 0);
       } else if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
@@ -210,7 +199,6 @@ export default function Player({ source }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
-  // Auto-hide control bar on inactivity
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -227,12 +215,6 @@ export default function Player({ source }) {
     } else {
       video.pause();
     }
-  };
-
-  const seekRelative = (seconds) => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = Math.min(Math.max(video.currentTime + seconds, 0), duration);
   };
 
   const handleSeek = (e) => {
@@ -264,7 +246,6 @@ export default function Player({ source }) {
   const toggleFullscreen = () => {
     const container = containerRef.current;
     if (!container) return;
-
     if (!document.fullscreenElement) {
       container.requestFullscreen?.().catch(() => {});
       setIsFullscreen(true);
@@ -283,9 +264,7 @@ export default function Player({ source }) {
       } else {
         await video.requestPictureInPicture();
       }
-    } catch {
-      // Browser does not support PiP
-    }
+    } catch {}
   };
 
   const handleSpeedChange = (speed) => {
@@ -326,27 +305,37 @@ export default function Player({ source }) {
       onMouseLeave={() => isPlaying && setShowControls(false)}
       className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden group select-none border border-white/10 shadow-2xl"
     >
-      {/* Native HTML5 Video Element */}
       <video
         ref={videoRef}
         playsInline
+        crossOrigin="anonymous"
         className="w-full h-full object-contain cursor-pointer"
         onClick={togglePlay}
         poster={source.backdrop || source.poster}
-      />
+      >
+        {source.subtitles &&
+          source.subtitles.map((sub, index) => (
+            <track
+              key={index}
+              kind="subtitles"
+              label={sub.label}
+              src={sub.src}
+              srcLang={sub.srclang}
+              default={sub.default}
+            />
+          ))}
+      </video>
 
-      {/* Loading Spinner */}
       {isLoading && !errorMessage && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30 backdrop-blur-[2px]">
           <div className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full animate-spin" />
         </div>
       )}
 
-      {/* Playback Error Overlay */}
       {errorMessage && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6 text-center backdrop-blur-md">
           <AlertCircle className="w-10 h-10 text-red-400 mb-3" />
-          <h4 className="text-base font-semibold text-white mb-1">Playback Unavailable</h4>
+          <h4 className="text-base font-semibold text-white mb-1">Playback Error</h4>
           <p className="text-xs text-white/60 max-w-sm mb-4">{errorMessage}</p>
           <button
             onClick={() => {
@@ -360,7 +349,6 @@ export default function Player({ source }) {
         </div>
       )}
 
-      {/* Resume Playback Pill */}
       {savedResumeTime > 0 && !isPlaying && (
         <div className="absolute top-4 left-4 z-40 flex items-center gap-2.5 px-4 py-2 rounded-full glass-panel border border-white/20 bg-black/60 backdrop-blur-md shadow-xl">
           <RotateCcw className="w-3.5 h-3.5 text-white/80" />
@@ -382,7 +370,6 @@ export default function Player({ source }) {
         </div>
       )}
 
-      {/* Center Big Play Button Overlay on Pause */}
       {!isPlaying && !isLoading && !errorMessage && (
         <div
           onClick={togglePlay}
@@ -394,28 +381,23 @@ export default function Player({ source }) {
         </div>
       )}
 
-      {/* Liquid-Glass Control Bar */}
+      {/* Control Bar */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-30 p-4 transition-all duration-300 bg-gradient-to-t from-black/80 via-black/40 to-transparent ${
           showControls || !isPlaying ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}
       >
         <div className="glass-panel rounded-2xl p-3 border border-white/15 shadow-2xl backdrop-blur-xl flex flex-col gap-2.5">
-          {/* Seek Bar & Buffer Progress */}
           <div className="relative w-full h-1.5 flex items-center group/seek cursor-pointer">
-            {/* Background Track */}
             <div className="absolute inset-0 rounded-full bg-white/10" />
-            {/* Buffer Track */}
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-white/20 transition-all"
               style={{ width: `${duration ? (buffered / duration) * 100 : 0}%` }}
             />
-            {/* Played Progress Track */}
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-white transition-all"
               style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
             />
-            {/* Native Seek Input */}
             <input
               type="range"
               min="0"
@@ -427,9 +409,7 @@ export default function Player({ source }) {
             />
           </div>
 
-          {/* Action Row */}
           <div className="flex items-center justify-between text-white/90">
-            {/* Left Controls */}
             <div className="flex items-center gap-3">
               <button
                 onClick={togglePlay}
@@ -438,7 +418,7 @@ export default function Player({ source }) {
                 {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white translate-x-0.5" />}
               </button>
 
-              <div className="flex items-center gap-1.5 group/vol">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={toggleMute}
                   className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer"
@@ -465,9 +445,7 @@ export default function Player({ source }) {
               </span>
             </div>
 
-            {/* Right Controls */}
             <div className="flex items-center gap-2 relative">
-              {/* Settings / Quality / Speed Menu */}
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer text-white/80 hover:text-white"
@@ -524,7 +502,6 @@ export default function Player({ source }) {
                 </div>
               )}
 
-              {/* PiP Button */}
               <button
                 onClick={togglePiP}
                 className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer text-white/80 hover:text-white"
@@ -533,7 +510,6 @@ export default function Player({ source }) {
                 <Tv className="w-4 h-4" />
               </button>
 
-              {/* Fullscreen Button */}
               <button
                 onClick={toggleFullscreen}
                 className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer text-white/80 hover:text-white"

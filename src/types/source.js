@@ -5,11 +5,14 @@
 export function createVideoSource({
   id,
   title,
-  type = 'hls',
+  type = 'embed',
   url,
   poster = '',
   backdrop = '',
   subtitles = [],
+  audioTracks = [],
+  quality = null,
+  provider = 'unknown',
   metadata = {},
 }) {
   if (!id || !url) {
@@ -17,8 +20,8 @@ export function createVideoSource({
   }
 
   const validTypes = ['hls', 'mp4', 'embed'];
-  const resolvedType = validTypes.includes(type.toLowerCase())
-    ? type.toLowerCase()
+  const resolvedType = validTypes.includes(String(type).toLowerCase())
+    ? String(type).toLowerCase()
     : 'embed';
 
   return {
@@ -30,12 +33,15 @@ export function createVideoSource({
     backdrop,
     subtitles: Array.isArray(subtitles)
       ? subtitles.map((s, idx) => ({
-          label: s.label || `Subtitle ${idx + 1}`,
-          src: s.src || s.url,
-          srclang: s.srclang || 'en',
+          label: s.label || s.language || `Subtitle ${idx + 1}`,
+          src: s.src || s.url || '',
+          srclang: s.srclang || s.lang || 'en',
           default: Boolean(s.default),
         }))
       : [],
+    audioTracks: Array.isArray(audioTracks) ? audioTracks : [],
+    quality,
+    provider,
     metadata,
     progressKey: `moviezilla_progress_${id}`,
   };

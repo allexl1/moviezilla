@@ -1,27 +1,56 @@
-import { createVideoSource } from '../types/source';
+import { DirectApiProvider } from './providers/directApiProvider';
+import { VidLinkFallbackProvider } from './providers/vidlinkFallbackProvider';
 
-const IMG_BASE = 'https://image.tmdb.org/t/p/original';
-
-export async function resolveVideoSource(media) {
-  if (!media || !media.id) {
-    throw new Error('Invalid media item provided to resolver.');
+class SourceManager {
+  constructor() {
+    this.providers = [
+      new DirectApiProvider(),
+      new VidLinkFallbackProvider(),
+    ].sort((a, b) => a.priority - b.priority);
   }
 
-  const poster = media.poster_path ? `${IMG_BASE}${media.poster_path}` : '';
-  const backdrop = media.backdrop_path ? `${IMG_BASE}${media.backdrop_path}` : '';
-  const title = media.title || media.name || 'Untitled';
+  /**
+   * Resolves a media item through registered providers in priority order.
+   * Invokes onProgress callback with status updates.
+   */
+  async resolve(media, onProgress = () => {}) {
+    if (!media || !media.id) {
+      throw new Error('Invalid media object provided for resolution.');
+    }
 
-  return createVideoSource({
-    id: media.id,
-    title,
-    type: 'embed',
-    url: `https://vidlink.pro/movie/${media.id}?primaryColor=ffffff&secondaryColor=08090a&iconColor=ffffff&icons=vid&autoplay=true`,
-    poster,
-    backdrop,
-    metadata: {
-      voteAverage: media.vote_average,
-      releaseDate: media.release_date,
-      overview: media.overview,
-    },
-  });
+    let lastError = null;
+
+    for (const provider of this.providers) {
+      try {
+        onProgress({
+          status: 'resolving',
+          providerName: provider.name,
+          providerId: provider.id,
+        });
+
+        const source = await provider.resolve(media);
+        if (source && source.url) {
+          onProgress({
+            status: 'resolved',
+            providerName: provider.name,
+            providerId: provider.id,
+            isFallback: provider.id === 'vidlink-fallback',
+          });
+          return source;
+        }
+      } catch (err) {
+        lastError = err;
+        console.warn(`[MovieZilla SourceManager] Provider ${provider.id} failed:`, err.message);
+      }
+    }
+
+    throw lastError || new Error('All media providers failed to return a valid source.');
+  }
+}
+
+export const sourceManager = new SourceManager();
+
+// Backward-compatible entrypoint
+export async function resolveVideoSource(media, onProgress) {
+  return await sourceManager.resolve(media, onProgress);
 }
