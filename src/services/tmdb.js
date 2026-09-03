@@ -27,10 +27,13 @@ export const GUARANTEED_TITLES = [
 
 async function proxyFetch(endpoint, params = {}) {
   try {
-    const query = new URLSearchParams({ path: endpoint, ...params });
-    const res = await fetch(`/api/tmdb/path?${query.toString()}`);
+    const query = new URLSearchParams(params);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await fetch(`/api/tmdb/${endpoint}${queryString}`);
+    
     if (!res.ok) throw new Error(`Proxy status ${res.status}`);
     const data = await res.json();
+    
     if (data?.results && data.results.length > 0) return data;
     return { results: GUARANTEED_TITLES };
   } catch {
@@ -77,8 +80,8 @@ export const tmdb = {
 
   async getMediaDetails(mediaType, id) {
     try {
-      const query = new URLSearchParams({ path: `${mediaType}/${id}`, append_to_response: 'videos,credits,similar' });
-      const res = await fetch(`/api/tmdb/path?${query.toString()}`);
+      const query = new URLSearchParams({ append_to_response: 'videos,credits,similar' });
+      const res = await fetch(`/api/tmdb/${mediaType}/${id}?${query.toString()}`);
       if (!res.ok) throw new Error();
       return await res.json();
     } catch {
@@ -88,8 +91,7 @@ export const tmdb = {
 
   async getSeasonDetails(tvId, seasonNumber) {
     try {
-      const query = new URLSearchParams({ path: `tv/${tvId}/season/${seasonNumber}` });
-      const res = await fetch(`/api/tmdb/path?${query.toString()}`);
+      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${seasonNumber}`);
       if (!res.ok) throw new Error();
       return await res.json();
     } catch {
