@@ -25,7 +25,9 @@ export default function App() {
   const [featuredItem, setFeaturedItem] = useState(GUARANTEED_TITLES[0]);
   const [continueWatching, setContinueWatching] = useState([]);
 
-  const [letterboxdUser, setLetterboxdUser] = useState(() => localStorage.getItem('mz_letterboxd_user') || '');
+  const [letterboxdUser, setLetterboxdUser] = useState(
+    () => localStorage.getItem('mz_letterboxd_user') || ''
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Filters
@@ -48,18 +50,29 @@ export default function App() {
     async function load() {
       try {
         let res;
+
         if (activeTab === 'watchlist') {
           const localList = storage.getWatchlist();
           let letterboxdList = [];
+
           if (letterboxdUser) {
             letterboxdList = await letterboxd.fetchUserWatchlist(letterboxdUser);
           }
+
           if (isMounted) setItems([...localList, ...letterboxdList]);
           return;
         } else if (activeTab === 'movie') {
-          res = await tmdb.getMovies({ genre: selectedGenre, year: selectedYear, sort: selectedSort, provider: selectedProvider });
+          res = await tmdb.getMovies({
+            genre: selectedGenre,
+            year: selectedYear,
+            sort: selectedSort,
+            provider: selectedProvider,
+          });
         } else if (activeTab === 'tv') {
-          res = await tmdb.getSeries({ genre: selectedGenre, sort: selectedSort });
+          res = await tmdb.getSeries({
+            genre: selectedGenre,
+            sort: selectedSort,
+          });
         } else if (activeTab === 'anime') {
           res = await tmdb.getAnime();
         } else {
@@ -68,6 +81,7 @@ export default function App() {
 
         if (isMounted) {
           const list = (res?.results || []).filter((x) => x.poster_path);
+
           if (list.length > 0) {
             setItems(list);
             setFeaturedItem(list[0]);
@@ -79,15 +93,64 @@ export default function App() {
     }
 
     load();
-    return () => { isMounted = false; };
-  }, [activeTab, selectedGenre, selectedYear, selectedSort, selectedProvider, letterboxdUser]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    activeTab,
+    selectedGenre,
+    selectedYear,
+    selectedSort,
+    selectedProvider,
+    letterboxdUser,
+  ]);
 
   const heroItem = featuredItem || items[0] || GUARANTEED_TITLES[0];
+
+  // Always fetch full TMDB details before starting playback.
+  // Catalog/trending objects do not contain all TV metadata such as
+  // number_of_seasons.
+  const playMedia = async (media, fallbackDetails = null) => {
+    if (!media?.id) return;
+
+    const mediaType =
+      media.media_type ||
+      (fallbackDetails?.media_type) ||
+      (fallbackDetails?.number_of_seasons ? 'tv' : 'movie');
+
+    try {
+      const details = await tmdb.getMediaDetails(mediaType, media.id);
+
+      setActivePlayer({
+        media: {
+          ...media,
+          media_type: mediaType,
+        },
+        details: details || fallbackDetails || media,
+      });
+    } catch (err) {
+      console.error('Failed to load media details for playback:', err);
+
+      // Keep playback usable even if the details request fails.
+      setActivePlayer({
+        media: {
+          ...media,
+          media_type: mediaType,
+        },
+        details: fallbackDetails || media,
+      });
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-[#05000d] text-white select-none">
       {/* Contextual Ambient Aurora Mesh Canvas */}
-      <div className={`cine-aurora-canvas ${activeTab === 'movie' ? 'opacity-90' : ''}`} />
+      <div
+        className={`cine-aurora-canvas ${
+          activeTab === 'movie' ? 'opacity-90' : ''
+        }`}
+      />
 
       <Navbar
         activeTab={activeTab}
@@ -111,8 +174,12 @@ export default function App() {
       {selectedMedia ? (
         <MediaDetailPage
           media={selectedMedia}
-          mediaType={activeTab === 'tv' || activeTab === 'anime' ? 'tv' : 'movie'}
-          onPlay={(media, details) => setActivePlayer({ media, details })}
+          mediaType={
+            activeTab === 'tv' || activeTab === 'anime' ? 'tv' : 'movie'
+          }
+          onPlay={(media, details) =>
+            setActivePlayer({ media, details })
+          }
           onSelectMedia={(item) => setSelectedMedia(item)}
         />
       ) : (
@@ -120,10 +187,15 @@ export default function App() {
           {activeTab === 'home' && (
             <section className="cine-hero">
               <img
-                src={tmdb.getImageUrl(heroItem.backdrop_path, 'original', heroItem.backdrop_fallback)}
+                src={tmdb.getImageUrl(
+                  heroItem.backdrop_path,
+                  'original',
+                  heroItem.backdrop_fallback
+                )}
                 alt={heroItem.title || heroItem.name}
                 className="cine-hero-img"
               />
+
               <div className="cine-hero-overlay" />
 
               <div className="cine-hero-content">
@@ -132,11 +204,25 @@ export default function App() {
                 </h1>
 
                 <div className="cine-hero-meta">
-                  <span className="cine-star-tag">★ {(heroItem.vote_average || 8.4).toFixed(1)}/10</span>
+                  <span className="cine-star-tag">
+                    ★ {(heroItem.vote_average || 8.4).toFixed(1)}/10
+                  </span>
+
                   <span>•</span>
-                  <span>{(heroItem.release_date || heroItem.first_air_date || '2026').split('-')[0]}</span>
+
+                  <span>
+                    {(
+                      heroItem.release_date ||
+                      heroItem.first_air_date ||
+                      '2026'
+                    ).split('-')[0]}
+                  </span>
+
                   <span>•</span>
-                  <span className="text-white/60">Trending Spotlight</span>
+
+                  <span className="text-white/60">
+                    Trending Spotlight
+                  </span>
                 </div>
 
                 <p className="cine-hero-desc">
@@ -145,7 +231,7 @@ export default function App() {
 
                 <div className="cine-actions">
                   <button
-                    onClick={() => setActivePlayer({ media: heroItem, details: heroItem })}
+                    onClick={() => playMedia(heroItem, heroItem)}
                     className="cine-play-btn"
                   >
                     <span>▶</span>
@@ -173,14 +259,24 @@ export default function App() {
           )}
 
           {/* Main Container */}
-          <main className={`cine-container ${activeTab !== 'home' ? 'pt-32' : 'pt-4'}`}>
+          <main
+            className={`cine-container ${
+              activeTab !== 'home' ? 'pt-32' : 'pt-4'
+            }`}
+          >
             {/* Cinejoy Movies/Shows Page Header & Filter Rail */}
             {activeTab === 'movie' && (
               <div className="space-y-4">
                 <div>
-                  <h1 className="text-3xl font-extrabold text-white tracking-tight">Movies</h1>
-                  <p className="text-xs text-white/50 mt-0.5">Discover new movies to watch</p>
+                  <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                    Movies
+                  </h1>
+
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Discover new movies to watch
+                  </p>
                 </div>
+
                 <FilterBar
                   selectedGenre={selectedGenre}
                   onSelectGenre={setSelectedGenre}
@@ -197,9 +293,15 @@ export default function App() {
             {activeTab === 'tv' && (
               <div className="space-y-4">
                 <div>
-                  <h1 className="text-3xl font-extrabold text-white tracking-tight">TV Shows</h1>
-                  <p className="text-xs text-white/50 mt-0.5">Explore hit series and episodic dramas</p>
+                  <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                    TV Shows
+                  </h1>
+
+                  <p className="text-xs text-white/50 mt-0.5">
+                    Explore hit series and episodic dramas
+                  </p>
                 </div>
+
                 <FilterBar
                   selectedGenre={selectedGenre}
                   onSelectGenre={setSelectedGenre}
@@ -215,23 +317,42 @@ export default function App() {
 
             {activeTab === 'anime' && (
               <div className="space-y-2">
-                <h1 className="text-3xl font-extrabold text-white tracking-tight">Anime</h1>
-                <p className="text-xs text-white/50">Japanese animation and top-tier series</p>
+                <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                  Anime
+                </h1>
+
+                <p className="text-xs text-white/50">
+                  Japanese animation and top-tier series
+                </p>
               </div>
             )}
 
             {activeTab === 'home' && continueWatching.length > 0 && (
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-white/80 tracking-wide">Continue Watching</h3>
+                <h3 className="text-sm font-semibold text-white/80 tracking-wide">
+                  Continue Watching
+                </h3>
+
                 <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
                   {continueWatching.map((item) => (
                     <div
                       key={`${item.type}_${item.mediaId}`}
                       onClick={() =>
-                        setActivePlayer({
-                          media: { id: item.mediaId, media_type: item.type, name: item.title, title: item.title },
-                          details: { title: item.title, name: item.title },
-                        })
+                        playMedia(
+                          {
+                            id: item.mediaId,
+                            media_type: item.type,
+                            name: item.title,
+                            title: item.title,
+                            poster_path: item.poster,
+                          },
+                          {
+                            title: item.title,
+                            name: item.title,
+                            poster_path: item.poster,
+                            media_type: item.type,
+                          }
+                        )
                       }
                       className="relative w-64 flex-shrink-0 p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 backdrop-blur-xl transition cursor-pointer group"
                     >
@@ -241,6 +362,7 @@ export default function App() {
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         />
+
                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                           <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center font-bold text-xs">
                             ▶
@@ -248,13 +370,22 @@ export default function App() {
                         </div>
                       </div>
 
-                      <h4 className="text-xs font-semibold text-white/90 truncate">{item.title}</h4>
+                      <h4 className="text-xs font-semibold text-white/90 truncate">
+                        {item.title}
+                      </h4>
+
                       <p className="text-[11px] text-white/40 mt-0.5">
-                        {item.type === 'tv' ? `Season ${item.season} • Episode ${item.episode}` : 'Movie'} • {item.percent}%
+                        {item.type === 'tv'
+                          ? `Season ${item.season} • Episode ${item.episode}`
+                          : 'Movie'}{' '}
+                        • {item.percent}%
                       </p>
 
                       <div className="w-full bg-white/10 h-1 rounded-full mt-2 overflow-hidden">
-                        <div className="bg-[#95ff50] h-full rounded-full" style={{ width: `${item.percent}%` }} />
+                        <div
+                          className="bg-[#95ff50] h-full rounded-full"
+                          style={{ width: `${item.percent}%` }}
+                        />
                       </div>
                     </div>
                   ))}
@@ -264,7 +395,10 @@ export default function App() {
 
             {activeTab === 'home' && (
               <section>
-                <h3 className="text-sm font-semibold text-white/80 mb-3 tracking-wide">Browse by Provider</h3>
+                <h3 className="text-sm font-semibold text-white/80 mb-3 tracking-wide">
+                  Browse by Provider
+                </h3>
+
                 <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
                   {PROVIDERS.map((p) => (
                     <div
@@ -275,7 +409,10 @@ export default function App() {
                       }}
                       className="provider-pill"
                     >
-                      <span className="text-xs font-bold" style={{ color: p.color }}>
+                      <span
+                        className="text-xs font-bold"
+                        style={{ color: p.color }}
+                      >
                         {p.name}
                       </span>
                     </div>
@@ -287,17 +424,31 @@ export default function App() {
             <section>
               {activeTab === 'home' && (
                 <div className="cine-section-head">
-                  <h2 className="cine-section-title">Recommended For You</h2>
-                  <span className="text-xs text-white/40">{items.length} titles</span>
+                  <h2 className="cine-section-title">
+                    Recommended For You
+                  </h2>
+
+                  <span className="text-xs text-white/40">
+                    {items.length} titles
+                  </span>
                 </div>
               )}
 
               <div className="cine-grid-cards">
                 {items.map((media) => {
                   const title = media.title || media.name;
-                  const poster = tmdb.getImageUrl(media.poster_path, 'w500');
-                  const rating = media.vote_average ? media.vote_average.toFixed(1) : null;
-                  const year = (media.release_date || media.first_air_date || '').split('-')[0];
+                  const poster = tmdb.getImageUrl(
+                    media.poster_path,
+                    'w500'
+                  );
+                  const rating = media.vote_average
+                    ? media.vote_average.toFixed(1)
+                    : null;
+                  const year = (
+                    media.release_date ||
+                    media.first_air_date ||
+                    ''
+                  ).split('-')[0];
 
                   return (
                     <div
@@ -311,12 +462,22 @@ export default function App() {
                           alt={title}
                           loading="lazy"
                           onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
+                            e.target.src =
+                              'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
                           }}
                         />
-                        {rating && <span className="cine-card-badge">★ {rating}</span>}
+
+                        {rating && (
+                          <span className="cine-card-badge">
+                            ★ {rating}
+                          </span>
+                        )}
                       </div>
-                      <h4 className="cine-card-title">{title}</h4>
+
+                      <h4 className="cine-card-title">
+                        {title}
+                      </h4>
+
                       <p className="cine-card-year">{year}</p>
                     </div>
                   );
