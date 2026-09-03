@@ -27,14 +27,16 @@ export const GUARANTEED_TITLES = [
 
 async function proxyFetch(endpoint, params = {}) {
   try {
-    const query = new URLSearchParams(params);
-    const queryString = query.toString();
+    const query = new URLSearchParams({
+      path: endpoint,
+      ...params,
+    });
 
-    const res = await fetch(
-      `/api/tmdb/${endpoint}${queryString ? `?${queryString}` : ''}`
-    );
+    const res = await fetch(`/api/tmdb?${query.toString()}`);
 
-    if (!res.ok) throw new Error(`Proxy status ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`Proxy status ${res.status}`);
+    }
 
     const data = await res.json();
 
@@ -50,8 +52,14 @@ async function proxyFetch(endpoint, params = {}) {
 
 export const tmdb = {
   getImageUrl(path, size = 'original', fallback = '') {
-    if (!path) return fallback || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
-    if (path.startsWith('http')) return path;
+    if (!path) {
+      return fallback || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
+    }
+
+    if (path.startsWith('http')) {
+      return path;
+    }
+
     return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
   },
 
@@ -59,20 +67,48 @@ export const tmdb = {
     return proxyFetch('trending/all/week');
   },
 
-  async getMovies({ page = 1, genre = '', year = '', sort = 'popularity.desc', provider = '' } = {}) {
-    const params = { page, sort_by: sort };
-    if (genre) params.with_genres = genre;
-    if (year && year !== 'All Years') params.primary_release_year = year;
+  async getMovies({
+    page = 1,
+    genre = '',
+    year = '',
+    sort = 'popularity.desc',
+    provider = ''
+  } = {}) {
+    const params = {
+      page,
+      sort_by: sort,
+    };
+
+    if (genre) {
+      params.with_genres = genre;
+    }
+
+    if (year && year !== 'All Years') {
+      params.primary_release_year = year;
+    }
+
     if (provider) {
       params.with_watch_providers = provider;
       params.watch_region = 'US';
     }
+
     return proxyFetch('discover/movie', params);
   },
 
-  async getSeries({ page = 1, genre = '', sort = 'popularity.desc' } = {}) {
-    const params = { page, sort_by: sort };
-    if (genre) params.with_genres = genre;
+  async getSeries({
+    page = 1,
+    genre = '',
+    sort = 'popularity.desc'
+  } = {}) {
+    const params = {
+      page,
+      sort_by: sort,
+    };
+
+    if (genre) {
+      params.with_genres = genre;
+    }
+
     return proxyFetch('discover/tv', params);
   },
 
@@ -88,32 +124,59 @@ export const tmdb = {
   async getMediaDetails(mediaType, id) {
     try {
       const query = new URLSearchParams({
-  append_to_response: 'videos,credits,similar'
-});
-const res = await fetch(`/api/tmdb/${mediaType}/${id}?${query.toString()}`);
-              if (!res.ok) throw new Error();
+        path: `${mediaType}/${id}`,
+        append_to_response: 'videos,credits,similar',
+      });
+
+      const res = await fetch(`/api/tmdb?${query.toString()}`);
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
       return await res.json();
     } catch {
-      return GUARANTEED_TITLES.find((m) => m.id === Number(id)) || GUARANTEED_TITLES[0];
+      return (
+        GUARANTEED_TITLES.find((m) => m.id === Number(id)) ||
+        GUARANTEED_TITLES[0]
+      );
     }
   },
 
   async getSeasonDetails(tvId, seasonNumber) {
     try {
-      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${seasonNumber}`);
-      if (!res.ok) throw new Error();
+      const query = new URLSearchParams({
+        path: `tv/${tvId}/season/${seasonNumber}`,
+      });
+
+      const res = await fetch(`/api/tmdb?${query.toString()}`);
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
       return await res.json();
     } catch {
       return {
         episodes: [
-          { episode_number: 1, name: "Episode 1", overview: "Season premiere." },
-          { episode_number: 2, name: "Episode 2", overview: "The journey continues." }
-        ]
+          {
+            episode_number: 1,
+            name: "Episode 1",
+            overview: "Season premiere.",
+          },
+          {
+            episode_number: 2,
+            name: "Episode 2",
+            overview: "The journey continues.",
+          },
+        ],
       };
     }
   },
 
   async searchMulti(queryText) {
-    return proxyFetch('search/multi', { query: queryText });
+    return proxyFetch('search/multi', {
+      query: queryText,
+    });
   }
 };
