@@ -57,13 +57,13 @@ export default function App() {
     setResolveError(null);
   };
 
-  const handleStartStream = async (sourceType = 'development-hls') => {
-    if (!selectedMovie) return;
+  const handleStartStream = async (movieToPlay = selectedMovie) => {
+    if (!movieToPlay) return;
     setIsResolving(true);
     setResolveError(null);
 
     try {
-      const source = await resolveVideoSource(selectedMovie, sourceType);
+      const source = await resolveVideoSource(movieToPlay, 'default');
       setActiveSource(source);
     } catch (err) {
       setResolveError(err.message || 'Unable to resolve video stream source.');
@@ -139,7 +139,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         openMovie(heroMovie);
-                        handleStartStream('development-hls');
+                        handleStartStream(heroMovie);
                       }}
                       className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
@@ -177,7 +177,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal Dialog with Custom Native Player or Embed Fallback */}
+      {/* Modal Dialog with Custom Player or Embed Fallback */}
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
@@ -239,31 +239,21 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={() => handleStartStream('development-hls')}
-                      disabled={isResolving}
-                      className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
-                    >
-                      {isResolving ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-black" /> Initializing...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4 fill-black" /> Play (Custom HLS Player)
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => handleStartStream('vidlink-embed')}
-                      disabled={isResolving}
-                      className="flex items-center gap-2 px-5 py-3 rounded-full glass-panel hover:bg-white/10 font-medium text-xs transition-all cursor-pointer text-white/80"
-                    >
-                      Play via Embed Source
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => handleStartStream(selectedMovie)}
+                    disabled={isResolving}
+                    className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
+                  >
+                    {isResolving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-black" /> Loading Stream...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-black" /> Watch Movie
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             )}
