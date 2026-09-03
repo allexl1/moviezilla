@@ -52,16 +52,16 @@ async function proxyFetch(endpoint, params = {}) {
 
 export const tmdb = {
   getImageUrl(path, size = 'original', fallback = '') {
-    if (!path) {
-      return fallback || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
-    }
+  if (!path) {
+    return fallback || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
+  }
 
-    if (path.startsWith('http')) {
-      return path;
-    }
+  if (path.startsWith('http')) {
+    return path;
+  }
 
-    return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
-  },
+  return `/api/tmdb-image?size=${encodeURIComponent(size)}&path=${encodeURIComponent(path)}`;
+},
 
   async getTrending() {
     return proxyFetch('trending/all/week');
