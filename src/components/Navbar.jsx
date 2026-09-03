@@ -11,12 +11,12 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
   return (
     <>
       <header className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-12 py-7 pointer-events-none">
-        {/* Top Left: Back Arrow + Logo with proper spacing */}
+        {/* Top Left: Back Arrow + Logo */}
         <div className="flex items-center gap-4 pointer-events-auto">
           {isDetailView && (
             <button
               onClick={onBack}
-              className="w-11 h-11 rounded-full flex items-center justify-center text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl transition cursor-pointer"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-2xl transition cursor-pointer"
               title="Back"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -26,13 +26,13 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           )}
 
           <div onClick={() => onTabChange('home')} className="cursor-pointer select-none">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-2xl flex items-center justify-center text-white font-black text-lg shadow-xl">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-2xl flex items-center justify-center text-white font-black text-lg shadow-2xl">
               MZ
             </div>
           </div>
         </div>
 
-        {/* Top Right: Cinejoy Floating Pill Navigation with correct margins */}
+        {/* Top Right: Cinejoy Floating Pill Navigation */}
         <div className="hidden md:flex cine-nav-pill-box pointer-events-auto">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;

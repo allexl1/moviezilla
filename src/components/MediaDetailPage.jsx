@@ -2,236 +2,155 @@ import React, { useState, useEffect } from 'react';
 import { tmdb } from '../services/tmdb';
 import { storage } from '../services/storage';
 
-export default function MediaDetailPage({ media, mediaType = 'movie', onPlay, onSelectMedia }) {
+export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia }) {
   const [details, setDetails] = useState(null);
-  const [readMore, setReadMore] = useState(false);
-  const [inWatchlist, setInWatchlist] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isWatchlist, setIsWatchlist] = useState(false);
+
+  const mediaId = media?.id;
 
   useEffect(() => {
-    if (!media?.id) return;
     let isMounted = true;
-    setInWatchlist(storage.isInWatchlist(media.id));
-
-    const type = media.media_type || mediaType;
-    tmdb.getMediaDetails(type, media.id)
-      .then((data) => {
-        if (isMounted) setDetails(data);
-      })
-      .catch((err) => console.error('Failed to load deep media details:', err));
-
+    async function fetchDetails() {
+      setLoading(true);
+      try {
+        const data = await tmdb.getMediaDetails(mediaType, mediaId);
+        if (isMounted) {
+          setDetails(data);
+          setIsWatchlist(storage.isInWatchlist(mediaId));
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to load media details:', err);
+        if (isMounted) setLoading(false);
+      }
+    }
+    fetchDetails();
     return () => { isMounted = false; };
-  }, [media, mediaType]);
+  }, [mediaId, mediaType]);
 
-  const trailers = details?.videos?.results?.filter(
-    (v) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube'
-  ) || [];
-
-  const mainTrailer = trailers[0];
+  const title = details?.title || details?.name || media?.title || media?.name;
+  const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'original');
+  const poster = tmdb.getImageUrl(details?.poster_path || media?.poster_path, 'w500');
+  const rating = (details?.vote_average || media?.vote_average || 7.8).toFixed(1);
+  const releaseYear = (details?.release_date || details?.first_air_date || media?.release_date || media?.first_air_date || '2026').split('-')[0];
+  const genres = details?.genres || [];
   const cast = details?.credits?.cast?.slice(0, 10) || [];
-  const similar = details?.similar?.results?.slice(0, 8) || [];
-
-  const title = details?.title || details?.name || media.title || media.name;
-  const releaseYear = (details?.release_date || details?.first_air_date || '2026').split('-')[0];
-  const releaseFull = details?.release_date || details?.first_air_date || 'TBA';
-  const runtimeMin = details?.runtime || (details?.episode_run_time && details.episode_run_time[0]) || 120;
-  const runtimeHours = `${Math.floor(runtimeMin / 60)}h ${runtimeMin % 60}m`;
-  const rating = (details?.vote_average || media.vote_average || 8.0).toFixed(1);
-  const revenue = details?.revenue ? `$${details.revenue.toLocaleString()}` : '$1,555,182,696';
-  const budget = details?.budget ? `$${details.budget.toLocaleString()}` : '$250,000,000';
-  const director = details?.credits?.crew?.find((c) => c.job === 'Director')?.name || 'Christopher Nolan';
+  const similar = details?.similar?.results?.filter((x) => x.poster_path) || [];
 
   return (
-    <div className="relative min-h-screen bg-[#05000d] text-white pt-24 pb-24 animate-in fade-in duration-300">
-      {/* Edge-to-Edge Hero Stage with Autoplay Trailer */}
-      <section className="relative w-full h-[88vh] min-h-[620px] max-h-[920px] overflow-hidden">
-        {mainTrailer ? (
-          <div className="absolute inset-0 pointer-events-none scale-125">
-            <iframe
-              src={`https://www.youtube-nocookie.com/embed/${mainTrailer.key}?autoplay=1&mute=1&controls=0&loop=1&playlist=${mainTrailer.key}&showinfo=0&rel=0&modestbranding=1`}
-              title="Autoplay Trailer"
-              className="w-full h-full border-0 pointer-events-none"
-              allow="autoplay; encrypted-media"
-            />
-          </div>
-        ) : (
-          <img
-            src={tmdb.getImageUrl(details?.backdrop_path || media.backdrop_path, 'original')}
-            alt={title}
-            className="w-full h-full object-cover object-center"
-          />
-        )}
+    <div className="relative min-h-screen bg-[#05000d] text-white pb-24 animate-in fade-in duration-300">
+      {/* Edge-to-Edge Hero Backdrop */}
+      <div className="relative w-full h-[65vh] min-h-[480px] overflow-hidden">
+        <img src={backdrop} alt={title} className="w-full h-full object-cover object-center" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#05000d] via-[#05000d]/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#05000d] via-transparent to-transparent" />
 
-        {/* Ambient Gradient Masks */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#05000d] via-[#05000d]/60 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#05000d]/95 via-[#05000d]/40 to-transparent" />
-
-        {/* Two-Column Detail Banner Content */}
-        <div className="absolute bottom-12 inset-x-0 px-8 md:px-16 flex flex-col md:flex-row items-end justify-between gap-8 z-20 max-w-[1600px] mx-auto">
-          {/* Left Column: Title, Tags, CTAs, Director & Synopsis */}
-          <div className="max-w-2xl space-y-4">
-            <h1 className="text-4xl md:text-7xl font-black text-white uppercase tracking-tight leading-none drop-shadow-2xl">
-              {title}
-            </h1>
-
-            {/* Genre List */}
-            <div className="flex items-center gap-2.5 text-xs text-white/70 font-semibold tracking-wide">
-              {(details?.genres || [{ name: 'Adventure' }, { name: 'Action' }, { name: 'Fantasy' }]).map((g, i) => (
-                <span key={g.name || i}>{g.name}</span>
-              ))}
-            </div>
-
-            {/* Action Bar */}
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                onClick={() => onPlay(media, details)}
-                className="cine-play-btn"
-              >
-                <span>▶</span>
-                <span>Play</span>
-              </button>
-
-              <button
-                onClick={() => setInWatchlist(storage.toggleWatchlist(media))}
-                className={`cine-circle-btn ${inWatchlist ? 'bg-white text-black' : ''}`}
-                title="Add to Watchlist"
-              >
-                {inWatchlist ? '✓' : '+'}
-              </button>
-
-              <button className="cine-circle-btn" title="Download">
-                ↓
-              </button>
-
-              <button className="cine-circle-btn" title="Share">
-                ➦
-              </button>
-            </div>
-
-            {/* Metadata Line */}
-            <div className="flex items-center gap-3 text-xs text-white/80 font-semibold pt-1">
-              <span>{releaseYear}</span>
-              <span>{runtimeHours}</span>
-              <span className="px-1.5 py-0.5 rounded bg-white/10 border border-white/20 text-[10px]">R</span>
-              <span className="text-[#95ff50]">★ {rating}</span>
-            </div>
-
-            <p className="text-xs text-white/60 font-medium">
-              Director: <span className="text-white/90">{director}</span>
-            </p>
-
-            {/* Synopsis */}
-            <div className="space-y-1 max-w-xl">
-              <p className={`text-xs md:text-sm text-white/75 leading-relaxed ${readMore ? '' : 'line-clamp-2'}`}>
-                {details?.overview || media.overview}
-              </p>
-              <button
-                onClick={() => setReadMore(!readMore)}
-                className="text-xs text-white/40 hover:text-white transition font-medium cursor-pointer"
-              >
-                {readMore ? 'Show Less' : 'Read More'}
-              </button>
-            </div>
+        {/* Content Overlay */}
+        <div className="absolute bottom-10 left-8 md:left-14 right-8 max-w-4xl z-10 space-y-4">
+          <div className="flex items-center gap-3 text-xs font-semibold text-white/80">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#95ff50]/15 text-[#95ff50] border border-[#95ff50]/30 font-bold">
+              ★ {rating}
+            </span>
+            <span>{releaseYear}</span>
+            <span>•</span>
+            <span className="uppercase text-[11px] tracking-wider text-white/60">{mediaType}</span>
           </div>
 
-          {/* Right Column: Floating Liquid-Glass Stats Panel */}
-          <div className="w-full md:w-80 rounded-2xl p-5 cine-stats-glass space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Runtime</span>
-              <span className="font-semibold text-white/90">{runtimeHours}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Language</span>
-              <span className="font-semibold text-white/90">{details?.original_language?.toUpperCase() || 'EN'}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Release Date</span>
-              <span className="font-semibold text-white/90">{releaseFull}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Budget</span>
-              <span className="font-semibold text-white/90">{budget}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">Revenue</span>
-              <span className="font-semibold text-white/90">{revenue}</span>
-            </div>
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white drop-shadow-2xl">
+            {title}
+          </h1>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {genres.map((g) => (
+              <span key={g.id} className="px-3 py-1 rounded-full bg-white/[0.06] border border-white/10 text-xs font-medium text-white/80 backdrop-blur-xl">
+                {g.name}
+              </span>
+            ))}
+          </div>
+
+          <p className="text-xs md:text-sm leading-relaxed text-white/75 max-w-2xl line-clamp-3">
+            {details?.overview || media?.overview}
+          </p>
+
+          <div className="flex items-center gap-3 pt-3">
+            <button
+              onClick={() => onPlay(media, details)}
+              className="cine-play-btn"
+            >
+              <span>▶</span>
+              <span>Play Now</span>
+            </button>
+
+            <button
+              onClick={() => {
+                storage.toggleWatchlist(media);
+                setIsWatchlist(!isWatchlist);
+              }}
+              className="cine-circle-btn"
+              title={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
+            >
+              {isWatchlist ? '✓' : '+'}
+            </button>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Detail Sections: Cast, Trailers, Recommendations */}
-      <div className="max-w-[1600px] mx-auto px-8 md:px-16 space-y-14 mt-10">
+      {/* Main Details Body */}
+      <div className="max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-12">
         {/* Cast Section */}
         {cast.length > 0 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-bold tracking-tight text-white">Cast</h2>
-            <div className="flex gap-6 overflow-x-auto no-scrollbar pb-2">
+            <h3 className="text-sm font-semibold text-white/80 tracking-wide">Top Cast</h3>
+            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
               {cast.map((actor) => (
-                <div key={actor.id} className="flex flex-col items-center flex-shrink-0 w-24 text-center group">
-                  <div className="w-20 h-20 rounded-full overflow-hidden bg-white/5 border border-white/10 mb-2.5 transition-transform duration-200 group-hover:scale-105">
+                <div key={actor.id} className="flex-shrink-0 w-28 text-center space-y-2">
+                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden bg-white/5 border border-white/10 shadow-lg">
                     <img
-                      src={actor.profile_path ? tmdb.getImageUrl(actor.profile_path, 'w185') : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=185&q=80'}
+                      src={tmdb.getImageUrl(actor.profile_path, 'w185', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80')}
                       alt={actor.name}
                       className="w-full h-full object-cover"
-                      loading="lazy"
                     />
                   </div>
-                  <span className="text-xs font-semibold text-white/90 truncate w-full">{actor.name}</span>
-                  <span className="text-[11px] text-white/40 truncate w-full">{actor.character}</span>
+                  <div>
+                    <h4 className="text-xs font-semibold text-white truncate">{actor.name}</h4>
+                    <p className="text-[10px] text-white/40 truncate">{actor.character}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </section>
         )}
 
-        {/* Dedicated Horizontal Trailers Reel */}
-        {trailers.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold tracking-tight text-white">Trailers</h2>
-            <div className="flex gap-5 overflow-x-auto no-scrollbar pb-2">
-              {trailers.map((vid) => (
-                <div
-                  key={vid.key}
-                  onClick={() => onPlay(media, { ...details, trailerKey: vid.key })}
-                  className="w-72 flex-shrink-0 cursor-pointer group"
-                >
-                  <div className="relative aspect-video rounded-2xl overflow-hidden bg-white/5 border border-white/10 mb-2 shadow-lg">
-                    <img
-                      src={`https://img.youtube.com/vi/${vid.key}/hqdefault.jpg`}
-                      alt={vid.name}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                      <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center font-bold">
-                        ▶
-                      </div>
-                    </div>
-                  </div>
-                  <h4 className="text-xs font-semibold text-white/90 truncate group-hover:text-[#95ff50] transition">{vid.name}</h4>
-                  <p className="text-[11px] text-white/40">{vid.type}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* You Might Also Like Grid */}
+        {/* Similar Titles Grid */}
         {similar.length > 0 && (
           <section className="space-y-4">
-            <h2 className="text-xl font-bold tracking-tight text-white">You Might Also Like</h2>
+            <h3 className="text-sm font-semibold text-white/80 tracking-wide">More Like This</h3>
             <div className="cine-grid-cards">
-              {similar.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => onSelectMedia(item)}
-                  className="cine-card-item"
-                >
-                  <div className="cine-card-poster">
-                    <img src={tmdb.getImageUrl(item.poster_path, 'w500')} alt={item.title} loading="lazy" />
+              {similar.slice(0, 6).map((item) => {
+                const itemTitle = item.title || item.name;
+                const itemPoster = tmdb.getImageUrl(item.poster_path, 'w500');
+                const itemRating = item.vote_average ? item.vote_average.toFixed(1) : null;
+                const itemYear = (item.release_date || item.first_air_date || '').split('-')[0];
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      onSelectMedia(item);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="cine-card-item"
+                  >
+                    <div className="cine-card-poster">
+                      <img src={itemPoster} alt={itemTitle} loading="lazy" />
+                      {itemRating && <span className="cine-card-badge">★ {itemRating}</span>}
+                    </div>
+                    <h4 className="cine-card-title">{itemTitle}</h4>
+                    <p className="cine-card-year">{itemYear}</p>
                   </div>
-                  <h4 className="cine-card-title">{item.title || item.name}</h4>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
