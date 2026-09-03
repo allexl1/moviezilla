@@ -2,27 +2,14 @@ export async function onRequestGet(context) {
   const { params } = context;
   const tmdbId = String(params.id);
 
-  // Allow open CORS
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'public, max-age=3600',
   };
 
-  const DIRECT_CATALOG = {
-    "550": {
-      type: "hls",
-      url: "https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8",
-      subtitles: [
-        {
-          label: "English",
-          src: "https://content.jwplatform.com/tracks/114979.vtt",
-          srclang: "en",
-          default: true
-        }
-      ]
-    }
-  };
+  // Plug in legitimate, direct full-length media streams here:
+  // e.g. "550": { type: "hls", url: "https://your-storage.com/movies/550.m3u8" }
+  const DIRECT_CATALOG = {};
 
   if (DIRECT_CATALOG[tmdbId]) {
     return new Response(JSON.stringify(DIRECT_CATALOG[tmdbId]), {
@@ -31,7 +18,8 @@ export async function onRequestGet(context) {
     });
   }
 
-  return new Response(JSON.stringify({ error: 'Direct source not found' }), {
+  // When no direct source is configured, trigger the embed fallback
+  return new Response(JSON.stringify({ error: 'Direct source not configured' }), {
     status: 404,
     headers,
   });
