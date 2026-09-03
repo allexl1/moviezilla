@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info, Server } from 'lucide-react';
+import { Search, Play, Star, X, Film, Info, Server, Check } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
 
+// Clean, customized embed sources
 const SERVERS = [
-  { name: 'Server 1 (VidSrc ICU)', url: (id) => `https://vidsrc.icu/embed/movie/${id}` },
-  { name: 'Server 2 (Embed.su)',   url: (id) => `https://embed.su/embed/movie/${id}` },
-  { name: 'Server 3 (2Embed)',     url: (id) => `https://www.2embed.cc/embed/${id}` },
-  { name: 'Server 4 (VidSrc CC)',  url: (id) => `https://vidsrc.cc/v2/embed/movie/${id}` },
+  {
+    name: 'VidLink (Custom Skin)',
+    url: (id) => `https://vidlink.pro/movie/${id}?primaryColor=ffffff&secondaryColor=08090a&iconColor=ffffff&icons=vid&autoplay=true&title=false`
+  },
+  {
+    name: 'VidCore (Ad-Free HLS)',
+    url: (id) => `https://vidcore.org/embed/movie/${id}?autoplay=true`
+  },
+  {
+    name: 'Embed.su (Multi-Quality)',
+    url: (id) => `https://embed.su/embed/movie/${id}`
+  }
 ];
 
 export default function App() {
@@ -41,6 +50,22 @@ export default function App() {
         if (data.results) setTopRated(data.results);
       });
   }, []);
+
+  // Native player event bridge (receives time/playback from VidLink)
+  useEffect(() => {
+    const handlePlayerMessage = (event) => {
+      if (event.origin !== 'https://vidlink.pro') return;
+      if (event.data?.type === 'PLAYER_EVENT') {
+        const { event: playerState, currentTime } = event.data.data;
+        if (playerState === 'timeupdate' && selectedMovie) {
+          localStorage.setItem(`progress_${selectedMovie.id}`, currentTime);
+        }
+      }
+    };
+
+    window.addEventListener('message', handlePlayerMessage);
+    return () => window.removeEventListener('message', handlePlayerMessage);
+  }, [selectedMovie]);
 
   const handleSearch = (e) => {
     const q = e.target.value;
@@ -154,7 +179,7 @@ export default function App() {
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/30">
+            <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
               <div className="flex items-center gap-2 overflow-x-auto pr-4">
                 <span className="text-xs uppercase tracking-wider text-white/40 flex items-center gap-1.5 font-medium ml-1 mr-2">
                   <Server className="w-3.5 h-3.5" /> Source:
@@ -163,12 +188,13 @@ export default function App() {
                   <button
                     key={server.name}
                     onClick={() => { setActiveServer(idx); setIsPlaying(true); }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
                       activeServer === idx && isPlaying
-                        ? 'bg-white text-black font-semibold'
+                        ? 'bg-white text-black font-semibold shadow-md'
                         : 'bg-white/5 text-white/70 hover:bg-white/15'
                     }`}
                   >
+                    {activeServer === idx && isPlaying && <Check className="w-3 h-3 text-black" />}
                     {server.name}
                   </button>
                 ))}
@@ -188,7 +214,7 @@ export default function App() {
                   className="w-full h-full border-0"
                   allowFullScreen
                   allow="autoplay; encrypted-media; picture-in-picture"
-                  title="Player"
+                  title="MovieZilla Stream"
                 />
               </div>
             ) : (
