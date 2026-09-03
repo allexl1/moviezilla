@@ -8,7 +8,7 @@ export class DirectApiProvider extends BaseProvider {
     super({
       id: 'direct-edge-api',
       name: 'Direct HLS Edge Provider',
-      priority: 1, // Highest priority
+      priority: 1,
     });
   }
 
