@@ -1,26 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info, Server, Check } from 'lucide-react';
+import { Search, Play, Star, X, Film, Info, Layers } from 'lucide-react';
+import Player from './components/Player';
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
-
-// Clean, customized embed sources
-const SERVERS = [
-  {
-    name: 'VidLink (Custom Skin)',
-    url: (id) => `https://vidlink.pro/movie/${id}?primaryColor=ffffff&secondaryColor=08090a&iconColor=ffffff&icons=vid&autoplay=true&title=false`
-  },
-  {
-    name: 'VidCore (Ad-Free HLS)',
-    url: (id) => `https://vidcore.org/embed/movie/${id}?autoplay=true`
-  },
-  {
-    name: 'Embed.su (Multi-Quality)',
-    url: (id) => `https://embed.su/embed/movie/${id}`
-  }
-];
 
 export default function App() {
   const [trending, setTrending] = useState([]);
@@ -30,11 +15,12 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activeServer, setActiveServer] = useState(0);
+
+  // Direct HLS test stream for native HTML5 player
+  const sampleStream = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
 
   useEffect(() => {
     if (!API_KEY) return;
-
     fetch(`${TMDB_BASE}/trending/movie/week?api_key=${API_KEY}`)
       .then(res => res.json())
       .then(data => {
@@ -51,22 +37,6 @@ export default function App() {
       });
   }, []);
 
-  // Native player event bridge (receives time/playback from VidLink)
-  useEffect(() => {
-    const handlePlayerMessage = (event) => {
-      if (event.origin !== 'https://vidlink.pro') return;
-      if (event.data?.type === 'PLAYER_EVENT') {
-        const { event: playerState, currentTime } = event.data.data;
-        if (playerState === 'timeupdate' && selectedMovie) {
-          localStorage.setItem(`progress_${selectedMovie.id}`, currentTime);
-        }
-      }
-    };
-
-    window.addEventListener('message', handlePlayerMessage);
-    return () => window.removeEventListener('message', handlePlayerMessage);
-  }, [selectedMovie]);
-
   const handleSearch = (e) => {
     const q = e.target.value;
     setSearchQuery(q);
@@ -82,12 +52,10 @@ export default function App() {
   const openMovie = (movie) => {
     setSelectedMovie(movie);
     setIsPlaying(false);
-    setActiveServer(0);
   };
 
   return (
     <div className="min-h-screen relative selection:bg-white selection:text-black">
-      {/* Floating Glass Header */}
       <header className="fixed top-5 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-5xl rounded-full glass-panel px-6 py-3 flex items-center justify-between shadow-2xl">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSearchQuery(''); setSelectedMovie(null); }}>
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
@@ -108,7 +76,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="pt-24 pb-20 px-6 max-w-7xl mx-auto">
         {searchQuery.trim().length > 2 ? (
           <div className="mt-8">
@@ -175,29 +142,13 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal / Video Player */}
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
-              <div className="flex items-center gap-2 overflow-x-auto pr-4">
-                <span className="text-xs uppercase tracking-wider text-white/40 flex items-center gap-1.5 font-medium ml-1 mr-2">
-                  <Server className="w-3.5 h-3.5" /> Source:
-                </span>
-                {SERVERS.map((server, idx) => (
-                  <button
-                    key={server.name}
-                    onClick={() => { setActiveServer(idx); setIsPlaying(true); }}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                      activeServer === idx && isPlaying
-                        ? 'bg-white text-black font-semibold shadow-md'
-                        : 'bg-white/5 text-white/70 hover:bg-white/15'
-                    }`}
-                  >
-                    {activeServer === idx && isPlaying && <Check className="w-3 h-3 text-black" />}
-                    {server.name}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/70">
+                <Layers className="w-4 h-4 text-white" />
+                <span>Native Player Mode</span>
               </div>
               <button 
                 onClick={() => setSelectedMovie(null)}
@@ -208,15 +159,11 @@ export default function App() {
             </div>
 
             {isPlaying ? (
-              <div className="aspect-video w-full bg-black">
-                <iframe
-                  src={SERVERS[activeServer].url(selectedMovie.id)}
-                  className="w-full h-full border-0"
-                  allowFullScreen
-                  allow="autoplay; encrypted-media; picture-in-picture"
-                  title="MovieZilla Stream"
-                />
-              </div>
+              <Player
+                streamUrl={sampleStream}
+                poster={`${IMG_BASE}${selectedMovie.backdrop_path}`}
+                title={selectedMovie.title}
+              />
             ) : (
               <div className="p-6 sm:p-8 flex flex-col md:flex-row gap-6 items-start">
                 <img 
