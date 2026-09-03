@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info, Layers } from 'lucide-react';
+import { Search, Play, Star, X, Film, Info, Loader2 } from 'lucide-react';
 import Player from './components/Player';
+import { resolveVideoSource } from './services/sourceResolver';
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
@@ -14,16 +15,17 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  // Direct HLS test stream for native HTML5 player
-  const sampleStream = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+  
+  // Custom Player Integration State
+  const [resolvedSource, setResolvedSource] = useState(null);
+  const [isResolving, setIsResolving] = useState(false);
+  const [resolveError, setResolveError] = useState(null);
 
   useEffect(() => {
     if (!API_KEY) return;
     fetch(`${TMDB_BASE}/trending/movie/week?api_key=${API_KEY}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.results?.length > 0) {
           setTrending(data.results);
           setHeroMovie(data.results[0]);
@@ -31,8 +33,8 @@ export default function App() {
       });
 
     fetch(`${TMDB_BASE}/movie/top_rated?api_key=${API_KEY}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data.results) setTopRated(data.results);
       });
   }, []);
@@ -42,8 +44,8 @@ export default function App() {
     setSearchQuery(q);
     if (q.trim().length > 2) {
       fetch(`${TMDB_BASE}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(q)}`)
-        .then(res => res.json())
-        .then(data => setSearchResults(data.results || []));
+        .then((res) => res.json())
+        .then((data) => setSearchResults(data.results || []));
     } else {
       setSearchResults([]);
     }
@@ -51,13 +53,35 @@ export default function App() {
 
   const openMovie = (movie) => {
     setSelectedMovie(movie);
-    setIsPlaying(false);
+    setResolvedSource(null);
+    setResolveError(null);
+  };
+
+  const handleStartStream = async () => {
+    if (!selectedMovie) return;
+    setIsResolving(true);
+    setResolveError(null);
+    try {
+      const source = await resolveVideoSource(selectedMovie);
+      setResolvedSource(source);
+    } catch (err) {
+      setResolveError(err.message || 'Unable to resolve video stream source.');
+    } finally {
+      setIsResolving(false);
+    }
   };
 
   return (
     <div className="min-h-screen relative selection:bg-white selection:text-black">
       <header className="fixed top-5 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-5xl rounded-full glass-panel px-6 py-3 flex items-center justify-between shadow-2xl">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setSearchQuery(''); setSelectedMovie(null); }}>
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => {
+            setSearchQuery('');
+            setSelectedMovie(null);
+            setResolvedSource(null);
+          }}
+        >
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
             <Film className="w-4 h-4 text-white" />
           </div>
@@ -90,7 +114,7 @@ export default function App() {
           <>
             {heroMovie && (
               <section className="relative rounded-3xl overflow-hidden min-h-[500px] flex items-end p-8 sm:p-12 mb-16 border border-white/10 shadow-2xl">
-                <div 
+                <div
                   className="absolute inset-0 bg-cover bg-center transition-all duration-700 scale-105"
                   style={{ backgroundImage: `url(${IMG_BASE}${heroMovie.backdrop_path})` }}
                 />
@@ -99,18 +123,26 @@ export default function App() {
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/60 mb-3">
                     <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/15">Featured</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {heroMovie.vote_average.toFixed(1)}</span>
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{' '}
+                      {heroMovie.vote_average?.toFixed(1)}
+                    </span>
                   </div>
                   <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-4">{heroMovie.title}</h1>
-                  <p className="text-sm sm:text-base text-white/70 line-clamp-3 mb-6 font-normal leading-relaxed">{heroMovie.overview}</p>
+                  <p className="text-sm sm:text-base text-white/70 line-clamp-3 mb-6 font-normal leading-relaxed">
+                    {heroMovie.overview}
+                  </p>
                   <div className="flex gap-4">
-                    <button 
-                      onClick={() => openMovie(heroMovie)}
+                    <button
+                      onClick={() => {
+                        openMovie(heroMovie);
+                        handleStartStream();
+                      }}
                       className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
                       <Play className="w-4 h-4 fill-black" /> Watch Now
                     </button>
-                    <button 
+                    <button
                       onClick={() => openMovie(heroMovie)}
                       className="flex items-center gap-2 px-5 py-3 rounded-full glass-panel font-medium hover:bg-white/10 transition-all cursor-pointer"
                     >
@@ -142,32 +174,31 @@ export default function App() {
         )}
       </main>
 
+      {/* Modal Dialog with Custom Player */}
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-white/10 bg-black/40">
-              <div className="flex items-center gap-2 text-xs font-semibold text-white/70">
-                <Layers className="w-4 h-4 text-white" />
-                <span>Native Player Mode</span>
-              </div>
-              <button 
-                onClick={() => setSelectedMovie(null)}
+              <span className="text-sm font-semibold tracking-tight text-white/90 truncate ml-2">
+                {selectedMovie.title}
+              </span>
+              <button
+                onClick={() => {
+                  setSelectedMovie(null);
+                  setResolvedSource(null);
+                }}
                 className="w-8 h-8 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-all cursor-pointer shrink-0 ml-2"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {isPlaying ? (
-              <Player
-                streamUrl={sampleStream}
-                poster={`${IMG_BASE}${selectedMovie.backdrop_path}`}
-                title={selectedMovie.title}
-              />
+            {resolvedSource ? (
+              <Player source={resolvedSource} />
             ) : (
               <div className="p-6 sm:p-8 flex flex-col md:flex-row gap-6 items-start">
-                <img 
-                  src={`${POSTER_BASE}${selectedMovie.poster_path}`} 
+                <img
+                  src={`${POSTER_BASE}${selectedMovie.poster_path}`}
                   alt={selectedMovie.title}
                   className="w-44 rounded-2xl shadow-xl hidden sm:block border border-white/10"
                 />
@@ -175,16 +206,38 @@ export default function App() {
                   <div className="flex items-center gap-2 text-xs font-semibold text-white/60 mb-2">
                     <span>{selectedMovie.release_date?.split('-')[0]}</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1"><Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> {selectedMovie.vote_average.toFixed(1)}</span>
+                    <span className="flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{' '}
+                      {selectedMovie.vote_average?.toFixed(1)}
+                    </span>
                   </div>
-                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3">{selectedMovie.title}</h2>
-                  <p className="text-sm sm:text-base text-white/70 leading-relaxed mb-6">{selectedMovie.overview}</p>
-                  
-                  <button 
-                    onClick={() => setIsPlaying(true)}
-                    className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95"
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-3">
+                    {selectedMovie.title}
+                  </h2>
+                  <p className="text-sm sm:text-base text-white/70 leading-relaxed mb-6">
+                    {selectedMovie.overview}
+                  </p>
+
+                  {resolveError && (
+                    <div className="mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">
+                      {resolveError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleStartStream}
+                    disabled={isResolving}
+                    className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
                   >
-                    <Play className="w-4 h-4 fill-black" /> Start Stream
+                    {isResolving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-black" /> Loading Stream...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-black" /> Start Stream
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -198,14 +251,14 @@ export default function App() {
 
 function MovieCard({ movie, onClick }) {
   return (
-    <div 
+    <div
       onClick={onClick}
       className="group relative flex flex-col cursor-pointer rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02]"
     >
       <div className="aspect-[2/3] w-full rounded-2xl overflow-hidden bg-white/5 border border-white/10 relative">
         {movie.poster_path ? (
-          <img 
-            src={`${POSTER_BASE}${movie.poster_path}`} 
+          <img
+            src={`${POSTER_BASE}${movie.poster_path}`}
             alt={movie.title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
