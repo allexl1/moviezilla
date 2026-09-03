@@ -3,49 +3,47 @@ import { createVideoSource } from '../types/source';
 const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 
 /**
- * Resolves a TMDB movie/show entity into a normalized VideoSource.
- * Uses verified open HLS development stream manifests as baseline fallbacks.
+ * Resolves any TMDB movie object into an authorized VideoSource.
+ * Defaults to the standard Mux HLS test manifest for independent player verification.
  */
-export async function resolveVideoSource(media) {
+export async function resolveVideoSource(media, preferredSource = 'development-hls') {
   if (!media || !media.id) {
     throw new Error('Invalid media item provided to resolver.');
   }
 
-  // Development & Authorized HLS Test Manifests
-  const DEV_SOURCES = [
-    {
-      title: 'Tears of Steel (4K/1080p HLS + Subtitles)',
-      url: 'https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8',
-      subtitles: [
-        {
-          label: 'English',
-          url: 'https://content.jwplatform.com/tracks/114979.vtt',
-          default: true,
-        },
-      ],
-    },
-    {
-      title: 'Big Buck Bunny (Adaptive HLS Multi-bitrate)',
+  const poster = media.poster_path ? `${IMG_BASE}${media.poster_path}` : '';
+  const backdrop = media.backdrop_path ? `${IMG_BASE}${media.backdrop_path}` : '';
+  const title = media.title || media.name || 'Untitled';
+
+  // 1. Legitimate Development Stream (Mux HLS Test Manifest)
+  if (preferredSource === 'development-hls') {
+    return createVideoSource({
+      id: media.id,
+      title,
+      type: 'hls',
       url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+      poster,
+      backdrop,
       subtitles: [],
-    },
-  ];
+      metadata: {
+        voteAverage: media.vote_average,
+        releaseDate: media.release_date,
+        overview: media.overview,
+      },
+    });
+  }
 
-  // Pick deterministic source based on ID
-  const selectedDevSource = DEV_SOURCES[media.id % DEV_SOURCES.length];
+  // 2. Open Embed Fallback (Categorized cleanly as type: 'embed')
+  if (preferredSource === 'vidlink-embed') {
+    return createVideoSource({
+      id: media.id,
+      title,
+      type: 'embed',
+      url: `https://vidlink.pro/movie/${media.id}?primaryColor=ffffff&secondaryColor=08090a&iconColor=ffffff&icons=vid&autoplay=true`,
+      poster,
+      backdrop,
+    });
+  }
 
-  return createVideoSource({
-    id: media.id,
-    title: media.title || media.name || 'Untitled Stream',
-    streamUrl: selectedDevSource.url,
-    poster: media.poster_path ? `${IMG_BASE}${media.poster_path}` : '',
-    backdrop: media.backdrop_path ? `${IMG_BASE}${media.backdrop_path}` : '',
-    subtitles: selectedDevSource.subtitles,
-    metadata: {
-      releaseDate: media.release_date || media.first_air_date,
-      rating: media.vote_average,
-      overview: media.overview,
-    },
-    episodeInfo: null, // Ready for TV show schema extension
-  });
+  throw new Error(`Unknown source configuration: ${preferredSource}`);
 }

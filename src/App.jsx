@@ -15,9 +15,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
-  
-  // Custom Player Integration State
-  const [resolvedSource, setResolvedSource] = useState(null);
+
+  // Playback & Resolver State
+  const [activeSource, setActiveSource] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState(null);
 
@@ -53,17 +53,18 @@ export default function App() {
 
   const openMovie = (movie) => {
     setSelectedMovie(movie);
-    setResolvedSource(null);
+    setActiveSource(null);
     setResolveError(null);
   };
 
-  const handleStartStream = async () => {
+  const handleStartStream = async (sourceType = 'development-hls') => {
     if (!selectedMovie) return;
     setIsResolving(true);
     setResolveError(null);
+
     try {
-      const source = await resolveVideoSource(selectedMovie);
-      setResolvedSource(source);
+      const source = await resolveVideoSource(selectedMovie, sourceType);
+      setActiveSource(source);
     } catch (err) {
       setResolveError(err.message || 'Unable to resolve video stream source.');
     } finally {
@@ -73,13 +74,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen relative selection:bg-white selection:text-black">
+      {/* Floating Glass Header */}
       <header className="fixed top-5 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-5xl rounded-full glass-panel px-6 py-3 flex items-center justify-between shadow-2xl">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => {
             setSearchQuery('');
             setSelectedMovie(null);
-            setResolvedSource(null);
+            setActiveSource(null);
           }}
         >
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
@@ -100,6 +102,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* Main Shelves & Hero */}
       <main className="pt-24 pb-20 px-6 max-w-7xl mx-auto">
         {searchQuery.trim().length > 2 ? (
           <div className="mt-8">
@@ -136,7 +139,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         openMovie(heroMovie);
-                        handleStartStream();
+                        handleStartStream('development-hls');
                       }}
                       className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95"
                     >
@@ -174,7 +177,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal Dialog with Custom Player */}
+      {/* Modal Dialog with Custom Native Player or Embed Fallback */}
       {selectedMovie && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
           <div className="relative w-full max-w-5xl rounded-3xl glass-panel overflow-hidden border border-white/15 shadow-2xl flex flex-col">
@@ -185,7 +188,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setSelectedMovie(null);
-                  setResolvedSource(null);
+                  setActiveSource(null);
                 }}
                 className="w-8 h-8 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-all cursor-pointer shrink-0 ml-2"
               >
@@ -193,8 +196,20 @@ export default function App() {
               </button>
             </div>
 
-            {resolvedSource ? (
-              <Player source={resolvedSource} />
+            {activeSource ? (
+              activeSource.type === 'embed' ? (
+                <div className="aspect-video w-full bg-black">
+                  <iframe
+                    src={activeSource.url}
+                    className="w-full h-full border-0"
+                    allowFullScreen
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    title={activeSource.title}
+                  />
+                </div>
+              ) : (
+                <Player source={activeSource} />
+              )
             ) : (
               <div className="p-6 sm:p-8 flex flex-col md:flex-row gap-6 items-start">
                 <img
@@ -224,21 +239,31 @@ export default function App() {
                     </div>
                   )}
 
-                  <button
-                    onClick={handleStartStream}
-                    disabled={isResolving}
-                    className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
-                  >
-                    {isResolving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-black" /> Loading Stream...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 fill-black" /> Start Stream
-                      </>
-                    )}
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => handleStartStream('development-hls')}
+                      disabled={isResolving}
+                      className="flex items-center gap-2 px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-white/90 transition-all cursor-pointer shadow-lg active:scale-95 disabled:opacity-50"
+                    >
+                      {isResolving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-black" /> Initializing...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 fill-black" /> Play (Custom HLS Player)
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => handleStartStream('vidlink-embed')}
+                      disabled={isResolving}
+                      className="flex items-center gap-2 px-5 py-3 rounded-full glass-panel hover:bg-white/10 font-medium text-xs transition-all cursor-pointer text-white/80"
+                    >
+                      Play via Embed Source
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
