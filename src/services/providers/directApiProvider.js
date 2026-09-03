@@ -1,58 +1,37 @@
 import { BaseProvider } from './base';
-import { createVideoSource } from '../../types/source';
-
-const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 
 export class DirectApiProvider extends BaseProvider {
   constructor() {
-    super({
-      id: 'direct-hls',
-      name: 'Direct HLS',
-      priority: 1,
-    });
+    super('direct', 'Direct Stream (Fastest)');
   }
 
-  async resolve(media) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
-
+  async resolve(mediaId, mediaType = 'movie', season = 1, episode = 1) {
     try {
-      const res = await fetch(`/api/source/movie/${media.id}`, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
+      const endpoint = mediaType === 'tv'
+        ? `/api/source/tv/${mediaId}?season=${season}&episode=${episode}`
+        : `/api/source/movie/${mediaId}`;
+
+      const res = await fetch(endpoint, {
+        headers: { 'Accept': 'application/json' },
       });
 
-      clearTimeout(timeoutId);
-
       if (!res.ok) {
-        throw new Error(`Direct API returned HTTP ${res.status}`);
+        throw new Error(`Direct provider endpoint returned ${res.status}`);
       }
 
       const data = await res.json();
-      if (!data || !data.url) {
-        throw new Error('Direct API payload missing stream URL');
+      if (data?.streamUrl) {
+        return {
+          type: 'direct',
+          url: data.streamUrl,
+          subtitles: data.subtitles || [],
+          server: 'direct',
+        };
       }
-
-      return createVideoSource({
-        id: media.id,
-        title: media.title || media.name,
-        type: data.type || 'hls',
-        url: data.url,
-        poster: media.poster_path ? `${IMG_BASE}${media.poster_path}` : '',
-        backdrop: media.backdrop_path ? `${IMG_BASE}${media.backdrop_path}` : '',
-        subtitles: data.subtitles || [],
-        audioTracks: data.audioTracks || [],
-        provider: this.id,
-        providerName: this.name,
-        metadata: {
-          voteAverage: media.vote_average,
-          releaseDate: media.release_date,
-          overview: media.overview,
-        },
-      });
+      return null;
     } catch (err) {
-      clearTimeout(timeoutId);
-      throw err;
+      console.warn(`DirectApiProvider failed for ${mediaType} ${mediaId}:`, err);
+      return null;
     }
   }
 }

@@ -7,10 +7,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "#08090a",
-        surface: "rgba(255, 255, 255, 0.04)",
-        glass: "rgba(18, 20, 24, 0.65)",
-      },
+        'cine-bg': '#05000d',
+        'cine-panel': '#0e0e1061',
+        'cine-accent': '#95ff50',
+      }
     },
   },
   plugins: [],

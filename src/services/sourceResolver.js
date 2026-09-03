@@ -1,63 +1,51 @@
 import { DirectApiProvider } from './providers/directApiProvider';
 import { VidyProvider } from './providers/vidyProvider';
-import { VidLinkFallbackProvider } from './providers/vidlinkFallbackProvider';
+import { VidlinkFallbackProvider } from './providers/vidlinkFallbackProvider';
 
-class SourceManager {
+class SourceResolver {
   constructor() {
     this.providers = [
       new DirectApiProvider(),
       new VidyProvider(),
-      new VidLinkFallbackProvider(),
-    ].sort((a, b) => a.priority - b.priority);
-
-    this.vidlinkFallback = new VidLinkFallbackProvider();
+      new VidlinkFallbackProvider(),
+    ];
   }
 
-  async resolve(media, onProgress = () => {}) {
-    if (!media || !media.id) {
-      throw new Error('Invalid media item provided for resolution.');
-    }
-
-    let lastError = null;
-
-    for (const provider of this.providers) {
-      try {
-        onProgress({
-          status: 'resolving',
-          providerName: provider.name,
-          providerId: provider.id,
-        });
-
-        const source = await provider.resolve(media);
-        if (source && source.url) {
-          onProgress({
-            status: 'resolved',
-            providerName: source.providerName,
-            providerId: source.provider,
-            isFallback: source.type === 'embed',
-          });
-          return source;
+  async resolveSource({ mediaId, type = 'movie', season = 1, episode = 1, preferredServer = null }) {
+    // 1. If user chose a specific server, try matching it first
+    if (preferredServer) {
+      const matched = this.providers.find((p) => p.id === preferredServer);
+      if (matched) {
+        try {
+          const result = await matched.resolve(mediaId, type, season, episode);
+          if (result) return result;
+        } catch (e) {
+          console.warn(`Preferred server "${preferredServer}" failed, falling back:`, e);
         }
-      } catch (err) {
-        lastError = err;
-        console.warn(`[MovieZilla SourceManager] Provider ${provider.name} failed:`, err.message);
       }
     }
 
-    throw lastError || new Error('All media providers failed to return a valid source.');
+    // 2. Cascade through providers sequentially until one resolves
+    for (const provider of this.providers) {
+      try {
+        const result = await provider.resolve(mediaId, type, season, episode);
+        if (result) return result;
+      } catch (err) {
+        console.warn(`Provider ${provider.name} failed:`, err);
+      }
+    }
+
+    // 3. Guaranteed ultimate fallback: VidLink Iframe URL
+    const fallbackUrl = type === 'tv'
+      ? `https://vidlink.pro/tv/${mediaId}/${season}/${episode}?primaryColor=95ff50&secondaryColor=101014`
+      : `https://vidlink.pro/movie/${mediaId}?primaryColor=95ff50&secondaryColor=101014`;
+
+    return {
+      type: 'embed',
+      url: fallbackUrl,
+      server: 'vidlink',
+    };
   }
-
-  async resolveVidLinkFallback(media) {
-    return await this.vidlinkFallback.resolve(media);
-  }
 }
 
-export const sourceManager = new SourceManager();
-
-export async function resolveVideoSource(media, onProgress) {
-  return await sourceManager.resolve(media, onProgress);
-}
-
-export async function resolveVidLinkFallback(media) {
-  return await sourceManager.resolveVidLinkFallback(media);
-}
+export const sourceResolver = new SourceResolver();

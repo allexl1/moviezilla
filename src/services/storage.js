@@ -1,16 +1,15 @@
 const STORAGE_KEYS = {
-  FAVORITES: 'moviezilla_favorites',
-  HISTORY: 'moviezilla_history',
-  LETTERBOXD: 'moviezilla_letterboxd',
+  PROGRESS: 'moviezilla_playback_progress',
+  HISTORY: 'moviezilla_watch_history',
+  WATCHLIST: 'moviezilla_watchlist',
+  ACTIVE_SERVER: 'moviezilla_preferred_server',
 };
 
-// Safe JSON Parse helper
-function safeGet(key, fallback = []) {
+function safeGet(key, fallback = {}) {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
-  } catch (err) {
-    console.error(`[Storage] Failed parsing ${key}:`, err);
+  } catch {
     return fallback;
   }
 }
@@ -19,109 +18,87 @@ function safeSet(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
-    console.error(`[Storage] Failed setting ${key}:`, err);
+    console.error(`Failed to write to localStorage key "${key}":`, err);
   }
 }
 
-// --- Favorites ---
-export function getFavorites() {
-  return safeGet(STORAGE_KEYS.FAVORITES, []);
-}
+export const storage = {
+  // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode, currentTime, duration
+  saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '' }) {
+    if (!mediaId) return;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const key = `${type}_${mediaId}`;
 
-export function isFavorite(id) {
-  const list = getFavorites();
-  return list.some((item) => String(item.id) === String(id));
-}
+    const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
-export function toggleFavorite(media) {
-  if (!media?.id) return [];
-  const list = getFavorites();
-  const exists = list.some((item) => String(item.id) === String(media.id));
+    allProgress[key] = {
+      mediaId,
+      type,
+      season,
+      episode,
+      currentTime: Math.floor(currentTime),
+      duration: Math.floor(duration),
+      percent: Math.min(100, Math.floor(progressPercent)),
+      title,
+      poster,
+      updatedAt: Date.now(),
+    };
 
-  let updated;
-  if (exists) {
-    updated = list.filter((item) => String(item.id) !== String(media.id));
-  } else {
-    updated = [
-      {
-        id: media.id,
-        title: media.title || media.name,
-        poster_path: media.poster_path,
-        media_type: media.media_type || (media.first_air_date ? 'tv' : 'movie'),
-        vote_average: media.vote_average,
-        release_date: media.release_date || media.first_air_date,
-        savedAt: Date.now(),
-      },
-      ...list,
-    ];
-  }
-  safeSet(STORAGE_KEYS.FAVORITES, updated);
-  return updated;
-}
+    safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+  },
 
-// --- Watch History ---
-export function getHistory() {
-  return safeGet(STORAGE_KEYS.HISTORY, []);
-}
+  // Retrieve position to resume
+  getProgress(type, mediaId) {
+    if (!mediaId) return null;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    return allProgress[`${type}_${mediaId}`] || null;
+  },
 
-export function recordWatchHistory(media, season = 1, episode = 1) {
-  if (!media?.id) return;
-  const list = getHistory().filter((item) => String(item.id) !== String(media.id));
-  const isTv = media.media_type === 'tv' || Boolean(media.first_air_date);
+  // Get all partially watched items sorted by most recent
+  getAllContinueWatching() {
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    return Object.values(allProgress)
+      .filter((item) => item.percent > 2 && item.percent < 95)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  },
 
-  const entry = {
-    id: media.id,
-    title: media.title || media.name,
-    poster_path: media.poster_path,
-    backdrop_path: media.backdrop_path,
-    media_type: isTv ? 'tv' : 'movie',
-    season: isTv ? season : null,
-    episode: isTv ? episode : null,
-    watchedAt: Date.now(),
-  };
+  // Preferred Server memory
+  getPreferredServer(defaultServer = 'VidLink') {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
+    } catch {
+      return defaultServer;
+    }
+  },
 
-  safeSet(STORAGE_KEYS.HISTORY, [entry, ...list].slice(0, 25));
-}
+  setPreferredServer(serverName) {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_SERVER, serverName);
+    } catch (err) {
+      console.error('Failed to set preferred server:', err);
+    }
+  },
 
-export function clearHistory() {
-  safeSet(STORAGE_KEYS.HISTORY, []);
-}
+  // Watchlist
+  getWatchlist() {
+    return safeGet(STORAGE_KEYS.WATCHLIST, []);
+  },
 
-// --- Letterboxd Config ---
-export function getLetterboxdConfig() {
-  return safeGet(STORAGE_KEYS.LETTERBOXD, { username: '', items: [] });
-}
+  toggleWatchlist(item) {
+    const list = safeGet(STORAGE_KEYS.WATCHLIST, []);
+    const idx = list.findIndex((x) => x.id === item.id);
+    let updated;
+    if (idx >= 0) {
+      updated = list.filter((x) => x.id !== item.id);
+    } else {
+      updated = [item, ...list];
+    }
+    safeSet(STORAGE_KEYS.WATCHLIST, updated);
+    return idx === -1; // returns true if added, false if removed
+  },
 
-export function setLetterboxdConfig(config) {
-  safeSet(STORAGE_KEYS.LETTERBOXD, config);
-}
-
-// --- Backup & Restore ---
-export function exportUserData() {
-  const data = {
-    favorites: getFavorites(),
-    history: getHistory(),
-    letterboxd: getLetterboxdConfig(),
-    exportDate: new Date().toISOString(),
-  };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `moviezilla-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function importUserData(jsonString) {
-  try {
-    const data = JSON.parse(jsonString);
-    if (data.favorites) safeSet(STORAGE_KEYS.FAVORITES, data.favorites);
-    if (data.history) safeSet(STORAGE_KEYS.HISTORY, data.history);
-    if (data.letterboxd) safeSet(STORAGE_KEYS.LETTERBOXD, data.letterboxd);
-    return true;
-  } catch (err) {
-    console.error('[Storage] Import failed:', err);
-    return false;
-  }
-}
+  isInWatchlist(id) {
+    const list = safeGet(STORAGE_KEYS.WATCHLIST, []);
+    return list.some((x) => x.id === id);
+  },
+};
