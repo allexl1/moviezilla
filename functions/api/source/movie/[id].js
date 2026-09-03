@@ -1,14 +1,14 @@
 export async function onRequestGet(context) {
   const { params } = context;
-  const tmdbId = String(params.id);
+  const tmdbId = String(params?.id || '');
 
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
   };
 
-  // Plug in legitimate, direct full-length media streams here:
-  // e.g. "550": { type: "hls", url: "https://your-storage.com/movies/550.m3u8" }
+  // Direct media catalog hook.
+  // Map TMDB IDs to legitimate, authorized direct HLS/MP4 streams here.
   const DIRECT_CATALOG = {};
 
   if (DIRECT_CATALOG[tmdbId]) {
@@ -18,9 +18,9 @@ export async function onRequestGet(context) {
     });
   }
 
-  // When no direct source is configured, trigger the embed fallback
-  return new Response(JSON.stringify({ error: 'Direct source not configured' }), {
-    status: 404,
-    headers,
-  });
+  // Gracefully report 404 so SourceManager cascades to embed providers
+  return new Response(
+    JSON.stringify({ error: 'Direct HLS stream not indexed for this title' }),
+    { status: 404, headers }
+  );
 }

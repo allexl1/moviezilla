@@ -13,6 +13,7 @@ export function createVideoSource({
   audioTracks = [],
   quality = null,
   provider = 'unknown',
+  providerName = 'Unknown Provider',
   metadata = {},
 }) {
   if (!id || !url) {
@@ -42,6 +43,7 @@ export function createVideoSource({
     audioTracks: Array.isArray(audioTracks) ? audioTracks : [],
     quality,
     provider,
+    providerName,
     metadata,
     progressKey: `moviezilla_progress_${id}`,
   };

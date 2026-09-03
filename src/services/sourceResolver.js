@@ -1,21 +1,21 @@
 import { DirectApiProvider } from './providers/directApiProvider';
+import { VidyProvider } from './providers/vidyProvider';
 import { VidLinkFallbackProvider } from './providers/vidlinkFallbackProvider';
 
 class SourceManager {
   constructor() {
     this.providers = [
       new DirectApiProvider(),
+      new VidyProvider(),
       new VidLinkFallbackProvider(),
     ].sort((a, b) => a.priority - b.priority);
+
+    this.vidlinkFallback = new VidLinkFallbackProvider();
   }
 
-  /**
-   * Resolves a media item through registered providers in priority order.
-   * Invokes onProgress callback with status updates.
-   */
   async resolve(media, onProgress = () => {}) {
     if (!media || !media.id) {
-      throw new Error('Invalid media object provided for resolution.');
+      throw new Error('Invalid media item provided for resolution.');
     }
 
     let lastError = null;
@@ -32,25 +32,32 @@ class SourceManager {
         if (source && source.url) {
           onProgress({
             status: 'resolved',
-            providerName: provider.name,
-            providerId: provider.id,
-            isFallback: provider.id === 'vidlink-fallback',
+            providerName: source.providerName,
+            providerId: source.provider,
+            isFallback: source.type === 'embed',
           });
           return source;
         }
       } catch (err) {
         lastError = err;
-        console.warn(`[MovieZilla SourceManager] Provider ${provider.id} failed:`, err.message);
+        console.warn(`[MovieZilla SourceManager] Provider ${provider.name} failed:`, err.message);
       }
     }
 
     throw lastError || new Error('All media providers failed to return a valid source.');
   }
+
+  async resolveVidLinkFallback(media) {
+    return await this.vidlinkFallback.resolve(media);
+  }
 }
 
 export const sourceManager = new SourceManager();
 
-// Backward-compatible entrypoint
 export async function resolveVideoSource(media, onProgress) {
   return await sourceManager.resolve(media, onProgress);
+}
+
+export async function resolveVidLinkFallback(media) {
+  return await sourceManager.resolveVidLinkFallback(media);
 }

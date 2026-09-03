@@ -3,18 +3,18 @@ import { createVideoSource } from '../../types/source';
 
 const IMG_BASE = 'https://image.tmdb.org/t/p/original';
 
-export class VidLinkFallbackProvider extends BaseProvider {
+export class VidyProvider extends BaseProvider {
   constructor() {
     super({
-      id: 'vidlink-embed',
-      name: 'VidLink Embed',
-      priority: 3,
+      id: 'vidy-embed',
+      name: 'Vidy Embed',
+      priority: 2,
     });
   }
 
   async resolve(media) {
     if (!media || !media.id) {
-      throw new Error('Missing media ID for VidLink Fallback');
+      throw new Error('Missing media ID for Vidy Embed');
     }
 
     const poster = media.poster_path ? `${IMG_BASE}${media.poster_path}` : '';
@@ -22,9 +22,9 @@ export class VidLinkFallbackProvider extends BaseProvider {
 
     return createVideoSource({
       id: media.id,
-      title: media.title || media.name,
+      title: media.title || media.name || 'Untitled Media',
       type: 'embed',
-      url: `https://vidlink.pro/movie/${media.id}?primaryColor=ffffff&secondaryColor=08090a&iconColor=ffffff&icons=vid&autoplay=true`,
+      url: `https://vidy.st/movie/${media.id}`,
       poster,
       backdrop,
       provider: this.id,

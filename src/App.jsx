@@ -1,26 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Play, Star, X, Film, Info, Loader2, CheckCircle2 } from 'lucide-react';
-import Player from './components/Player';
-import { resolveVideoSource } from './services/sourceResolver';
+import React, { useState, useEffect, useRef } from "react";
+import { Search, Play, Star, X, Film, Info, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import Player from "./components/Player";
+import { resolveVideoSource, resolveVidLinkFallback } from "./services/sourceResolver";
 
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const IMG_BASE = 'https://image.tmdb.org/t/p/original';
-const POSTER_BASE = 'https://image.tmdb.org/t/p/w500';
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const IMG_BASE = "https://image.tmdb.org/t/p/original";
+const POSTER_BASE = "https://image.tmdb.org/t/p/w500";
 
 export default function App() {
   const [trending, setTrending] = useState([]);
   const [topRated, setTopRated] = useState([]);
   const [heroMovie, setHeroMovie] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
-  // Playback & Resolver State
+  // Playback state
   const [activeSource, setActiveSource] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
-  const [resolveStatus, setResolveStatus] = useState('');
-  const [isFallbackNotice, setIsFallbackNotice] = useState(false);
+  const [resolveStatus, setResolveStatus] = useState("");
+
+  // Embed timeout supervision
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeTimedOut, setIframeTimedOut] = useState(false);
+  const iframeTimerRef = useRef(null);
 
   useEffect(() => {
     if (!API_KEY) return;
@@ -40,6 +44,23 @@ export default function App() {
       });
   }, []);
 
+  // Monitor embed load duration without inspecting cross-origin iframe internals
+  useEffect(() => {
+    if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+    setIframeLoaded(false);
+    setIframeTimedOut(false);
+
+    if (activeSource?.type === "embed") {
+      iframeTimerRef.current = setTimeout(() => {
+        setIframeTimedOut(true);
+      }, 10000);
+    }
+
+    return () => {
+      if (iframeTimerRef.current) clearTimeout(iframeTimerRef.current);
+    };
+  }, [activeSource]);
+
   const handleSearch = (e) => {
     const q = e.target.value;
     setSearchQuery(q);
@@ -55,30 +76,41 @@ export default function App() {
   const openMovie = (movie) => {
     setSelectedMovie(movie);
     setActiveSource(null);
-    setIsFallbackNotice(false);
-    setResolveStatus('');
+    setResolveStatus("");
   };
 
   const handleStartStream = async (movieToPlay = selectedMovie) => {
     if (!movieToPlay) return;
     setIsResolving(true);
-    setIsFallbackNotice(false);
-    setResolveStatus('Checking direct sources...');
+    setResolveStatus("Connecting...");
 
     try {
       const source = await resolveVideoSource(movieToPlay, (progress) => {
-        if (progress.status === 'resolving') {
+        if (progress.status === "resolving") {
           setResolveStatus(`Connecting to ${progress.providerName}...`);
-        } else if (progress.status === 'resolved' && progress.isFallback) {
-          setIsFallbackNotice(true);
         }
       });
       setActiveSource(source);
     } catch (err) {
-      console.error('[MovieZilla] Resolution failed:', err);
+      console.error("[MovieZilla] Resolution failed:", err);
     } finally {
       setIsResolving(false);
-      setResolveStatus('');
+      setResolveStatus("");
+    }
+  };
+
+  const handleSwitchToVidLink = async () => {
+    if (!selectedMovie) return;
+    setIsResolving(true);
+    setResolveStatus("Switching to VidLink fallback...");
+    try {
+      const fallbackSource = await resolveVidLinkFallback(selectedMovie);
+      setActiveSource(fallbackSource);
+    } catch (err) {
+      console.error("[MovieZilla] VidLink fallback resolution failed:", err);
+    } finally {
+      setIsResolving(false);
+      setResolveStatus("");
     }
   };
 
@@ -89,7 +121,7 @@ export default function App() {
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => {
-            setSearchQuery('');
+            setSearchQuery("");
             setSelectedMovie(null);
             setActiveSource(null);
           }}
@@ -112,7 +144,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Shelves & Hero */}
       <main className="pt-24 pb-20 px-6 max-w-7xl mx-auto">
         {searchQuery.trim().length > 2 ? (
           <div className="mt-8">
@@ -137,7 +169,7 @@ export default function App() {
                     <span className="px-2 py-0.5 rounded-full bg-white/10 border border-white/15">Featured</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{' '}
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{" "}
                       {heroMovie.vote_average?.toFixed(1)}
                     </span>
                   </div>
@@ -197,8 +229,8 @@ export default function App() {
                   {selectedMovie.title}
                 </span>
                 {activeSource && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/15 text-white/60">
-                    {activeSource.type === 'embed' ? 'Fallback Stream' : 'MovieZilla Native'}
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-white/10 border border-white/15 text-white/70">
+                    {activeSource.providerName}
                   </span>
                 )}
               </div>
@@ -214,20 +246,42 @@ export default function App() {
             </div>
 
             {activeSource ? (
-              activeSource.type === 'embed' ? (
+              activeSource.type === "embed" ? (
                 <div className="relative aspect-video w-full bg-black">
-                  {isFallbackNotice && (
-                    <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full glass-panel border border-white/20 bg-black/70 backdrop-blur-md text-[11px] text-white/70 shadow-lg">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-yellow-400" />
-                      <span>Direct source unavailable — playing via VidLink</span>
+                  {/* Switch to VidLink action while using Vidy */}
+                  <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
+                    {activeSource.provider === "vidy-embed" && (
+                      <button
+                        onClick={handleSwitchToVidLink}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full glass-panel border border-white/20 bg-black/70 hover:bg-black/90 backdrop-blur-md text-[11px] text-white/80 hover:text-white transition-all cursor-pointer shadow-lg"
+                      >
+                        <RefreshCw className="w-3 h-3 text-white/60" />
+                        <span>Switch to VidLink</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 10-second iframe load stall notice */}
+                  {!iframeLoaded && iframeTimedOut && activeSource.provider === "vidy-embed" && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2 rounded-full glass-panel border border-white/20 bg-black/85 backdrop-blur-md text-xs text-white/90 shadow-2xl">
+                      <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+                      <span>Stream taking longer than expected?</span>
+                      <button
+                        onClick={handleSwitchToVidLink}
+                        className="ml-1 px-2.5 py-0.5 rounded-full bg-white text-black font-semibold text-[11px] hover:bg-white/90 transition-all cursor-pointer"
+                      >
+                        Try VidLink
+                      </button>
                     </div>
                   )}
+
                   <iframe
                     src={activeSource.url}
                     className="w-full h-full border-0"
                     allowFullScreen
                     allow="autoplay; encrypted-media; picture-in-picture"
                     title={activeSource.title}
+                    onLoad={() => setIframeLoaded(true)}
                   />
                 </div>
               ) : (
@@ -242,10 +296,10 @@ export default function App() {
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2 text-xs font-semibold text-white/60 mb-2">
-                    <span>{selectedMovie.release_date?.split('-')[0]}</span>
+                    <span>{selectedMovie.release_date?.split("-")[0]}</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{' '}
+                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{" "}
                       {selectedMovie.vote_average?.toFixed(1)}
                     </span>
                   </div>
@@ -264,7 +318,7 @@ export default function App() {
                     {isResolving ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-black" />
-                        <span>{resolveStatus || 'Resolving source...'}</span>
+                        <span>{resolveStatus || "Resolving source..."}</span>
                       </>
                     ) : (
                       <>
@@ -306,7 +360,7 @@ function MovieCard({ movie, onClick }) {
         </div>
       </div>
       <h3 className="text-sm font-medium text-white/90 truncate mt-2 px-0.5">{movie.title}</h3>
-      <span className="text-xs text-white/40 px-0.5">{movie.release_date?.split('-')[0]}</span>
+      <span className="text-xs text-white/40 px-0.5">{movie.release_date?.split("-")[0]}</span>
     </div>
   );
 }
