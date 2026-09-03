@@ -28,13 +28,20 @@ export const GUARANTEED_TITLES = [
 async function proxyFetch(endpoint, params = {}) {
   try {
     const query = new URLSearchParams(params);
-    const queryString = query.toString() ? `?${query.toString()}` : '';
-    const res = await fetch(`/api/tmdb/${endpoint}${queryString}`);
-    
+    const queryString = query.toString();
+
+    const res = await fetch(
+      `/api/tmdb/${endpoint}${queryString ? `?${queryString}` : ''}`
+    );
+
     if (!res.ok) throw new Error(`Proxy status ${res.status}`);
+
     const data = await res.json();
-    
-    if (data?.results && data.results.length > 0) return data;
+
+    if (data?.results && data.results.length > 0) {
+      return data;
+    }
+
     return { results: GUARANTEED_TITLES };
   } catch {
     return { results: GUARANTEED_TITLES };
@@ -80,9 +87,11 @@ export const tmdb = {
 
   async getMediaDetails(mediaType, id) {
     try {
-      const query = new URLSearchParams({ append_to_response: 'videos,credits,similar' });
-      const res = await fetch(`/api/tmdb/${mediaType}/${id}?${query.toString()}`);
-      if (!res.ok) throw new Error();
+      const query = new URLSearchParams({
+  append_to_response: 'videos,credits,similar'
+});
+const res = await fetch(`/api/tmdb/${mediaType}/${id}?${query.toString()}`);
+              if (!res.ok) throw new Error();
       return await res.json();
     } catch {
       return GUARANTEED_TITLES.find((m) => m.id === Number(id)) || GUARANTEED_TITLES[0];
