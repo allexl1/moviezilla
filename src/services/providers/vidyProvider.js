@@ -1,7 +1,6 @@
 import { BaseProvider } from './base';
 import { createVideoSource } from '../../types/source';
-
-const IMG_BASE = 'https://image.tmdb.org/t/p/original';
+import { tmdb } from '../tmdb';
 
 export class VidyProvider extends BaseProvider {
   constructor() {
@@ -17,8 +16,8 @@ export class VidyProvider extends BaseProvider {
       throw new Error('Missing media ID for Vidy Embed');
     }
 
-    const poster = media.poster_path ? `${IMG_BASE}${media.poster_path}` : '';
-    const backdrop = media.backdrop_path ? `${IMG_BASE}${media.backdrop_path}` : '';
+    const poster = tmdb.getImageUrl(media.poster_path, 'original');
+const backdrop = tmdb.getImageUrl(media.backdrop_path, 'original');
 
     return createVideoSource({
       id: media.id,
