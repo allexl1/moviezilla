@@ -17,8 +17,9 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           {isDetailView && (
             <button
               onClick={onBack}
-              className="w-11 h-11 rounded-full flex items-center justify-center text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-2xl transition cursor-pointer"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white/80 hover:text-white bg-[var(--cine-glass-tint)] hover:bg-[var(--cine-glass-tint-hover)] border border-[var(--cine-glass-border)] backdrop-blur-2xl transition cursor-pointer"
               title="Back"
+              aria-label="Back"
             >
               <ArrowLeft className="w-5 h-5" strokeWidth={2.4} />
             </button>
@@ -54,6 +55,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             onClick={() => onTabChange('search')}
             className="cine-nav-icon-btn"
             title="Search"
+            aria-label="Search"
           >
             <Search className="w-4 h-4" strokeWidth={2.2} />
           </button>
@@ -62,6 +64,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             onClick={onOpenSettings}
             className="cine-nav-icon-btn"
             title="Settings"
+            aria-label="Settings"
           >
             <Settings className="w-4 h-4" strokeWidth={2} />
           </button>
@@ -69,7 +72,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
       </header>
 
       {/* Mobile Bottom Dock */}
-      <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+      <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none" aria-label="Primary">
         <div className="pointer-events-auto flex items-center gap-1 p-1.5 rounded-full cine-nav-pill-box shadow-2xl">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;
@@ -83,6 +86,20 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
               </button>
             );
           })}
+          <button
+            onClick={() => onTabChange('search')}
+            className="cine-nav-btn px-3.5 py-2 text-xs"
+            aria-label="Search"
+          >
+            <Search className="w-4 h-4" strokeWidth={2.2} />
+          </button>
+          <button
+            onClick={onOpenSettings}
+            className="cine-nav-btn px-3.5 py-2 text-xs"
+            aria-label="Settings"
+          >
+            <Settings className="w-4 h-4" strokeWidth={2} />
+          </button>
         </div>
       </nav>
     </>

@@ -1,4 +1,4 @@
-import React from 'react';
+import { FALLBACK_POSTER } from '../../services/tmdb';
 
 /**
  * Row — glass list row (search results, history, menus).
@@ -24,8 +24,7 @@ export default function Row({
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition"
           onError={(e) => {
-            e.target.src =
-              'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
+            e.target.src = FALLBACK_POSTER;
           }}
         />
       </div>

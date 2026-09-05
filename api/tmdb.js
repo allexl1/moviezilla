@@ -1,3 +1,46 @@
+const ALLOWED_PATHS = [
+  /^trending\/all\/week$/,
+  /^discover\/(movie|tv)$/,
+  /^search\/(movie|multi)$/,
+  /^watch\/providers\/movie$/,
+  /^(movie|tv)\/\d+$/,
+  /^(movie|tv)\/\d+\/images$/,
+  /^tv\/\d+\/season\/\d+$/,
+];
+
+// Never forward credential/session params even if a caller sends them.
+const BLOCKED_PARAMS = new Set([
+  'api_key',
+  'api_token',
+  'session_id',
+  'guest_session_id',
+  'session',
+  'token',
+]);
+
+// Best-effort in-memory rate limit (per serverless instance, not global).
+const rateBuckets = new Map();
+const RATE_WINDOW = 60 * 1000;
+const RATE_MAX = 240;
+
+function rateLimited(ip) {
+  const now = Date.now();
+  const hits = (rateBuckets.get(ip) || []).filter((t) => now - t < RATE_WINDOW);
+  hits.push(now);
+  rateBuckets.set(ip, hits);
+  if (rateBuckets.size > 2000) rateBuckets.clear();
+  return hits.length > RATE_MAX;
+}
+
+function cacheHeader(tmdbPath) {
+  // Search results change fast and are query-specific: short cache.
+  // Catalog/details/seasons are near-immutable: longer edge cache.
+  if (/^search\//.test(tmdbPath)) {
+    return 'public, s-maxage=60, stale-while-revalidate=120';
+  }
+  return 'public, s-maxage=600, stale-while-revalidate=1200';
+}
+
 export default async function handler(req, res) {
   try {
     const { path, ...queryParams } = req.query;
@@ -19,6 +62,25 @@ export default async function handler(req, res) {
     }
 
     const tmdbPath = pathSegments.join('/');
+
+    if (!ALLOWED_PATHS.some((re) => re.test(tmdbPath))) {
+      return res.status(403).json({
+        error: 'TMDB path not allowed',
+      });
+    }
+
+    const forwarded = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
+    if (rateLimited(forwarded)) {
+      res.setHeader?.('Retry-After', '60');
+      return res.status(429).json({
+        error: 'Rate limit exceeded, retry later',
+      });
+    }
+
+    for (const blocked of BLOCKED_PARAMS) {
+      delete queryParams[blocked];
+    }
+
     const apiKey = process.env.TMDB_API_KEY;
 
     if (!apiKey) {
@@ -51,6 +113,7 @@ export default async function handler(req, res) {
       });
     }
 
+    res.setHeader?.('Cache-Control', cacheHeader(tmdbPath));
     return res.status(200).json(data);
   } catch (err) {
     return res.status(500).json({

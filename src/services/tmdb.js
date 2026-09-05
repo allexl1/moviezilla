@@ -75,6 +75,13 @@ export const TV_SORTS = [
 ];
 
 async function proxyFetch(endpoint, params = {}) {
+  // Short client cache for catalog/search: key includes every param, so
+  // different filters/queries can never collide. 2-min staleness on public
+  // catalog data is negligible; repeat visits and re-renders skip the network.
+  const cacheKey = `catalog:${endpoint}:${JSON.stringify(params)}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   const query = new URLSearchParams({
     path: endpoint,
     ...params,
@@ -87,7 +94,9 @@ async function proxyFetch(endpoint, params = {}) {
   }
 
   const data = await res.json();
-  return data ?? { results: [] };
+  const payload = data ?? { results: [] };
+  cacheSet(cacheKey, payload, 120 * 1000);
+  return payload;
 }
 
 // Tiny in-memory TTL cache for immutable detail calls (details, logos,
@@ -98,15 +107,15 @@ const CACHE_TTL = 5 * 60 * 1000;
 function cacheGet(key) {
   const hit = responseCache.get(key);
   if (!hit) return undefined;
-  if (Date.now() - hit.at > CACHE_TTL) {
+  if (Date.now() - hit.at > (hit.ttl || CACHE_TTL)) {
     responseCache.delete(key);
     return undefined;
   }
   return hit.data;
 }
 
-function cacheSet(key, data) {
-  responseCache.set(key, { data, at: Date.now() });
+function cacheSet(key, data, ttl = CACHE_TTL) {
+  responseCache.set(key, { data, at: Date.now(), ttl });
 }
 
 export const tmdb = {
@@ -237,21 +246,6 @@ export const tmdb = {
     });
   },
 
-  // Watch-provider catalog (logos) for the provider rail.
-  async getProviderCatalog() {
-    try {
-      const query = new URLSearchParams({
-        path: 'watch/providers/movie',
-        watch_region: 'US',
-      });
-      const res = await fetch(`/api/tmdb?${query.toString()}`);
-      if (!res.ok) throw new Error();
-      return await res.json();
-    } catch {
-      return { results: [] };
-    }
-  },
-
   async getMediaDetails(mediaType, id) {
     const cacheKey = `details:${mediaType}:${id}`;
     const cached = cacheGet(cacheKey);
@@ -320,24 +314,64 @@ export const tmdb = {
   },
 
   // Resolve a Letterboxd-style title/year to a real TMDB item (lazy, on
-  // selection — not at list-fetch time). Returns the TMDB item or null;
-  // throws on network failure. Never fabricates an ID.
+  // selection — not at list-fetch time). Scores candidates on normalized
+  // title (diacritics/punctuation/articles stripped, original_title
+  // accepted) plus release-year agreement; requires an exact title match
+  // so similar titles can't win. Returns the TMDB item or null; throws on
+  // network failure. Never fabricates an ID.
   async resolveTitle(title, year = '') {
+    const norm = (s) =>
+      String(s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/^the\s+/, '')
+        .replace(/[^a-z0-9 ]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
     const cleanYear = String(year || '').slice(0, 4);
+    const wantYear = /^\d{4}$/.test(cleanYear) ? cleanYear : '';
+    const target = norm(title);
+    if (!target) return null;
+
+    const score = (c) => {
+      const t = norm(c.title || c.name);
+      const o = norm(c.original_title || c.original_name);
+      let s = 0;
+      if (t === target) s += 5;
+      else if (o === target) s += 4;
+      else if (t.startsWith(target) || target.startsWith(t)) s += 1;
+      else return -1;
+      const y = String(c.release_date || c.first_air_date || '').slice(0, 4);
+      if (wantYear) s += y === wantYear ? 3 : -2;
+      return s;
+    };
+
+    const pick = (results) => {
+      let best = null;
+      let bestScore = 4;
+      for (const c of results || []) {
+        if (c.media_type !== undefined && c.media_type !== 'movie' && c.media_type !== 'tv') continue;
+        if (!c.poster_path) continue;
+        const s = score(c);
+        const pop = c.popularity || c.vote_count || 0;
+        if (s > bestScore || (s === bestScore && best && pop > (best.popularity || best.vote_count || 0))) {
+          best = c;
+          bestScore = s;
+        }
+      }
+      return best;
+    };
+
     const params = { query: title };
-    if (/^\d{4}$/.test(cleanYear)) params.year = cleanYear;
+    if (wantYear) params.year = wantYear;
 
     const movieRes = await proxyFetch('search/movie', params);
-    const movieMatch =
-      (movieRes?.results || []).find((x) => x.poster_path) ||
-      (movieRes?.results || [])[0];
+    const movieMatch = pick(movieRes?.results);
     if (movieMatch) return { ...movieMatch, media_type: 'movie' };
 
     const multiRes = await proxyFetch('search/multi', { query: title });
-    return (
-      (multiRes?.results || []).find(
-        (x) => (x.media_type === 'movie' || x.media_type === 'tv') && x.poster_path
-      ) || null
-    );
+    return pick(multiRes?.results) || null;
   }
 };

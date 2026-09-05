@@ -46,6 +46,8 @@ function certificationOf(details, mediaType) {
 export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [detailsError, setDetailsError] = useState('');
+  const [detailsRetry, setDetailsRetry] = useState(0);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [logo, setLogo] = useState(null);
   const [trailerKey, setTrailerKey] = useState(null);
@@ -58,6 +60,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     let isMounted = true;
     async function fetchDetails() {
       setLoading(true);
+      setDetailsError('');
       setTrailerKey(null);
       setLogo(null);
       setExpanded(false);
@@ -78,12 +81,23 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         }
       } catch (err) {
         console.error('Failed to load media details:', err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setDetailsError("Couldn't load full details. Showing basic info.");
+          setLoading(false);
+        }
       }
     }
     fetchDetails();
     return () => { isMounted = false; };
-  }, [mediaId, mediaType]);
+  }, [mediaId, mediaType, detailsRetry]);
+
+  // Stay in sync when the watchlist changes elsewhere (no reload needed).
+  useEffect(() => {
+    if (!mediaId) return;
+    return storage.subscribeWatchlist(() => {
+      setIsWatchlist(storage.isInWatchlist(mediaId));
+    });
+  }, [mediaId]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
@@ -131,6 +145,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             onClick={() => setMuted((m) => !m)}
             className="cine-icon-btn absolute bottom-8 right-8 md:right-14 z-20"
             title={muted ? 'Unmute trailer' : 'Mute trailer'}
+            aria-label={muted ? 'Unmute trailer' : 'Mute trailer'}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
@@ -172,6 +187,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               }}
               className="cine-btn-circle"
               title={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
+              aria-label={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
             >
               {isWatchlist ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             </button>
@@ -212,9 +228,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           </div>
         </div>
 
-        {/* Facts panel (desktop) */}
+        {/* Facts panel (xl screens only — avoids overlapping the overlay below that) */}
         {(runtime || language || releaseDate) && (
-          <div className="hidden lg:block absolute right-14 bottom-10 z-10 w-72 rounded-2xl cine-glass-panel overflow-hidden">
+          <div className="hidden xl:block absolute right-14 bottom-10 z-10 w-72 rounded-2xl cine-glass-panel overflow-hidden">
             {runtime && (
               <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-white/[0.07]">
                 <span className="text-white/45 font-medium">Runtime</span>
@@ -242,12 +258,22 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
       {/* Main Details Body */}
       <div className="max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-12">
-        {/* Mobile facts */}
-        <section className="lg:hidden flex flex-wrap items-center gap-2 text-xs">
+        {detailsError && (
+          <div className="flex items-center gap-3 text-xs text-white/60">
+            <span>{detailsError}</span>
+            <button
+              onClick={() => setDetailsRetry((r) => r + 1)}
+              className="cine-control-btn"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {/* Mobile facts (cert already shows in the meta row above) */}
+        <section className="xl:hidden flex flex-wrap items-center gap-2 text-xs">
           {runtime && <span className="cine-chip cine-chip--neutral">{runtime} · {formatEndsAt(runtimeMins)}</span>}
           {language && <span className="cine-chip cine-chip--neutral">{language}</span>}
           {releaseDate && <span className="cine-chip cine-chip--neutral">{releaseDate}</span>}
-          {cert && <span className="cine-chip cine-chip--neutral">{cert}</span>}
         </section>
 
         {studios.length > 0 && (
@@ -270,7 +296,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             <div className="flex gap-5 overflow-x-auto no-scrollbar pb-2">
               {cast.map((actor) => (
                 <div key={actor.id} className="flex-shrink-0 w-32 text-center space-y-2">
-                  <div className="w-28 h-28 mx-auto rounded-full overflow-hidden bg-white/5 border border-white/10 shadow-lg">
+                  <div className="w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">
                     <img
                       src={tmdb.getImageUrl(actor.profile_path, 'w185', FALLBACK_PROFILE)}
                       alt={actor.name}
@@ -302,11 +328,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     setTrailerKey(t.key);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`group relative flex-shrink-0 w-72 aspect-video rounded-2xl overflow-hidden cursor-pointer border transition ${
-                    trailerKey === t.key
-                      ? 'border-[var(--cine-accent)]/60'
-                      : 'border-white/10 hover:border-white/25'
-                  }`}
+                   className={`group relative flex-shrink-0 w-72 aspect-video rounded-2xl overflow-hidden cursor-pointer border transition ${
+                     trailerKey === t.key
+                       ? 'border-[var(--cine-accent)]/60'
+                       : 'border-[var(--cine-glass-border)] hover:border-white/25'
+                   }`}
                 >
                   <img
                     src={`https://i.ytimg.com/vi/${t.key}/hqdefault.jpg`}

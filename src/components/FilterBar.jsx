@@ -48,6 +48,7 @@ export default function FilterBar({
         <Select
           value={selectedGenre}
           onChange={onSelectGenre}
+          label="Genre"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,
@@ -57,6 +58,7 @@ export default function FilterBar({
         <Select
           value={selectedYear}
           onChange={onSelectYear}
+          label="Year"
           options={YEARS.map((y) => ({
             value: y,
             label: y === 'All Years' ? 'Year' : y,
@@ -66,12 +68,14 @@ export default function FilterBar({
         <Select
           value={selectedSort}
           onChange={onSelectSort}
+          label="Sort by"
           options={sorts.map((s) => ({ value: s.id, label: s.name }))}
         />
 
         <Select
           value={selectedProvider}
           onChange={onSelectProvider}
+          label="Provider"
           options={PROVIDERS.map((p) => ({
             value: p.id,
             label: p.id === '' ? 'Provider' : p.name,
@@ -81,6 +85,7 @@ export default function FilterBar({
         <Select
           value={selectedCountry}
           onChange={onSelectCountry}
+          label="Country"
           options={COUNTRIES.map((c) => ({
             value: c.id,
             label: c.id === '' ? 'Country' : c.name,

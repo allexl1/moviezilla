@@ -66,6 +66,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   const [letterboxdList, setLetterboxdList] = useState([]);
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveError, setResolveError] = useState('');
+  // Bumped by the storage event so toggles re-render immediately.
+  const [, setWlVersion] = useState(0);
+
+  React.useEffect(() => storage.subscribeWatchlist(() => setWlVersion((v) => v + 1)), []);
 
   // Letterboxd rows carry a URL id, not a TMDB id — resolve lazily on tap
   // so the detail/playback flow always receives a real TMDB ID + type.
@@ -191,7 +195,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         <SegmentedControl label="When" options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} />
         <div className="flex items-center gap-2.5">
           <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
-          <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} />
+          <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} label="Filter by genre" />
         </div>
       </div>
 

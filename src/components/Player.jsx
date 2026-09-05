@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
+import { ArrowLeft, Eye, ListVideo, Maximize } from 'lucide-react';
 import { storage } from '../services/storage';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
@@ -56,9 +56,12 @@ export default function Player({ media, details, onClose }) {
     }
   }, [mediaId, isTv]);
 
-  // 2. Keyboard shortcuts (Escape to exit, F for Fullscreen)
+  // 2. Keyboard shortcuts (Escape to exit, F for Fullscreen).
+  // Any key also wakes the chrome — pointer events over the embed iframe
+  // never reach this container, so keys are a guaranteed recovery path.
   useEffect(() => {
     function handleKeyDown(e) {
+      poke();
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -204,6 +207,7 @@ export default function Player({ media, details, onClose }) {
             onClick={onClose}
             className="cine-icon-btn"
             title="Exit (Esc)"
+            aria-label="Exit player"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -225,6 +229,7 @@ export default function Player({ media, details, onClose }) {
             <button
               onClick={() => setIsEpisodeOpen(!isEpisodeOpen)}
               className="cine-control-btn"
+              aria-label="Toggle episode list"
             >
               <ListVideo className="w-4 h-4 text-[var(--cine-accent)]" />
               <span>Episodes</span>
@@ -243,6 +248,7 @@ export default function Player({ media, details, onClose }) {
             }}
             className="cine-icon-btn"
             title="Fullscreen (F)"
+            aria-label="Toggle fullscreen"
           >
             <Maximize className="w-4 h-4" />
           </button>
@@ -272,6 +278,20 @@ export default function Player({ media, details, onClose }) {
           currentEpisode={currentEpisode}
           onSelectEpisode={handleSelectEpisode}
         />
+      )}
+
+      {/* Recovery toggle: the embed iframe swallows all pointer events, so
+          once the chrome hides there is no hover path back. This button
+          renders above the iframe and is always clickable. */}
+      {!showChrome && (
+        <button
+          onClick={poke}
+          className="cine-icon-btn absolute bottom-5 right-5 z-40"
+          title="Show controls"
+          aria-label="Show player controls"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
       )}
     </div>
   );

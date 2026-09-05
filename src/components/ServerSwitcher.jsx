@@ -35,6 +35,8 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="cine-control-btn"
+        aria-label="Select playback server"
+        aria-expanded={isOpen}
       >
         <span className="w-2 h-2 rounded-full bg-[var(--cine-accent)] animate-pulse" />
         <span>{activeServer.name}</span>
@@ -45,7 +47,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-72 p-3 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/40 border-b border-white/10 mb-2">
+          <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/40 border-b border-[var(--cine-glass-border)] mb-2">
             <Server className="w-3.5 h-3.5" />
             Playback Servers
           </div>

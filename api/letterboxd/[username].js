@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   const { username } = req.query;
 
   try {
-    const rss = await fetch(`https://letterboxd.com/${username}/rss/`);
+    const rss = await fetch(`https://letterboxd.com/${encodeURIComponent(String(username))}/rss/`);
     if (!rss.ok) throw new Error(`Letterboxd status ${rss.status}`);
     const text = await rss.text();
 

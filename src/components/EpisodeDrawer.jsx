@@ -14,6 +14,8 @@ export default function EpisodeDrawer({
   const [activeSeason, setActiveSeason] = useState(currentSeason);
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState('');
+  const [seasonRetry, setSeasonRetry] = useState(0);
   const popoverRef = useRef(null);
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export default function EpisodeDrawer({
     if (!isOpen || !tvId) return;
     let isMounted = true;
     setLoading(true);
+    setSeasonError('');
 
     tmdb.getSeasonDetails(tvId, activeSeason)
       .then((data) => {
@@ -34,11 +37,14 @@ export default function EpisodeDrawer({
       })
       .catch((err) => {
         console.error('Failed to load season episodes:', err);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setSeasonError("Couldn't load episodes. Check your connection.");
+          setLoading(false);
+        }
       });
 
     return () => { isMounted = false; };
-  }, [tvId, activeSeason, isOpen]);
+  }, [tvId, activeSeason, isOpen, seasonRetry]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -63,9 +69,9 @@ export default function EpisodeDrawer({
         className="pointer-events-auto w-full max-w-sm max-h-[82vh] rounded-3xl cine-glass-panel flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
       >
         {/* Popover Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--cine-glass-border)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[var(--cine-accent)]">
+            <div className="w-10 h-10 rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-[var(--cine-accent)]">
               <ListVideo className="w-4 h-4" />
             </div>
             <div>
@@ -82,7 +88,7 @@ export default function EpisodeDrawer({
         </div>
 
         {/* Season Selector Pills */}
-        <div className="flex gap-1.5 p-3 overflow-x-auto no-scrollbar border-b border-white/10">
+        <div className="flex gap-1.5 p-3 overflow-x-auto no-scrollbar border-b border-[var(--cine-glass-border)]">
           {seasons.map((sNum) => (
             <button
               key={sNum}
@@ -90,7 +96,7 @@ export default function EpisodeDrawer({
               className={`h-10 px-5 inline-flex items-center rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 activeSeason === sNum
                   ? 'bg-white text-black shadow-sm'
-                  : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                  : 'bg-[var(--cine-glass-tint)] text-white/60 hover:text-white hover:bg-[var(--cine-glass-tint-hover)]'
               }`}
             >
               Season {sNum}
@@ -103,6 +109,16 @@ export default function EpisodeDrawer({
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-6 h-6 border-2 border-[var(--cine-accent)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : seasonError ? (
+            <div className="flex flex-col items-center justify-center gap-3 h-32 text-xs text-white/60">
+              <span>{seasonError}</span>
+              <button
+                onClick={() => setSeasonRetry((r) => r + 1)}
+                className="cine-control-btn"
+              >
+                Retry
+              </button>
             </div>
           ) : episodes.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-xs text-white/40">

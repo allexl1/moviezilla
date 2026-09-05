@@ -19,7 +19,7 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
           className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${
             danger
               ? 'bg-red-500/10 border-red-500/20 text-red-400'
-              : 'bg-white/5 border-white/10 text-[var(--cine-accent)]'
+              : 'bg-[var(--cine-glass-tint)] border-[var(--cine-glass-border)] text-[var(--cine-accent)]'
           }`}
         >
           {icon}
@@ -115,7 +115,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
         />
       </div>
 
-      <div className="pt-5 mt-1 border-t border-white/10 flex justify-end">
+      <div className="pt-5 mt-1 border-t border-[var(--cine-glass-border)] flex justify-end">
         <button
           onClick={handleSave}
           className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm"

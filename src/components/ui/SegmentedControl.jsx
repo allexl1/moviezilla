@@ -22,7 +22,7 @@ export default function SegmentedControl({ label, options = [], value, onChange 
             className={`h-11 px-6 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition cursor-pointer border backdrop-blur-xl ${
               active
                 ? 'bg-white text-black border-white shadow-md'
-                : 'bg-white/[0.06] hover:bg-white/[0.1] border-white/10 text-white'
+                : 'bg-[var(--cine-glass-tint)] hover:bg-[var(--cine-glass-tint-hover)] border-[var(--cine-glass-border)] text-white'
             }`}
             >
               {opt.name ?? opt.label}

@@ -9,12 +9,14 @@ export default function Select({
   onChange,
   options = [],
   className = '',
+  label,
 }) {
   return (
     <div className="relative flex-shrink-0">
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
         className={`cine-select ${className}`}
       >
         {options.map((opt) => (

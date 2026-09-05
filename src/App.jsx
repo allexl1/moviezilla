@@ -53,6 +53,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [items, setItems] = useState([]);
   const [featuredItem, setFeaturedItem] = useState(null);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const [continueWatching, setContinueWatching] = useState([]);
 
   const [letterboxdUser, setLetterboxdUser] = useState(
@@ -118,9 +120,11 @@ export default function App() {
 
           setItems(list);
           setFeaturedItem(list.length > 0 ? list[0] : null);
+          setCatalogError('');
         }
       } catch (err) {
         console.error('Failed to load catalog:', err);
+        if (isMounted) setCatalogError("Couldn't load titles. Check your connection.");
       }
     }
 
@@ -137,9 +141,11 @@ export default function App() {
     selectedProvider,
     selectedCountry,
     letterboxdUser,
+    catalogRetry,
   ]);
 
-  const playRandom = () => {
+  // Picks a random visible title into the detail view (does not autoplay).
+  const pickRandom = () => {
     if (items.length === 0) return;
     const pick = items[Math.floor(Math.random() * items.length)];
     setSelectedMedia(pick);
@@ -268,7 +274,11 @@ export default function App() {
     } catch (err) {
       console.error('Failed to load media details for playback:', err);
 
-      // Keep playback usable even if the details request fails.
+      // Policy: play with partial metadata rather than blocking. The embed
+      // URL needs only id/type/season/episode (all resolved above), and the
+      // episode drawer loads real season data on demand — so a details
+      // failure degrades (season count may fall back to 1) instead of
+      // refusing playback. The failure is logged, never disguised as success.
       setActivePlayer({
         media: {
           ...media,
@@ -411,6 +421,7 @@ export default function App() {
                     <button
                       onClick={() => storage.toggleWatchlist(heroItem)}
                       title="Add to Watchlist"
+                      aria-label="Add to Watchlist"
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -418,6 +429,7 @@ export default function App() {
                     <button
                       onClick={() => setSelectedMedia(heroItem)}
                       title="Details"
+                      aria-label="Details"
                     >
                       <Info className="w-5 h-5" />
                     </button>
@@ -432,6 +444,8 @@ export default function App() {
                       key={item.id}
                       onClick={() => setHeroIndex(i)}
                       title={item.title || item.name}
+                      aria-label={`Show ${item.title || item.name}`}
+                      aria-current={i === heroIndex}
                       className={`cine-hero-dot ${i === heroIndex ? 'is-active' : ''}`}
                     />
                   ))}
@@ -439,7 +453,7 @@ export default function App() {
               )}
             </section>
           )}
-          {activeTab === 'home' && !heroItem && (
+          {activeTab === 'home' && !heroItem && !catalogError && (
             <p className="text-center py-16 text-xs text-white/40">
               Loading catalog…
             </p>
@@ -477,7 +491,7 @@ export default function App() {
                   onSelectProvider={setSelectedProvider}
                   selectedCountry={selectedCountry}
                   onSelectCountry={setSelectedCountry}
-                  onRandom={playRandom}
+                  onRandom={pickRandom}
                 />
               </div>
             )}
@@ -507,7 +521,7 @@ export default function App() {
                   onSelectProvider={setSelectedProvider}
                   selectedCountry={selectedCountry}
                   onSelectCountry={setSelectedCountry}
-                  onRandom={playRandom}
+                  onRandom={pickRandom}
                 />
               </div>
             )}
@@ -613,6 +627,17 @@ export default function App() {
             )}
 
             <section>
+              {catalogError && activeTab !== 'watchlist' && (
+                <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
+                  <span>{catalogError}</span>
+                  <button
+                    onClick={() => setCatalogRetry((c) => c + 1)}
+                    className="cine-control-btn"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
               {activeTab === 'home' ? (
                 <div className="flex flex-col gap-10">
                   <RowRail title="Trending Now" items={items} onSelect={setSelectedMedia} />
@@ -651,6 +676,7 @@ export default function App() {
                           <Select
                             value={homeProvider}
                             onChange={setHomeProvider}
+                            label="Provider"
                             options={PROVIDERS.filter((p) => p.id !== '').map((p) => ({
                               value: p.id,
                               label: p.name,

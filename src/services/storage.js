@@ -1,6 +1,5 @@
 const STORAGE_KEYS = {
   PROGRESS: 'moviezilla_playback_progress',
-  HISTORY: 'moviezilla_watch_history',
   WATCHLIST: 'moviezilla_watchlist',
   ACTIVE_SERVER: 'moviezilla_preferred_server',
 };
@@ -19,6 +18,14 @@ function safeSet(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     console.error(`Failed to write to localStorage key "${key}":`, err);
+  }
+}
+
+function notifyWatchlist() {
+  try {
+    window.dispatchEvent(new CustomEvent('mz:watchlist'));
+  } catch {
+    // Non-browser environment: subscribers simply never fire.
   }
 }
 
@@ -110,6 +117,17 @@ export const storage = {
     return safeGet(STORAGE_KEYS.WATCHLIST, []);
   },
 
+  // Subscribe to watchlist changes (same-tab; localStorage events don't
+  // fire in the writing tab). Returns an unsubscribe function.
+  subscribeWatchlist(fn) {
+    try {
+      window.addEventListener('mz:watchlist', fn);
+      return () => window.removeEventListener('mz:watchlist', fn);
+    } catch {
+      return () => {};
+    }
+  },
+
   toggleWatchlist(item) {
     const list = safeGet(STORAGE_KEYS.WATCHLIST, []);
     const idx = list.findIndex((x) => x.id === item.id);
@@ -120,6 +138,7 @@ export const storage = {
       updated = [item, ...list];
     }
     safeSet(STORAGE_KEYS.WATCHLIST, updated);
+    notifyWatchlist();
     return idx === -1; // returns true if added, false if removed
   },
 

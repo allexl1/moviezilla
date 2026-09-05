@@ -8,9 +8,14 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchRetry, setSearchRetry] = useState(0);
 
   useEffect(() => {
-    if (!isOpen) setQuery('');
+    if (!isOpen) {
+      setQuery('');
+      setSearchError('');
+    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -21,18 +26,20 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
 
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError('');
       try {
         const res = await tmdb.searchMulti(query);
         setResults((res?.results || []).filter((x) => x.poster_path));
       } catch (err) {
         console.error('Search failed:', err);
+        setSearchError("Search failed. Check your connection.");
       } finally {
         setLoading(false);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, searchRetry]);
 
   return (
     <Modal
@@ -45,7 +52,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       label="Search movies and shows"
     >
       {/* Search Input Bar */}
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+      <div className="flex items-center gap-3 border-b border-[var(--cine-glass-border)] pb-4">
         <Search className="w-5 h-5 text-white/40 flex-shrink-0" />
         <input
           type="text"
@@ -68,8 +75,20 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       <div className="max-h-[60vh] overflow-y-auto no-scrollbar space-y-2">
         {loading && <p className="text-center py-8 text-xs text-white/40">Searching catalog...</p>}
 
-        {!loading && query && results.length === 0 && (
+        {!loading && query && results.length === 0 && !searchError && (
           <p className="text-center py-8 text-xs text-white/40">No titles found for "{query}".</p>
+        )}
+
+        {!loading && searchError && (
+          <div className="flex items-center justify-center gap-3 py-8 text-xs text-white/60">
+            <span>{searchError}</span>
+            <button
+              onClick={() => setSearchRetry((r) => r + 1)}
+              className="cine-control-btn"
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         {results.map((item) => {
