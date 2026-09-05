@@ -60,6 +60,30 @@ export const COUNTRIES = [
   { id: 'ES', name: 'Spain' },
   { id: 'IT', name: 'Italy' },
   { id: 'CA', name: 'Canada' },
+  { id: 'MX', name: 'Mexico' },
+  { id: 'BR', name: 'Brazil' },
+  { id: 'AR', name: 'Argentina' },
+  { id: 'AU', name: 'Australia' },
+  { id: 'NZ', name: 'New Zealand' },
+  { id: 'CN', name: 'China' },
+  { id: 'HK', name: 'Hong Kong' },
+  { id: 'TW', name: 'Taiwan' },
+  { id: 'TH', name: 'Thailand' },
+  { id: 'TR', name: 'Turkey' },
+  { id: 'GR', name: 'Greece' },
+  { id: 'PT', name: 'Portugal' },
+  { id: 'IE', name: 'Ireland' },
+  { id: 'NL', name: 'Netherlands' },
+  { id: 'BE', name: 'Belgium' },
+  { id: 'CH', name: 'Switzerland' },
+  { id: 'AT', name: 'Austria' },
+  { id: 'SE', name: 'Sweden' },
+  { id: 'NO', name: 'Norway' },
+  { id: 'DK', name: 'Denmark' },
+  { id: 'FI', name: 'Finland' },
+  { id: 'PL', name: 'Poland' },
+  { id: 'CZ', name: 'Czechia' },
+  { id: 'RU', name: 'Russia' },
 ];
 
 export const SORTS = [
@@ -155,9 +179,10 @@ export const tmdb = {
     }
 
     if (year && year !== 'All Years') {
-      if (year === '2020s') {
-        params['primary_release_date.gte'] = '2020-01-01';
-        params['primary_release_date.lte'] = '2029-12-31';
+      const decade = String(year).match(/^(\d{3})0s$/);
+      if (decade) {
+        params['primary_release_date.gte'] = `${decade[1]}0-01-01`;
+        params['primary_release_date.lte'] = `${decade[1]}9-12-31`;
       } else {
         params.primary_release_year = year;
       }
@@ -193,9 +218,10 @@ export const tmdb = {
     }
 
     if (year && year !== 'All Years') {
-      if (year === '2020s') {
-        params['first_air_date.gte'] = '2020-01-01';
-        params['first_air_date.lte'] = '2029-12-31';
+      const decade = String(year).match(/^(\d{3})0s$/);
+      if (decade) {
+        params['first_air_date.gte'] = `${decade[1]}0-01-01`;
+        params['first_air_date.lte'] = `${decade[1]}9-12-31`;
       } else {
         params.first_air_date_year = year;
       }
@@ -244,6 +270,18 @@ export const tmdb = {
       sort_by: 'vote_average.desc',
       'vote_count.gte': 500,
     });
+  },
+
+  // Provider logo paths for the "Browse by Provider" row (id -> logo_path).
+  async getProviderLogos() {
+    const res = await proxyFetch('watch/providers/movie', {
+      watch_region: 'US',
+    });
+    const map = {};
+    for (const p of res?.results || []) {
+      if (p.provider_id && p.logo_path) map[String(p.provider_id)] = p.logo_path;
+    }
+    return map;
   },
 
   async getMediaDetails(mediaType, id) {

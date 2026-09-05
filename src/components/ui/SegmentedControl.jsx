@@ -8,7 +8,7 @@ export default function SegmentedControl({ label, options = [], value, onChange 
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       {label && (
-        <span className="text-[11px] font-bold uppercase tracking-wider text-white/35 flex-shrink-0">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 flex-shrink-0">
           {label}
         </span>
       )}
@@ -19,7 +19,7 @@ export default function SegmentedControl({ label, options = [], value, onChange 
             <button
               key={opt.id ?? opt.value}
               onClick={() => onChange(opt.id ?? opt.value)}
-            className={`h-11 px-6 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition cursor-pointer border backdrop-blur-xl ${
+            className={`h-10 px-5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition cursor-pointer border backdrop-blur-xl ${
               active
                 ? 'bg-white text-black border-white shadow-md'
                 : 'bg-[var(--cine-glass-tint)] hover:bg-[var(--cine-glass-tint-hover)] border-[var(--cine-glass-border)] text-white'

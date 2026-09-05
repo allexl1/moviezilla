@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Eye, ListVideo, Maximize } from 'lucide-react';
+import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
 import { storage } from '../services/storage';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
@@ -201,7 +201,7 @@ export default function Player({ media, details, onClose }) {
       className={`fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`}
     >
       {/* Top Floating Chrome */}
-      <div className={`absolute top-0 inset-x-0 z-30 flex items-center justify-between p-4 md:px-8 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+      <div className={`absolute top-0 inset-x-0 z-30 flex items-center justify-between p-5 md:px-10 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
         <div className={`flex items-center gap-3 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <button
             onClick={onClose}
@@ -212,7 +212,7 @@ export default function Player({ media, details, onClose }) {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-sm md:text-base font-bold text-white truncate max-w-xs md:max-w-md">
+            <h2 className="text-base md:text-lg font-bold text-white truncate max-w-xs md:max-w-md">
               {title}
             </h2>
             {isTv && (
@@ -280,18 +280,14 @@ export default function Player({ media, details, onClose }) {
         />
       )}
 
-      {/* Recovery toggle: the embed iframe swallows all pointer events, so
-          once the chrome hides there is no hover path back. This button
-          renders above the iframe and is always clickable. */}
+      {/* Hover strip: the embed iframe swallows all pointer events, so once
+          the chrome hides there is no hover path back. This transparent
+          strip sits above the video — entering the top edge wakes the UI. */}
       {!showChrome && (
-        <button
-          onClick={poke}
-          className="cine-icon-btn absolute bottom-5 right-5 z-40"
-          title="Show controls"
-          aria-label="Show player controls"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
+        <div
+          onMouseEnter={poke}
+          className="absolute inset-x-0 top-0 h-20 z-20 cursor-default"
+        />
       )}
     </div>
   );

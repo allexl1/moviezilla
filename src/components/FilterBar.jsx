@@ -3,7 +3,20 @@ import { Shuffle } from 'lucide-react';
 import Select from './ui/Select';
 import { COUNTRIES } from '../services/tmdb';
 
-const YEARS = ['All Years', '2026', '2025', '2024', '2023', '2022', '2020s'];
+// Full year range (TMDB has no year-list endpoint, so generate it):
+// every year back to 1970, then decades back to the 1900s.
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [
+  'All Years',
+  ...Array.from({ length: CURRENT_YEAR - 1969 }, (_, i) => String(CURRENT_YEAR - i)),
+  '1960s',
+  '1950s',
+  '1940s',
+  '1930s',
+  '1920s',
+  '1910s',
+  '1900s',
+];
 
 const PROVIDERS = [
   { id: '', name: 'All Providers' },

@@ -38,8 +38,9 @@ export const letterboxd = {
         };
       });
     } catch (err) {
-      console.warn('Failed to parse Letterboxd RSS:', err);
-      return [];
+      // Throw (don't swallow to []) so callers can tell "sync failed"
+      // apart from "list is empty".
+      throw new Error(`Letterboxd sync failed: ${err.message || err}`, { cause: err });
     }
   }
 };

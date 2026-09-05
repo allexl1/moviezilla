@@ -64,6 +64,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   const [typeFilter, setTypeFilter] = useState('all');
   const [genreFilter, setGenreFilter] = useState('');
   const [letterboxdList, setLetterboxdList] = useState([]);
+  const [letterboxdError, setLetterboxdError] = useState('');
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveError, setResolveError] = useState('');
   // Bumped by the storage event so toggles re-render immediately.
@@ -99,7 +100,12 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     if (!letterboxdUser) return;
     let isMounted = true;
     letterboxd.fetchUserWatchlist(letterboxdUser).then((list) => {
-      if (isMounted) setLetterboxdList(list);
+      if (!isMounted) return;
+      setLetterboxdList(list);
+      setLetterboxdError('');
+    }).catch((err) => {
+      console.error('Letterboxd sync failed:', err);
+      if (isMounted) setLetterboxdError('Letterboxd sync failed. Check the username and connection.');
     });
     return () => {
       isMounted = false;
@@ -167,7 +173,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex-shrink-0">
@@ -180,9 +186,14 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         </div>
 
         {letterboxdUser ? (
-          <span className="cine-chip cine-chip--accent self-start lg:self-auto">
-            Letterboxd: {letterboxdUser}
-          </span>
+          <div className="self-start lg:self-auto flex flex-col items-start lg:items-end gap-1.5">
+            <span className="cine-chip cine-chip--accent">
+              Letterboxd: {letterboxdUser}
+            </span>
+            {letterboxdError && (
+              <p className="text-[11px] text-red-400/90">{letterboxdError}</p>
+            )}
+          </div>
         ) : (
           <button onClick={onOpenSettings} className="cine-control-btn self-start lg:self-auto">
             Connect Letterboxd
@@ -191,7 +202,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
       </div>
 
       {/* Filters — labeled groups */}
-      <div className="flex flex-col gap-3 lg:items-end">
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
         <SegmentedControl label="When" options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} />
         <div className="flex items-center gap-2.5">
           <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
@@ -202,7 +213,9 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
       {/* Continue Watching */}
       {continueItems.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-white/80 tracking-wide">Continue Watching</h3>
+        <div className="cine-section-head">
+          <h2 className="cine-section-title">Continue Watching</h2>
+        </div>
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
             {continueItems.map((item) => {
               const { media, fallback } = resumePayload(item);
@@ -246,13 +259,15 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
       {/* History by day */}
       <section className="space-y-6">
-        <h3 className="text-sm font-semibold text-white/80 tracking-wide">History</h3>
+        <div className="cine-section-head">
+          <h2 className="cine-section-title">History</h2>
+        </div>
         {historyGroups.length === 0 && (
-          <p className="text-xs text-white/40">Nothing watched yet — press play on anything.</p>
+          <p className="text-xs text-white/60">Nothing watched yet — press play on anything.</p>
         )}
         {historyGroups.map(([label, items]) => (
           <div key={label} className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white/40">{label}</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">{label}</h4>
             <div className="space-y-2">
               {items.map((h) => {
                 const { media, fallback } = resumePayload(h);
@@ -279,11 +294,11 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
       {/* My List */}
       <section className="space-y-3">
         <div className="cine-section-head">
-          <h3 className="text-sm font-semibold text-white/80 tracking-wide">My List</h3>
-          <span className="text-xs text-white/40">{myList.length} titles</span>
+          <h2 className="cine-section-title">My List</h2>
+          <span className="text-xs text-white/60">{myList.length} titles</span>
         </div>
         {resolvingId && (
-          <p className="text-xs text-white/40">Looking up title on TMDB…</p>
+          <p className="text-xs text-white/60">Looking up title on TMDB…</p>
         )}
         {!resolvingId && resolveError && (
           <p className="text-xs text-red-400/90">{resolveError}</p>
@@ -300,6 +315,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               <Card
                 key={`${item.id}_${item.title}`}
                 media={item}
+                size="fluid"
                 onClick={(m) =>
                   m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
                 }

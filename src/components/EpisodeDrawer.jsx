@@ -76,7 +76,7 @@ export default function EpisodeDrawer({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight">Episodes</h3>
-              <p className="text-[11px] text-white/40">Season {activeSeason} • {episodes.length} episodes</p>
+              <p className="text-[11px] text-white/60">Season {activeSeason} • {episodes.length} episodes</p>
             </div>
           </div>
           <button
@@ -121,7 +121,7 @@ export default function EpisodeDrawer({
               </button>
             </div>
           ) : episodes.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-xs text-white/40">
+            <div className="flex items-center justify-center h-32 text-xs text-white/60">
               No episodes available for this season.
             </div>
           ) : (
@@ -153,7 +153,7 @@ export default function EpisodeDrawer({
                     <h4 className={`text-xs font-semibold truncate ${isCurrent ? 'text-[var(--cine-accent)]' : 'text-white/90 group-hover:text-white'}`}>
                       {ep.episode_number}. {ep.name || `Episode ${ep.episode_number}`}
                     </h4>
-                    <p className="text-[11px] text-white/40 line-clamp-1 mt-0.5">
+                    <p className="text-[11px] text-white/60 line-clamp-1 mt-0.5">
                       {ep.overview || 'Play episode'}
                     </p>
                   </div>

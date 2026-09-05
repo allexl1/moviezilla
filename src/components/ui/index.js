@@ -1,10 +1,8 @@
 /**
  * Shared UI Component Library
- * Import from: import { Button, Card, Chip, Modal, Select, Row, Input, SegmentedControl, EmptyState } from './ui';
+ * Import from: import { Card, Modal, Select, Row, Input, SegmentedControl, EmptyState } from './ui';
  */
-export { default as Button } from './Button.jsx';
 export { default as Card } from './Card.jsx';
-export { default as Chip } from './Chip.jsx';
 export { default as Modal } from './Modal.jsx';
 export { default as Select } from './Select.jsx';
 export { default as Row } from './Row.jsx';

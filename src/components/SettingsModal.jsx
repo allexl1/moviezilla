@@ -29,7 +29,7 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
           <p className="text-xs text-white/45 leading-relaxed mt-0.5">{desc}</p>
         </div>
       </div>
-      <div className="flex-shrink-0 w-52">{control}</div>
+      <div className="flex-shrink-0 w-44 sm:w-60">{control}</div>
     </div>
   );
 }
@@ -60,15 +60,15 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-xl"
+      maxWidth="max-w-2xl"
       align="center"
       showCloseButton={false}
-      panelClassName="p-6"
+      panelClassName="p-6 sm:p-8"
       label="Settings"
     >
       <div className="flex items-center justify-between pb-2">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight">Settings</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">Settings</h2>
           <p className="text-xs text-white/45 mt-0.5">Preferences & sync</p>
         </div>
         <button onClick={onClose} className="cine-icon-btn" title="Close">
@@ -124,7 +124,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
         </button>
       </div>
 
-      <p className="pt-4 text-[11px] leading-relaxed text-white/35">
+      <p className="pt-4 text-[11px] leading-relaxed text-white/50">
         Movie and TV data provided by TMDB. This product uses the TMDB API
         but is not endorsed or certified by TMDB.
       </p>

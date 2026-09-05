@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage } from './services/storage';
@@ -55,6 +55,10 @@ export default function App() {
   const [featuredItem, setFeaturedItem] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const [catalogRetry, setCatalogRetry] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const prevFilterKey = useRef('');
   const [continueWatching, setContinueWatching] = useState([]);
 
   const [letterboxdUser, setLetterboxdUser] = useState(
@@ -87,8 +91,27 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    const filterKey = [
+      activeTab,
+      selectedGenre,
+      selectedYear,
+      selectedSort,
+      selectedProvider,
+      selectedCountry,
+      letterboxdUser,
+    ].join('|');
+
+    // New tab/filters always restart from page 1 instead of appending.
+    if (prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
 
     async function load() {
+      if (page > 1) setLoadingMore(true);
       try {
         let res;
 
@@ -97,6 +120,7 @@ export default function App() {
           return;
         } else if (activeTab === 'movie') {
           res = await tmdb.getMovies({
+            page,
             genre: selectedGenre,
             year: selectedYear,
             sort: selectedSort,
@@ -105,6 +129,7 @@ export default function App() {
           });
         } else if (activeTab === 'tv') {
           res = await tmdb.getSeries({
+            page,
             genre: selectedGenre,
             year: selectedYear,
             sort: selectedSort,
@@ -118,13 +143,23 @@ export default function App() {
         if (isMounted) {
           const list = (res?.results || []).filter((x) => x.poster_path);
 
-          setItems(list);
-          setFeaturedItem(list.length > 0 ? list[0] : null);
+          if (page === 1) {
+            setItems(list);
+            setFeaturedItem(list.length > 0 ? list[0] : null);
+          } else {
+            setItems((prev) => {
+              const seen = new Set(prev.map((x) => x.id));
+              return [...prev, ...list.filter((x) => !seen.has(x.id))];
+            });
+          }
+          setTotalPages(res?.total_pages || 1);
           setCatalogError('');
         }
       } catch (err) {
         console.error('Failed to load catalog:', err);
         if (isMounted) setCatalogError("Couldn't load titles. Check your connection.");
+      } finally {
+        if (isMounted) setLoadingMore(false);
       }
     }
 
@@ -142,6 +177,7 @@ export default function App() {
     selectedCountry,
     letterboxdUser,
     catalogRetry,
+    page,
   ]);
 
   // Picks a random visible title into the detail view (does not autoplay).
@@ -186,6 +222,22 @@ export default function App() {
     };
   }, [activeTab]);
 
+  // Provider logos for the home row (static catalog data, cached).
+  const [providerLogos, setProviderLogos] = useState({});
+
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    let isMounted = true;
+    tmdb
+      .getProviderLogos()
+      .then((map) => {
+        if (isMounted) setProviderLogos(map);
+      })
+      .catch((err) => console.error('Failed to load provider logos:', err));
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]);
   // "Movies on {provider}" rail follows the home provider picker.
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -454,7 +506,7 @@ export default function App() {
             </section>
           )}
           {activeTab === 'home' && !heroItem && !catalogError && (
-            <p className="text-center py-16 text-xs text-white/40">
+            <p className="text-center py-16 text-xs text-white/60">
               Loading catalog…
             </p>
           )}
@@ -528,9 +580,9 @@ export default function App() {
 
             {activeTab === 'home' && continueWatching.length > 0 && (
               <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-white/80 tracking-wide">
-                  Continue Watching
-                </h3>
+                <div className="cine-section-head">
+                  <h2 className="cine-section-title">Continue Watching</h2>
+                </div>
 
                 <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
                   {continueWatching.map((item) => (
@@ -593,10 +645,10 @@ export default function App() {
             )}
 
             {activeTab === 'home' && (
-              <section>
-                <h3 className="text-sm font-semibold text-white/80 mb-3 tracking-wide">
-                  Browse by Provider
-                </h3>
+              <section className="space-y-3">
+                <div className="cine-section-head">
+                  <h2 className="cine-section-title">Browse by Provider</h2>
+                </div>
 
                 <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
                   {PROVIDERS.map((p) => (
@@ -609,15 +661,24 @@ export default function App() {
                       className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
                       title={p.name}
                     >
-                      <div className="cine-provider-pill min-w-[132px]">
-                        <span
-                          className="text-sm font-bold tracking-tight"
-                          style={{ color: p.color }}
-                        >
-                          {p.name}
-                        </span>
+                      <div className="cine-provider-pill">
+                        {providerLogos[p.id] ? (
+                          <img
+                            src={tmdb.getImageUrl(providerLogos[p.id], 'w185')}
+                            alt={p.name}
+                            loading="lazy"
+                            className="h-8 w-auto rounded-md"
+                          />
+                        ) : (
+                          <span
+                            className="text-sm font-bold tracking-tight"
+                            style={{ color: p.color }}
+                          >
+                            {p.name}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[11px] font-medium text-white/45 group-hover:text-white/80 transition">
+                      <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition">
                         {p.name}
                       </span>
                     </div>
@@ -713,10 +774,23 @@ export default function App() {
                     ))}
                   </div>
                   {items.length === 0 && (
-                    <p className="text-center py-16 text-xs text-white/40">
+                    <p className="text-center py-16 text-xs text-white/60">
                       No titles found. Try clearing filters.
                     </p>
                   )}
+                  {(activeTab === 'movie' || activeTab === 'tv') &&
+                    page < totalPages &&
+                    items.length > 0 && (
+                      <div className="flex justify-center py-10">
+                        <button
+                          onClick={() => setPage((p) => p + 1)}
+                          disabled={loadingMore}
+                          className="cine-control-btn disabled:opacity-50"
+                        >
+                          {loadingMore ? 'Loading…' : 'Load more'}
+                        </button>
+                      </div>
+                    )}
                 </>
               )}
             </section>

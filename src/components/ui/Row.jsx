@@ -30,7 +30,7 @@ export default function Row({
       </div>
       <div className="flex-1 min-w-0">
         <h4 className="text-xs md:text-sm font-semibold text-white/90 truncate">{title}</h4>
-        {meta && <p className="text-[11px] text-white/40 mt-0.5 truncate">{meta}</p>}
+        {meta && <p className="text-[11px] text-white/60 mt-0.5 truncate">{meta}</p>}
       </div>
       {right && <div className="flex-shrink-0">{right}</div>}
     </div>

@@ -53,7 +53,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
     >
       {/* Search Input Bar */}
       <div className="flex items-center gap-3 border-b border-[var(--cine-glass-border)] pb-4">
-        <Search className="w-5 h-5 text-white/40 flex-shrink-0" />
+        <Search className="w-5 h-5 text-white/60 flex-shrink-0" />
         <input
           type="text"
           value={query}
@@ -73,10 +73,10 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
 
       {/* Results Container */}
       <div className="max-h-[60vh] overflow-y-auto no-scrollbar space-y-2">
-        {loading && <p className="text-center py-8 text-xs text-white/40">Searching catalog...</p>}
+        {loading && <p className="text-center py-8 text-xs text-white/60">Searching catalog...</p>}
 
         {!loading && query && results.length === 0 && !searchError && (
-          <p className="text-center py-8 text-xs text-white/40">No titles found for "{query}".</p>
+          <p className="text-center py-8 text-xs text-white/60">No titles found for "{query}".</p>
         )}
 
         {!loading && searchError && (

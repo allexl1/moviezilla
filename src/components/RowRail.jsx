@@ -23,7 +23,7 @@ export default function RowRail({ title, titleNode, items = [], onSelect, mediaT
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         ) : (
-          <span className="text-xs text-white/40">{items.length} titles</span>
+          <span className="text-xs text-white/60">{items.length} titles</span>
         )}
       </div>
 

@@ -113,6 +113,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const director = (details?.credits?.crew || []).find((c) => c.job === 'Director')?.name || null;
   const studios = (details?.production_companies || []).slice(0, 2).map((c) => c.name);
   const language = (details?.original_language || '').toUpperCase() || null;
+  const status = details?.status || null;
+  const seasonsCount = details?.number_of_seasons || null;
+  const episodesCount = details?.number_of_episodes || null;
   const releaseDate = formatDate(details?.release_date || details?.first_air_date);
   const similar = details?.similar?.results?.filter((x) => x.poster_path) || [];
   const trailers = (details?.videos?.results || []).filter(
@@ -127,9 +130,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         {trailerKey ? (
           <iframe
             key={`${trailerKey}_${muted ? 'muted' : 'loud'}`}
-            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${trailerKey}&rel=0&modestbranding=1&controls=0&playsinline=1`}
+            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${trailerKey}&rel=0&modestbranding=1&controls=0&playsinline=1&iv_load_policy=3&disablekb=1`}
             title="Trailer"
-            className="w-full h-full border-0 scale-[1.02] pointer-events-none"
+            className="cine-trailer-cover border-0 pointer-events-none"
             allow="autoplay; encrypted-media; fullscreen"
             allowFullScreen
           />
@@ -139,11 +142,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-transparent to-transparent pointer-events-none" />
 
-        {/* Mute toggle */}
+        {/* Mute toggle (autoplay starts muted — browser policy, not a choice) */}
         {trailerKey && (
           <button
             onClick={() => setMuted((m) => !m)}
-            className="cine-icon-btn absolute bottom-8 right-8 md:right-14 z-20"
+            className="cine-icon-btn absolute top-24 right-8 md:right-14 z-20"
             title={muted ? 'Unmute trailer' : 'Mute trailer'}
             aria-label={muted ? 'Unmute trailer' : 'Mute trailer'}
           >
@@ -152,7 +155,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         )}
 
         {/* Content Overlay */}
-        <div className="absolute bottom-10 left-8 md:left-14 right-8 max-w-4xl z-10 space-y-3">
+        <div className="absolute bottom-10 left-8 md:left-14 right-8 max-w-4xl z-10 space-y-4">
           {logo ? (
             <img
               src={tmdb.getImageUrl(logo, 'w500')}
@@ -229,14 +232,31 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </div>
 
         {/* Facts panel (xl screens only — avoids overlapping the overlay below that) */}
-        {(runtime || language || releaseDate) && (
+        {(runtime || language || releaseDate || status || seasonsCount) && (
           <div className="hidden xl:block absolute right-14 bottom-10 z-10 w-72 rounded-2xl cine-glass-panel overflow-hidden">
+            {seasonsCount && (
+              <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-[var(--cine-glass-border)]">
+                <span className="text-white/60 font-medium">Seasons</span>
+                <span className="text-white/90 font-semibold">
+                  {seasonsCount}
+                  {episodesCount && (
+                    <span className="text-white/60 font-normal"> · {episodesCount} episodes</span>
+                  )}
+                </span>
+              </div>
+            )}
+            {status && (
+              <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-[var(--cine-glass-border)]">
+                <span className="text-white/60 font-medium">Status</span>
+                <span className="text-white/90 font-semibold">{status}</span>
+              </div>
+            )}
             {runtime && (
               <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-white/[0.07]">
                 <span className="text-white/45 font-medium">Runtime</span>
                 <span className="text-white/90 font-semibold">
                   {runtime}
-                  <span className="text-white/40 font-normal"> · {formatEndsAt(runtimeMins)}</span>
+                  <span className="text-white/60 font-normal"> · {formatEndsAt(runtimeMins)}</span>
                 </span>
               </div>
             )}
@@ -257,7 +277,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       </div>
 
       {/* Main Details Body */}
-      <div className="max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-12">
+      <div className="max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
         {detailsError && (
           <div className="flex items-center gap-3 text-xs text-white/60">
             <span>{detailsError}</span>
@@ -277,7 +297,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </section>
 
         {studios.length > 0 && (
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/35">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
             {studios.join(' · ')}
           </p>
         )}
@@ -308,7 +328,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   </div>
                   <div>
                     <h4 className="text-xs font-semibold text-white truncate">{actor.name}</h4>
-                    <p className="text-[10px] text-white/40 truncate">{actor.character}</p>
+                    <p className="text-[10px] text-white/60 truncate">{actor.character}</p>
                   </div>
                 </div>
               ))}
@@ -370,7 +390,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         )}
 
         {loading && (
-          <p className="text-center py-8 text-xs text-white/40">Loading details...</p>
+          <p className="text-center py-8 text-xs text-white/60">Loading details...</p>
         )}
       </div>
     </div>

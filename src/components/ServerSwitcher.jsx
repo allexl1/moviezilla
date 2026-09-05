@@ -39,15 +39,15 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
         aria-expanded={isOpen}
       >
         <span className="w-2 h-2 rounded-full bg-[var(--cine-accent)] animate-pulse" />
-        <span>{activeServer.name}</span>
+        <span className="hidden sm:inline">{activeServer.name}</span>
         <ChevronDown
           className={`w-3.5 h-3.5 text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 p-3 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/40 border-b border-[var(--cine-glass-border)] mb-2">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] p-4 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/60 border-b border-[var(--cine-glass-border)] mb-2">
             <Server className="w-3.5 h-3.5" />
             Playback Servers
           </div>
@@ -58,7 +58,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
                 <button
                   key={s.id}
                   onClick={() => handleSelect(s.id)}
-                  className={`mat-row w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-xs transition cursor-pointer ${
+                  className={`mat-row w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left text-sm transition cursor-pointer ${
                     isSelected ? 'border-[var(--cine-accent)]/50' : ''
                   }`}
                 >
@@ -66,7 +66,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
                     <span className={`font-semibold truncate ${isSelected ? 'text-[var(--cine-accent)]' : 'text-white/90'}`}>
                       {s.name}
                     </span>
-                    <span className="text-[10px] text-white/40">{s.quality} • {s.ping}</span>
+                    <span className="text-xs text-white/60">{s.quality} • {s.ping}</span>
                   </div>
                   {isSelected ? (
                     <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0" />

@@ -87,9 +87,8 @@
   --cine-duration-base: 0.25s;
   --cine-duration-slow: 0.4s;
 
-  /* ── Focus (Apple-like: quiet white ring for keyboard, press states live
-     on :active — never a colored ring on tap) ── */
-  --cine-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(255, 255, 255, 0.65);
+  /* ── Focus (Apple-like: quiet ring, keyboard-only via :focus-visible) ── */
+  --cine-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 0 3px rgba(255, 255, 255, 0.35);
 
   /* ── Typography Scale ── */
   --cine-text-xs: 0.75rem;         /* 12px */
@@ -144,9 +143,16 @@ h1, h2, h3 {
 }
 
 /* ─── Custom Scrollbar (Glass Style) ────────────────────────────────────── */
+/* Slim overlay-style page scrollbar: transparent track so no dark gutter
+   edge reads as a "black line" against the background. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -582,7 +588,7 @@ select:focus-visible,
   padding-top: 1rem;
   display: flex;
   flex-direction: column;
-  gap: var(--cine-space-12);
+  gap: var(--cine-space-10);
   position: relative;
   z-index: 10;
 }
@@ -625,11 +631,24 @@ select:focus-visible,
   object-position: center top;
 }
 
+/* Full-bleed trailer: cover-fit the 16:9 YouTube frame into any hero shape
+   so no letterbox/pillarbox bars paint black edges around the video. */
+.cine-trailer-cover {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 56.25vw;
+  min-width: 177.78vh;
+  min-height: 100%;
+  transform: translate(-50%, -50%);
+}
+
 .cine-hero-scrim {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.35) 35%, transparent 65%),
+    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.6) 32%, rgba(5, 5, 5, 0.25) 55%, transparent 75%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 
@@ -649,8 +668,11 @@ select:focus-visible,
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  opacity: 0.22;
-  filter: brightness(0.6) saturate(0.9);
+  /* Ambient wash (cinejoy parity): fully blurred so no hard detail edge
+     shows where the bright hero ends — scale hides the blur bleed. */
+  opacity: 0.6;
+  filter: blur(28px) brightness(0.55) saturate(1.1);
+  transform: scale(1.06);
 }
 
 .cine-home-bg-shade {
@@ -827,6 +849,21 @@ select:focus-visible,
   background: var(--cine-white);
 }
 
+/* Tighten the spotlight frame on phones so copy and controls keep margin. */
+@media (max-width: 768px) {
+  .cine-hero-content {
+    left: 1.25rem;
+    right: 1.25rem;
+    bottom: 2.5rem;
+    max-width: none;
+  }
+
+  .cine-hero-dots {
+    right: 1.25rem;
+    bottom: 1.5rem;
+  }
+}
+
 /* ─── Media Grid ────────────────────────────────────────────────────────── */
 .cine-grid {
   display: grid;
@@ -991,9 +1028,10 @@ select:focus-visible,
 /* ─── Provider Pills ────────────────────────────────────────────────────── */
 .cine-provider-pill {
   height: 52px;
-  min-width: 105px;
+  min-width: 132px;
   padding: 0 1.5rem;
   flex-shrink: 0;
+  white-space: nowrap;
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -1128,6 +1166,7 @@ select:focus-visible,
   -webkit-appearance: none;
   width: 100%;
   max-width: 100%;
+  min-width: 8.5rem;
   height: 2.75rem;
   padding: 0 2.75rem 0 1.5rem;
   border-radius: var(--cine-radius-full);
@@ -1155,11 +1194,10 @@ select:focus-visible,
 
 .cine-select:hover {
   border-color: rgba(255, 255, 255, 0.22);
-  transform: translateY(-1px);
 }
 
 .cine-select:focus {
-  border-color: var(--cine-accent);
+  border-color: var(--cine-glass-border-hover);
 }
 
 .cine-select option {
@@ -1229,119 +1267,6 @@ select:focus-visible,
   to { opacity: 1; transform: none; }
 }
 
-/* ─── Legacy Aliases (classes used in JSX before the ui/ lib existed) ──────
-   Maps old names to the canonical system so nothing renders unstyled.
-   New code should use the canonical names or src/components/ui/. */
-.cine-play-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: var(--cine-radius-full);
-  font-weight: var(--cine-font-semibold);
-  font-size: 0.875rem;
-  border: none;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--cine-white);
-  color: var(--cine-bg);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
-  height: 2.75rem;
-  padding: 0 1.75rem;
-}
-
-.cine-play-btn:hover {
-  background: #f0f0f0;
-  transform: scale(1.03);
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.2);
-}
-
-.cine-circle-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--cine-radius-full);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  border: 1px solid var(--cine-glass-border);
-  background: var(--cine-glass-tint);
-  color: var(--cine-text-primary);
-  backdrop-filter: var(--cine-blur-md);
-  -webkit-backdrop-filter: var(--cine-blur-md);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.cine-circle-btn:hover {
-  background: var(--cine-glass-tint-hover);
-  border-color: var(--cine-glass-border-hover);
-  transform: scale(1.06);
-}
-
-.cine-grid-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-  gap: 1.5rem;
-}
-
-.cine-card-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.cine-card-item:hover {
-  transform: translateY(-6px);
-}
-
-.cine-card-item:hover .cine-card-poster img {
-  transform: scale(1.04);
-}
-
-.cine-card-badge {
-  position: absolute;
-  top: 0.55rem;
-  right: 0.55rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: var(--cine-radius-full);
-  background: rgba(10, 10, 14, 0.75);
-  backdrop-filter: var(--cine-blur-sm);
-  -webkit-backdrop-filter: var(--cine-blur-sm);
-  color: var(--cine-accent);
-  font-size: 0.75rem;
-  font-weight: var(--cine-font-bold);
-  border: 1px solid var(--cine-glass-border);
-}
-
-.provider-pill {
-  height: 52px;
-  min-width: 132px;
-  padding: 0 1.5rem;
-  flex-shrink: 0;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--cine-glass-border);
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
-  transition: all 0.2s ease;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: var(--cine-font-medium);
-}
-
-.provider-pill:hover {
-  background: var(--cine-glass-tint-hover);
-  border-color: var(--cine-glass-border-hover);
-  transform: translateY(-2px);
-}
-
 /* ─── Cinejoy Parity (verified from cinejoy.to live CSS) ─────────────────── */
 .glass-filter {
   position: absolute;
@@ -1354,38 +1279,10 @@ select:focus-visible,
   pointer-events: none;
 }
 
-.card-in {
-  animation: 0.2s ease-out both cine-card-in;
-}
-
-.glass-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.glass-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 4px;
-}
-
-.glass-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.glass-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .cine-aurora-canvas::before,
   .cine-aurora-canvas::after,
   .cine-card-in,
-  .card-in,
   .cine-btn-shimmer:hover::before {
     animation: none;
     translate: none;

@@ -14,7 +14,7 @@ export default function Input({
         <label className="text-xs font-semibold text-white/80">{label}</label>
       )}
       <input className="cine-input" {...props} />
-      {hint && <p className="text-[11px] text-white/40">{hint}</p>}
+      {hint && <p className="text-[11px] text-white/60">{hint}</p>}
     </div>
   );
 }

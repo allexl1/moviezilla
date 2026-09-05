@@ -80,7 +80,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`cine-nav-btn px-3.5 py-2 text-xs ${isActive ? 'is-active' : ''}`}
+                className={`cine-nav-btn px-3 py-2 text-xs ${isActive ? 'is-active' : ''}`}
               >
                 {tab.label}
               </button>
@@ -88,14 +88,14 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           })}
           <button
             onClick={() => onTabChange('search')}
-            className="cine-nav-btn px-3.5 py-2 text-xs"
+            className="cine-nav-btn px-3 py-2 text-xs"
             aria-label="Search"
           >
             <Search className="w-4 h-4" strokeWidth={2.2} />
           </button>
           <button
             onClick={onOpenSettings}
-            className="cine-nav-btn px-3.5 py-2 text-xs"
+            className="cine-nav-btn px-3 py-2 text-xs"
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" strokeWidth={2} />
