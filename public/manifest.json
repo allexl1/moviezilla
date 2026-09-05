@@ -5,7 +5,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#050505",
-  "theme_color": "#95FF50",
+  "theme_color": "#050505",
   "description": "Watch the latest movies and TV series on Moviezilla",
   "icons": [
     {

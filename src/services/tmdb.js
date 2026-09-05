@@ -252,7 +252,7 @@ export const tmdb = {
     try {
       const query = new URLSearchParams({
         path: `${mediaType}/${id}`,
-        append_to_response: 'videos,credits,similar',
+        append_to_response: 'videos,credits,similar,release_dates,content_ratings',
       });
 
       const res = await fetch(`/api/tmdb?${query.toString()}`);

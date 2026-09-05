@@ -783,7 +783,17 @@ select:focus-visible,
 }
 
 .cine-hero-fade {
-  animation: cine-fade-in var(--cine-duration-slow) ease-out both;
+  animation: cine-hero-in 0.9s var(--cine-ease-out) both;
+}
+
+/* Slow dissolve for the dim frozen ghost (must not touch filter). */
+.cine-ghost-fade {
+  animation: cine-fade-in 1.2s ease-out both;
+}
+
+@keyframes cine-hero-in {
+  0% { opacity: 0; transform: scale(1.04); filter: blur(14px) brightness(0.7); }
+  100% { opacity: 1; transform: scale(1); filter: none; }
 }
 
 /* Spotlight dots */

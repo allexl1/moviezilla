@@ -267,7 +267,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#05000d] text-white select-none">
+    <div className="relative min-h-screen bg-[var(--cine-bg-deep)] text-white select-none">
       {/* Contextual Ambient Aurora Mesh Canvas */}
       <div
         className={`cine-aurora-canvas ${
@@ -318,7 +318,7 @@ export default function App() {
                   heroItem.backdrop_fallback
                 )}
                 alt=""
-                className="cine-home-bg-img cine-hero-fade"
+                className="cine-home-bg-img cine-ghost-fade"
               />
               <div className="cine-home-bg-shade" />
             </div>

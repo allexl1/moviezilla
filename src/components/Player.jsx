@@ -13,9 +13,25 @@ export default function Player({ media, details, onClose }) {
   const [isEpisodeOpen, setIsEpisodeOpen] = useState(false);
   const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
   const [key, setKey] = useState(0);
+  const [showChrome, setShowChrome] = useState(true);
 
   const containerRef = useRef(null);
   const playbackRef = useRef({ currentTime: 0, duration: 0 });
+  const hideTimer = useRef(null);
+
+  // Auto-hide chrome after 3s idle (basic player behavior).
+  const poke = () => {
+    setShowChrome(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowChrome(false), 3000);
+  };
+
+  useEffect(() => {
+    poke();
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
 
   // 1. Restore saved playback position
   useEffect(() => {
@@ -164,10 +180,16 @@ export default function Player({ media, details, onClose }) {
   const totalSeasons = details?.number_of_seasons || media?.number_of_seasons || 1;
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200">
+    <div
+      ref={containerRef}
+      onMouseMove={poke}
+      onTouchStart={poke}
+      onClick={poke}
+      className={`fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`}
+    >
       {/* Top Floating Chrome */}
-      <div className="absolute top-0 inset-x-0 z-30 flex items-center justify-between p-4 md:px-8 bg-gradient-to-b from-black/95 via-black/50 to-transparent pointer-events-none">
-        <div className="flex items-center gap-3 pointer-events-auto">
+      <div className={`absolute top-0 inset-x-0 z-30 flex items-center justify-between p-4 md:px-8 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`flex items-center gap-3 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <button
             onClick={onClose}
             className="cine-icon-btn"
@@ -188,7 +210,7 @@ export default function Player({ media, details, onClose }) {
         </div>
 
         {/* Right Actions: Episode Trigger, Server Switcher, and Fullscreen toggle */}
-        <div className="flex items-center gap-2.5 pointer-events-auto">
+        <div className={`flex items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {isTv && (
             <button
               onClick={() => setIsEpisodeOpen(!isEpisodeOpen)}
