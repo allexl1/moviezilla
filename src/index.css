@@ -220,7 +220,7 @@ select:focus-visible,
   height: 60vw;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(139, 92, 246, 0.10) 0%, rgba(99, 102, 241, 0.05) 45%, transparent 70%);
-  filter: blur(120px);
+  filter: blur(90px);
   will-change: transform;
   animation:
     cine-breathe 20s ease-in-out infinite alternate,
@@ -869,6 +869,9 @@ select:focus-visible,
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
   gap: 1.5rem;
+  /* Skip rendering off-screen grid rows until scrolled near. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 700px;
 }
 
 .cine-card {
@@ -925,6 +928,9 @@ select:focus-visible,
   gap: 1rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
+  /* Skip rendering off-screen rails until scrolled near. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 /* ─── Continue Watching Card ────────────────────────────────────────────── */

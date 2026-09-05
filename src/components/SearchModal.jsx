@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, Star } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
+import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Row from './ui/Row';
 
@@ -10,12 +11,32 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchRetry, setSearchRetry] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [trending, setTrending] = useState([]);
 
   useEffect(() => {
     if (!isOpen) {
       setQuery('');
       setSearchError('');
+      return;
     }
+    setHistory(storage.getSearchHistory());
+    let isMounted = true;
+    tmdb
+      .getTrending()
+      .then((res) => {
+        if (isMounted) {
+          setTrending(
+            (res?.results || [])
+              .filter((x) => x.poster_path && (x.title || x.name))
+              .slice(0, 8)
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -75,6 +96,61 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       <div className="max-h-[60vh] overflow-y-auto no-scrollbar space-y-2">
         {loading && <p className="text-center py-8 text-xs text-white/60">Searching catalog...</p>}
 
+        {!loading && !query.trim() && (
+          <div className="space-y-5 py-2">
+            {history.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+                    Recent searches
+                  </p>
+                  <button
+                    onClick={() => {
+                      storage.clearSearchHistory();
+                      setHistory([]);
+                    }}
+                    className="text-[11px] font-semibold text-white/60 hover:text-white transition cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {history.map((term) => (
+                    <button
+                      key={term}
+                      onClick={() => setQuery(term)}
+                      className="cine-chip cine-chip--neutral hover:text-white transition cursor-pointer"
+                    >
+                      {term}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {trending.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50 mb-2">
+                  Trending now
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {trending.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onSelectMedia(item);
+                        onClose();
+                      }}
+                      className="cine-chip cine-chip--neutral hover:text-white transition cursor-pointer"
+                    >
+                      {item.title || item.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {!loading && query && results.length === 0 && !searchError && (
           <p className="text-center py-8 text-xs text-white/60">No titles found for "{query}".</p>
         )}
@@ -104,6 +180,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
               title={title}
               meta={`${item.media_type ? item.media_type.toUpperCase() : 'MEDIA'}${year ? ` • ${year}` : ''}`}
               onClick={() => {
+                if (query.trim()) storage.addSearchHistory(query.trim());
                 onSelectMedia(item);
                 onClose();
               }}

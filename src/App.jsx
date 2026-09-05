@@ -411,6 +411,7 @@ export default function App() {
                     heroItem.backdrop_fallback
                   )}
                   alt=""
+                  fetchPriority="high"
                   className="cine-hero-fade"
                 />
                 <div className="cine-hero-scrim" />

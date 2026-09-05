@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, Volume2, VolumeX, CalendarDays } from 'lucide-react';
+import { Play, Plus, Check, Star, X, CalendarDays } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { storage } from '../services/storage';
 import RowRail from './RowRail';
@@ -48,10 +48,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [loading, setLoading] = useState(true);
   const [detailsError, setDetailsError] = useState('');
   const [detailsRetry, setDetailsRetry] = useState(0);
+  // User-picked trailer key — hero is a still backdrop until the user
+  // chooses to play (no autoplay embeds, no chrome, no mute dance).
+  const [heroVideo, setHeroVideo] = useState(null);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [logo, setLogo] = useState(null);
-  const [trailerKey, setTrailerKey] = useState(null);
-  const [muted, setMuted] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
   const mediaId = media?.id;
@@ -61,7 +62,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     async function fetchDetails() {
       setLoading(true);
       setDetailsError('');
-      setTrailerKey(null);
+      setHeroVideo(null);
       setLogo(null);
       setExpanded(false);
       try {
@@ -73,10 +74,6 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           setDetails(data);
           setIsWatchlist(storage.isInWatchlist(mediaId));
           if (titleLogo?.file_path) setLogo(titleLogo.file_path);
-          const first = (data?.videos?.results || []).find(
-            (v) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube'
-          );
-          if (first) setTrailerKey(first.key);
           setLoading(false);
         }
       } catch (err) {
@@ -125,14 +122,15 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
   return (
     <div className="relative min-h-screen bg-[var(--cine-bg)] text-white pb-24 animate-in fade-in duration-300">
-      {/* Hero: trailer running (cinejoy parity), still backdrop fallback */}
+      {/* Hero: still backdrop. Trailers play here only when the user picks
+          one below — never autoplayed, so no player chrome or mute dance. */}
       <div className="relative w-full h-[68vh] min-h-[500px] overflow-hidden bg-black">
-        {trailerKey ? (
+        {heroVideo ? (
           <iframe
-            key={`${trailerKey}_${muted ? 'muted' : 'loud'}`}
-            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${muted ? 1 : 0}&loop=1&playlist=${trailerKey}&rel=0&modestbranding=1&controls=0&playsinline=1&iv_load_policy=3&disablekb=1`}
+            key={heroVideo}
+            src={`https://www.youtube-nocookie.com/embed/${heroVideo}?autoplay=1&rel=0&modestbranding=1&controls=1&playsinline=1&iv_load_policy=3`}
             title="Trailer"
-            className="cine-trailer-cover border-0 pointer-events-none"
+            className="cine-trailer-cover border-0"
             allow="autoplay; encrypted-media; fullscreen"
             allowFullScreen
           />
@@ -142,15 +140,15 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-transparent to-transparent pointer-events-none" />
 
-        {/* Mute toggle (autoplay starts muted — browser policy, not a choice) */}
-        {trailerKey && (
+        {/* Back to the still backdrop */}
+        {heroVideo && (
           <button
-            onClick={() => setMuted((m) => !m)}
+            onClick={() => setHeroVideo(null)}
             className="cine-icon-btn absolute top-24 right-8 md:right-14 z-20"
-            title={muted ? 'Unmute trailer' : 'Mute trailer'}
-            aria-label={muted ? 'Unmute trailer' : 'Mute trailer'}
+            title="Close trailer"
+            aria-label="Close trailer"
           >
-            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            <X className="w-4 h-4" />
           </button>
         )}
 
@@ -345,11 +343,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <div
                   key={t.key}
                   onClick={() => {
-                    setTrailerKey(t.key);
+                    setHeroVideo(t.key);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                    className={`group relative flex-shrink-0 w-72 aspect-video rounded-2xl overflow-hidden cursor-pointer border transition ${
-                     trailerKey === t.key
+                     heroVideo === t.key
                        ? 'border-[var(--cine-accent)]/60'
                        : 'border-[var(--cine-glass-border)] hover:border-white/25'
                    }`}

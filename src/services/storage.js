@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   PROGRESS: 'moviezilla_playback_progress',
   WATCHLIST: 'moviezilla_watchlist',
   ACTIVE_SERVER: 'moviezilla_preferred_server',
+  SEARCH_HISTORY: 'moviezilla_search_history',
 };
 
 function safeGet(key, fallback = {}) {
@@ -145,5 +146,28 @@ export const storage = {
   isInWatchlist(id) {
     const list = safeGet(STORAGE_KEYS.WATCHLIST, []);
     return list.some((x) => x.id === id);
+  },
+
+  // Recent searches (newest first, max 8, deduplicated)
+  getSearchHistory() {
+    const list = safeGet(STORAGE_KEYS.SEARCH_HISTORY, []);
+    return Array.isArray(list) ? list : [];
+  },
+
+  addSearchHistory(term) {
+    const clean = String(term || '').trim();
+    if (!clean) return;
+    const list = storage
+      .getSearchHistory()
+      .filter((t) => t.toLowerCase() !== clean.toLowerCase());
+    safeSet(STORAGE_KEYS.SEARCH_HISTORY, [clean, ...list].slice(0, 8));
+  },
+
+  clearSearchHistory() {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.SEARCH_HISTORY);
+    } catch (err) {
+      console.error('Failed to clear search history:', err);
+    }
   },
 };

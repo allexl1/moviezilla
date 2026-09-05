@@ -8,7 +8,10 @@ import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
  */
 export default function Card({ media, onClick, showRating = true, size = 'default', posterOnly = false }) {
   const title = media?.title || media?.name || 'Untitled';
-  const poster = tmdb.getImageUrl(media?.poster_path, size === 'lg' ? 'w780' : 'w500');
+  // Posters render ≤250px wide — w342 is plenty (retina-covered) and far
+  // lighter than w500/w780. Only lg keeps a larger size.
+  const posterSize = size === 'lg' ? 'w780' : 'w342';
+  const poster = tmdb.getImageUrl(media?.poster_path, posterSize);
   const rating = media?.vote_average ? media.vote_average.toFixed(1) : null;
   const year = (media?.release_date || media?.first_air_date || '').split('-')[0];
 
@@ -30,6 +33,7 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
           src={poster}
           alt={title}
           loading="lazy"
+          decoding="async"
           onError={(e) => {
             e.target.src = FALLBACK_POSTER;
           }}
