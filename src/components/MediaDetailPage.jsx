@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Plus, Check, Star, Volume2, VolumeX, CalendarDays } from 'lucide-react';
-import { tmdb } from '../services/tmdb';
+import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { storage } from '../services/storage';
 import RowRail from './RowRail';
 
@@ -86,7 +86,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   }, [mediaId, mediaType]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
-  const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'original');
+  const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
   const rating = (details?.vote_average || media?.vote_average || 0).toFixed(1);
   const releaseYear = (details?.release_date || details?.first_air_date || media?.release_date || media?.first_air_date || '').split('-')[0];
   const runtimeMins = details?.runtime || (details?.episode_run_time && details.episode_run_time[0]) || null;
@@ -272,9 +272,12 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <div key={actor.id} className="flex-shrink-0 w-32 text-center space-y-2">
                   <div className="w-28 h-28 mx-auto rounded-full overflow-hidden bg-white/5 border border-white/10 shadow-lg">
                     <img
-                      src={tmdb.getImageUrl(actor.profile_path, 'w185', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80')}
+                      src={tmdb.getImageUrl(actor.profile_path, 'w185', FALLBACK_PROFILE)}
                       alt={actor.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = FALLBACK_PROFILE;
+                      }}
                     />
                   </div>
                   <div>

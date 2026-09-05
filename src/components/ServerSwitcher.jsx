@@ -10,7 +10,6 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
     { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal' },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal' },
     { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good' },
-    { id: 'alpha', name: 'Server Alpha (Direct)', quality: 'Original', ping: 'stable' },
   ];
 
   useEffect(() => {

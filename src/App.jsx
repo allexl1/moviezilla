@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
-import { tmdb, GUARANTEED_TITLES, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
+import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage } from './services/storage';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
@@ -40,10 +40,19 @@ const PROVIDERS = [
   { id: '531', name: 'Paramount+', color: '#0064FF' },
 ];
 
+// Resolve the item's own type — never the nav tab. discover/* items lack
+// media_type, so fall back to first_air_date (TV) before defaulting to movie.
+function resolveMediaType(media) {
+  if (media?.media_type === 'tv' || media?.media_type === 'movie') return media.media_type;
+  if (media?.type === 'tv' || media?.type === 'movie') return media.type;
+  if (media?.first_air_date) return 'tv';
+  return 'movie';
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
-  const [items, setItems] = useState(GUARANTEED_TITLES);
-  const [featuredItem, setFeaturedItem] = useState(GUARANTEED_TITLES[0]);
+  const [items, setItems] = useState([]);
+  const [featuredItem, setFeaturedItem] = useState(null);
   const [continueWatching, setContinueWatching] = useState([]);
 
   const [letterboxdUser, setLetterboxdUser] = useState(
@@ -107,10 +116,8 @@ export default function App() {
         if (isMounted) {
           const list = (res?.results || []).filter((x) => x.poster_path);
 
-          if (list.length > 0) {
-            setItems(list);
-            setFeaturedItem(list[0]);
-          }
+          setItems(list);
+          setFeaturedItem(list.length > 0 ? list[0] : null);
         }
       } catch (err) {
         console.error('Failed to load catalog:', err);
@@ -203,8 +210,8 @@ export default function App() {
     setHeroLogo(null);
   }, [activeTab, items.length > 0 ? items[0].id : null]);
 
-  const heroItem = heroItems[heroIndex] || featuredItem || items[0] || GUARANTEED_TITLES[0];
-  const heroMediaType = heroItem.media_type || (heroItem.first_air_date ? 'tv' : 'movie');
+  const heroItem = heroItems[heroIndex] || featuredItem || items[0] || null;
+  const heroMediaType = heroItem ? resolveMediaType(heroItem) : 'movie';
 
   // Rotate spotlight; pause while reading details or watching.
   useEffect(() => {
@@ -231,6 +238,10 @@ export default function App() {
   // Discovery pages (Movies / Shows) are poster-only rails like cinejoy.
   const posterOnly = activeTab === 'movie' || activeTab === 'tv';
 
+  // The detail page must follow the selected item's own type, not the nav tab
+  // (a TV pick from Search/Watchlist/Home must stay 'tv').
+  const selectedMediaType = selectedMedia ? resolveMediaType(selectedMedia) : 'movie';
+
   // Always fetch full TMDB details before starting playback.
   // Catalog/trending objects do not contain all TV metadata such as
   // number_of_seasons.
@@ -238,9 +249,11 @@ export default function App() {
     if (!media?.id) return;
 
     const mediaType =
-      media.media_type ||
-      (fallbackDetails?.media_type) ||
-      (fallbackDetails?.number_of_seasons ? 'tv' : 'movie');
+      (media.media_type === 'tv' || media.media_type === 'movie') ? media.media_type :
+      (media.type === 'tv' || media.type === 'movie') ? media.type :
+      (fallbackDetails?.media_type === 'tv' || fallbackDetails?.media_type === 'movie') ? fallbackDetails.media_type :
+      (fallbackDetails?.type === 'tv' || fallbackDetails?.type === 'movie') ? fallbackDetails.type :
+      (media?.first_air_date || fallbackDetails?.first_air_date || fallbackDetails?.number_of_seasons) ? 'tv' : 'movie';
 
     try {
       const details = await tmdb.getMediaDetails(mediaType, media.id);
@@ -298,23 +311,24 @@ export default function App() {
       {selectedMedia ? (
         <MediaDetailPage
           media={selectedMedia}
-          mediaType={
-            activeTab === 'tv' ? 'tv' : 'movie'
-          }
+          mediaType={selectedMediaType}
           onPlay={(media, details) =>
-            setActivePlayer({ media, details })
+            setActivePlayer({
+              media: { ...media, media_type: resolveMediaType(media) },
+              details,
+            })
           }
           onSelectMedia={(item) => setSelectedMedia(item)}
         />
       ) : (
         <>
-          {activeTab === 'home' && (
+          {activeTab === 'home' && heroItem && (
             <div className="cine-home-bg" aria-hidden="true">
               <img
                 key={heroItem.id}
                 src={tmdb.getImageUrl(
                   heroItem.backdrop_path,
-                  'original',
+                  'w1280',
                   heroItem.backdrop_fallback
                 )}
                 alt=""
@@ -324,14 +338,14 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'home' && (
+          {activeTab === 'home' && heroItem && (
             <section className="cine-hero">
               <div className="cine-hero-media" aria-hidden="true">
                 <img
                   key={heroItem.id}
                   src={tmdb.getImageUrl(
                     heroItem.backdrop_path,
-                    'original',
+                    'w1280',
                     heroItem.backdrop_fallback
                   )}
                   alt=""
@@ -424,6 +438,11 @@ export default function App() {
                 </div>
               )}
             </section>
+          )}
+          {activeTab === 'home' && !heroItem && (
+            <p className="text-center py-16 text-xs text-white/40">
+              Loading catalog…
+            </p>
           )}
 
           {/* Main Container */}
@@ -667,6 +686,11 @@ export default function App() {
                       />
                     ))}
                   </div>
+                  {items.length === 0 && (
+                    <p className="text-center py-16 text-xs text-white/40">
+                      No titles found. Try clearing filters.
+                    </p>
+                  )}
                 </>
               )}
             </section>

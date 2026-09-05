@@ -79,6 +79,15 @@ export const storage = {
       });
   },
 
+  // Clear all playback progress / continue-watching history
+  clearPlaybackHistory() {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.PROGRESS);
+    } catch (err) {
+      console.error('Failed to clear playback history:', err);
+    }
+  },
+
   // Preferred Server memory
   getPreferredServer(defaultServer = 'vidy') {
     try {

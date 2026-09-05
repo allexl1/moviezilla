@@ -51,7 +51,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
 
   const handleClearHistory = () => {
     if (confirm('Clear all resume timestamps and continue watching history?')) {
-      localStorage.removeItem('mz_continue_watching');
+      storage.clearPlaybackHistory();
       window.location.reload();
     }
   };
@@ -64,6 +64,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
       align="center"
       showCloseButton={false}
       panelClassName="p-6"
+      label="Settings"
     >
       <div className="flex items-center justify-between pb-2">
         <div>
@@ -122,6 +123,11 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
           Save Changes
         </button>
       </div>
+
+      <p className="pt-4 text-[11px] leading-relaxed text-white/35">
+        Movie and TV data provided by TMDB. This product uses the TMDB API
+        but is not endorsed or certified by TMDB.
+      </p>
     </Modal>
   );
 }

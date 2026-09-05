@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Play, ListVideo } from 'lucide-react';
-import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
+import { tmdb, FALLBACK_POSTER, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
@@ -64,6 +64,29 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   const [typeFilter, setTypeFilter] = useState('all');
   const [genreFilter, setGenreFilter] = useState('');
   const [letterboxdList, setLetterboxdList] = useState([]);
+  const [resolvingId, setResolvingId] = useState(null);
+  const [resolveError, setResolveError] = useState('');
+
+  // Letterboxd rows carry a URL id, not a TMDB id — resolve lazily on tap
+  // so the detail/playback flow always receives a real TMDB ID + type.
+  const handleLetterboxdSelect = async (item) => {
+    if (resolvingId) return;
+    setResolvingId(item.id);
+    setResolveError('');
+    try {
+      const match = await tmdb.resolveTitle(item.title, item.release_date);
+      if (match) {
+        onSelectMedia(match);
+      } else {
+        setResolveError(`No TMDB match found for "${item.title}".`);
+      }
+    } catch (err) {
+      console.error('Letterboxd resolve failed:', err);
+      setResolveError(`Could not look up "${item.title}" — check connection and retry.`);
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   const history = storage.getWatchHistory();
   const watchlist = storage.getWatchlist();
@@ -191,8 +214,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                       onError={(e) => {
-                        e.target.src =
-                          'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
+                        e.target.src = FALLBACK_POSTER;
                       }}
                     />
                     <div className="cine-cw-play">
@@ -256,6 +278,12 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
           <h3 className="text-sm font-semibold text-white/80 tracking-wide">My List</h3>
           <span className="text-xs text-white/40">{myList.length} titles</span>
         </div>
+        {resolvingId && (
+          <p className="text-xs text-white/40">Looking up title on TMDB…</p>
+        )}
+        {!resolvingId && resolveError && (
+          <p className="text-xs text-red-400/90">{resolveError}</p>
+        )}
         {myList.length === 0 ? (
           <EmptyState
             icon={<ListVideo className="w-5 h-5" />}
@@ -265,7 +293,14 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         ) : (
           <div className="cine-grid">
             {myList.map((item) => (
-              <Card key={`${item.id}_${item.title}`} media={item} onClick={onSelectMedia} showRating={false} />
+              <Card
+                key={`${item.id}_${item.title}`}
+                media={item}
+                onClick={(m) =>
+                  m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
+                }
+                showRating={false}
+              />
             ))}
           </div>
         )}

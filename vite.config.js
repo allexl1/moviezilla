@@ -4,8 +4,6 @@ import { defineConfig, loadEnv } from 'vite'
 import tmdbHandler from './api/tmdb.js'
 import tmdbImageHandler from './api/tmdb-image.js'
 import letterboxdHandler from './api/letterboxd/[username].js'
-import sourceMovieHandler from './api/source/movie/[id].js'
-import sourceTvHandler from './api/source/tv/[id].js'
 
 // Serves the Vercel-style api/ handlers under `npm run dev` so the app
 // behaves the same locally as in production (catalog, images, Letterboxd).
@@ -33,12 +31,6 @@ function devApi() {
         else if (pathname.startsWith('/letterboxd/')) {
           handler = letterboxdHandler
           query.username = decodeURIComponent(pathname.slice('/letterboxd/'.length))
-        } else if (pathname.startsWith('/source/movie/')) {
-          handler = sourceMovieHandler
-          query.id = decodeURIComponent(pathname.slice('/source/movie/'.length))
-        } else if (pathname.startsWith('/source/tv/')) {
-          handler = sourceTvHandler
-          query.id = decodeURIComponent(pathname.slice('/source/tv/'.length))
         } else {
           return next()
         }

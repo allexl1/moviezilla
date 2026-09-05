@@ -4,6 +4,14 @@ import { storage } from '../services/storage';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 
+// Only accept playback progress messages from our own embed servers.
+// Anything else (other tabs, ads, nested third-party frames) is ignored.
+const TRUSTED_PLAYER_ORIGINS = [
+  'https://vidy.st',
+  'https://vidlink.pro',
+  'https://vidsrc.to',
+];
+
 export default function Player({ media, details, onClose }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
   const mediaId = media?.id;
@@ -69,6 +77,7 @@ export default function Player({ media, details, onClose }) {
   // 3. PostMessage listener to track real-time playback
   useEffect(() => {
     function handlePlayerMessage(event) {
+      if (!TRUSTED_PLAYER_ORIGINS.includes(event.origin)) return;
       try {
         const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (!payload) return;
@@ -147,9 +156,10 @@ export default function Player({ media, details, onClose }) {
         : `https://vidsrc.to/embed/movie/${mediaId}`;
     }
 
+    // Unknown/stale server ids fall back to the default (Vidy).
     return isTv
-      ? `https://vidsrc.me/embed/tv?tmdb=${mediaId}&season=${currentSeason}&episode=${currentEpisode}`
-      : `https://vidsrc.me/embed/movie?tmdb=${mediaId}`;
+      ? `https://vidy.st/tv/${mediaId}/${currentSeason}/${currentEpisode}`
+      : `https://vidy.st/movie/${mediaId}`;
   };
 
   const handleSelectEpisode = (seasonNum, episodeNum) => {

@@ -42,6 +42,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       align="top"
       showCloseButton={false}
       panelClassName="p-6 space-y-6"
+      label="Search movies and shows"
     >
       {/* Search Input Bar */}
       <div className="flex items-center gap-3 border-b border-white/10 pb-4">
@@ -51,6 +52,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search movies, shows, or anime..."
+          aria-label="Search movies, shows, or anime"
           autoFocus
           className="w-full bg-transparent text-sm md:text-base text-white placeholder-white/30 focus:outline-none"
         />

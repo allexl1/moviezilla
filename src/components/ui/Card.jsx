@@ -1,6 +1,6 @@
 import React from 'react';
 import { Star } from 'lucide-react';
-import { tmdb } from '../../services/tmdb';
+import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
 
 /**
  * Shared MediaCard component — replaces all ad-hoc card implementations.
@@ -31,8 +31,7 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
           alt={title}
           loading="lazy"
           onError={(e) => {
-            e.target.src =
-              'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
+            e.target.src = FALLBACK_POSTER;
           }}
         />
         {showRating && rating && (

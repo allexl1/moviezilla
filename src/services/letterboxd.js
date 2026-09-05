@@ -25,6 +25,9 @@ export const letterboxd = {
         const year = parts[parts.length - 1] || '';
 
         return {
+          // NOTE: id is the Letterboxd URL (stable list key only) — NOT a
+          // TMDB id. Callers must resolve via tmdb.resolveTitle() before
+          // entering the detail/playback flow.
           id: link || title,
           title: cleanTitle,
           name: cleanTitle,

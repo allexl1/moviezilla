@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -15,24 +15,60 @@ export default function Modal({
   maxHeight = 'max-h-[92vh]',
   align = 'center',
   panelClassName = '',
+  label = 'Dialog',
 }) {
+  const panelRef = useRef(null);
+  const restoreRef = useRef(null);
+
+  const focusableIn = (root) =>
+    [...(root?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    ) || [])].filter((el) => !el.disabled && el.offsetParent !== null);
+
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleEscape = (e) => {
+    // Restore focus to the opener on close.
+    restoreRef.current = document.activeElement;
+    const panel = panelRef.current;
+
+    // Initial focus: first focusable control, else the panel itself.
+    const initial = focusableIn(panel);
+    (initial[0] || panel)?.focus?.();
+
+    const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+        return;
+      }
+
+      // Trap Tab inside the dialog.
+      if (e.key !== 'Tab' || !panel) return;
+      const items = focusableIn(panel);
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
 
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleKeyDown);
     // Prevent body scroll when modal is open
     document.body.style.overflow = 'hidden';
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
+      restoreRef.current?.focus?.();
     };
   }, [isOpen, onClose]);
 
@@ -47,6 +83,11 @@ export default function Modal({
       )}
 
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
         className={`relative z-10 w-full ${maxWidth} ${maxHeight} rounded-3xl cine-glass-panel flex flex-col overflow-y-auto no-scrollbar animate-in fade-in duration-200 ${panelClassName}`}
       >
         {showCloseButton && (
@@ -54,6 +95,7 @@ export default function Modal({
             onClick={onClose}
             className="cine-icon-btn absolute top-4 right-4 z-30"
             title="Close"
+            aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
           </button>

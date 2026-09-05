@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Check, ListVideo } from 'lucide-react';
-import { tmdb } from '../services/tmdb';
+import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 
 export default function EpisodeDrawer({
   isOpen,
@@ -113,7 +113,7 @@ export default function EpisodeDrawer({
               const isCurrent = activeSeason === currentSeason && ep.episode_number === currentEpisode;
               const thumb = ep.still_path
                 ? tmdb.getImageUrl(ep.still_path, 'w300')
-                : 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=300&q=80';
+                : FALLBACK_POSTER;
 
               return (
                 <div
@@ -127,7 +127,7 @@ export default function EpisodeDrawer({
                   }`}
                 >
                   <div className="relative w-20 h-14 rounded-xl overflow-hidden bg-black/50 flex-shrink-0">
-                    <img src={thumb} alt={ep.name} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={thumb} alt={ep.name} className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.target.src = FALLBACK_POSTER; }} />
                     <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs text-[9px] font-bold text-white">
                       E{ep.episode_number}
                     </span>

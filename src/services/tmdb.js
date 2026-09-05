@@ -1,29 +1,11 @@
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
 
-export const GUARANTEED_TITLES = [
-  {
-    id: 533535,
-    title: "Deadpool & Wolverine",
-    name: "Deadpool & Wolverine",
-    overview: "A listless Wade Wilson toils away in civilian life.",
-    backdrop_path: "/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
-    poster_path: "/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg",
-    media_type: "movie",
-    vote_average: 7.8,
-    release_date: "2024-07-24"
-  },
-  {
-    id: 1399,
-    title: "Game of Thrones",
-    name: "Game of Thrones",
-    overview: "Seven noble families fight for control of Westeros.",
-    backdrop_path: "/2OMB0ynKlyIenMJWI2Dy9IWT4c.jpg",
-    poster_path: "/1XS1oqL89opfnbLl8WnZY1O1uJx.jpg",
-    media_type: "tv",
-    vote_average: 8.4,
-    first_air_date: "2011-04-17"
-  }
-];
+// Single source of truth for fallback imagery (missing TMDB paths / broken
+// loads). YouTube trailer thumbnails and Letterboxd posters stay direct
+// intentionally — see getImageUrl below.
+export const FALLBACK_BACKDROP = 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
+export const FALLBACK_POSTER = 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
+export const FALLBACK_PROFILE = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
 
 export const MOVIE_GENRES = [
   { id: '', name: 'All Genres' },
@@ -93,34 +75,46 @@ export const TV_SORTS = [
 ];
 
 async function proxyFetch(endpoint, params = {}) {
-  try {
-    const query = new URLSearchParams({
-      path: endpoint,
-      ...params,
-    });
+  const query = new URLSearchParams({
+    path: endpoint,
+    ...params,
+  });
 
-    const res = await fetch(`/api/tmdb?${query.toString()}`);
+  const res = await fetch(`/api/tmdb?${query.toString()}`);
 
-    if (!res.ok) {
-      throw new Error(`Proxy status ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    if (data?.results && data.results.length > 0) {
-      return data;
-    }
-
-    return { results: GUARANTEED_TITLES };
-  } catch {
-    return { results: GUARANTEED_TITLES };
+  if (!res.ok) {
+    throw new Error(`TMDB request failed: ${res.status}`);
   }
+
+  const data = await res.json();
+  return data ?? { results: [] };
+}
+
+// Tiny in-memory TTL cache for immutable detail calls (details, logos,
+// seasons). Catalog/search stay uncached — they change with filters/query.
+const responseCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
+
+function cacheGet(key) {
+  const hit = responseCache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > CACHE_TTL) {
+    responseCache.delete(key);
+    return undefined;
+  }
+  return hit.data;
+}
+
+function cacheSet(key, data) {
+  responseCache.set(key, { data, at: Date.now() });
 }
 
 export const tmdb = {
+  // Absolute URLs (Letterboxd posters, YouTube thumbnails) pass through
+  // intentionally — only relative TMDB paths use the image proxy.
   getImageUrl(path, size = 'original', fallback = '') {
   if (!path) {
-    return fallback || 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=1200&q=80';
+    return fallback || FALLBACK_BACKDROP;
   }
 
   if (path.startsWith('http')) {
@@ -152,7 +146,12 @@ export const tmdb = {
     }
 
     if (year && year !== 'All Years') {
-      params.primary_release_year = year;
+      if (year === '2020s') {
+        params['primary_release_date.gte'] = '2020-01-01';
+        params['primary_release_date.lte'] = '2029-12-31';
+      } else {
+        params.primary_release_year = year;
+      }
     }
 
     if (provider) {
@@ -185,7 +184,12 @@ export const tmdb = {
     }
 
     if (year && year !== 'All Years') {
-      params.first_air_date_year = year;
+      if (year === '2020s') {
+        params['first_air_date.gte'] = '2020-01-01';
+        params['first_air_date.lte'] = '2029-12-31';
+      } else {
+        params.first_air_date_year = year;
+      }
     }
 
     if (provider) {
@@ -249,76 +253,91 @@ export const tmdb = {
   },
 
   async getMediaDetails(mediaType, id) {
-    try {
-      const query = new URLSearchParams({
-        path: `${mediaType}/${id}`,
-        append_to_response: 'videos,credits,similar,release_dates,content_ratings',
-      });
+    const cacheKey = `details:${mediaType}:${id}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
 
-      const res = await fetch(`/api/tmdb?${query.toString()}`);
+    const query = new URLSearchParams({
+      path: `${mediaType}/${id}`,
+      append_to_response: 'videos,credits,similar,release_dates,content_ratings',
+    });
 
-      if (!res.ok) {
-        throw new Error();
-      }
+    const res = await fetch(`/api/tmdb?${query.toString()}`);
 
-      return await res.json();
-    } catch {
-      return (
-        GUARANTEED_TITLES.find((m) => m.id === Number(id)) ||
-        GUARANTEED_TITLES[0]
-      );
+    if (!res.ok) {
+      throw new Error(`TMDB details failed: ${res.status}`);
     }
+
+    const data = await res.json();
+    cacheSet(cacheKey, data);
+    return data;
   },
 
   // Title logo (cinejoy-style hero treatment), English preferred.
   async getLogos(mediaType, id) {
+    const cacheKey = `logos:${mediaType}:${id}`;
+    const cached = cacheGet(cacheKey);
+    if (cached !== undefined) return cached;
+
     try {
       const query = new URLSearchParams({ path: `${mediaType}/${id}/images` });
       const res = await fetch(`/api/tmdb?${query.toString()}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       const logos = data?.logos || [];
-      return (
-        logos.find((l) => l.iso_639_1 === 'en') || logos[0] || null
-      );
+      const logo =
+        logos.find((l) => l.iso_639_1 === 'en') || logos[0] || null;
+      cacheSet(cacheKey, logo);
+      return logo;
     } catch {
       return null;
     }
   },
   async getSeasonDetails(tvId, seasonNumber) {
-    try {
-      const query = new URLSearchParams({
-        path: `tv/${tvId}/season/${seasonNumber}`,
-      });
+    const cacheKey = `season:${tvId}:${seasonNumber}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
 
-      const res = await fetch(`/api/tmdb?${query.toString()}`);
+    const query = new URLSearchParams({
+      path: `tv/${tvId}/season/${seasonNumber}`,
+    });
 
-      if (!res.ok) {
-        throw new Error();
-      }
+    const res = await fetch(`/api/tmdb?${query.toString()}`);
 
-      return await res.json();
-    } catch {
-      return {
-        episodes: [
-          {
-            episode_number: 1,
-            name: "Episode 1",
-            overview: "Season premiere.",
-          },
-          {
-            episode_number: 2,
-            name: "Episode 2",
-            overview: "The journey continues.",
-          },
-        ],
-      };
+    if (!res.ok) {
+      throw new Error(`TMDB season failed: ${res.status}`);
     }
+
+    const data = await res.json();
+    cacheSet(cacheKey, data);
+    return data;
   },
 
   async searchMulti(queryText) {
     return proxyFetch('search/multi', {
       query: queryText,
     });
+  },
+
+  // Resolve a Letterboxd-style title/year to a real TMDB item (lazy, on
+  // selection — not at list-fetch time). Returns the TMDB item or null;
+  // throws on network failure. Never fabricates an ID.
+  async resolveTitle(title, year = '') {
+    const cleanYear = String(year || '').slice(0, 4);
+    const params = { query: title };
+    if (/^\d{4}$/.test(cleanYear)) params.year = cleanYear;
+
+    const movieRes = await proxyFetch('search/movie', params);
+    const movieMatch =
+      (movieRes?.results || []).find((x) => x.poster_path) ||
+      (movieRes?.results || [])[0];
+    if (movieMatch) return { ...movieMatch, media_type: 'movie' };
+
+    const multiRes = await proxyFetch('search/multi', { query: title });
+    return (
+      (multiRes?.results || []).find(
+        (x) => (x.media_type === 'movie' || x.media_type === 'tv') && x.poster_path
+      ) || null
+    );
   }
 };
