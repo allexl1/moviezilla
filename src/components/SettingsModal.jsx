@@ -1,11 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { X, Clapperboard, Play, Trash2 } from 'lucide-react';
 import { storage } from '../services/storage';
+import Modal from './ui/Modal';
+import Input from './ui/Input';
+import Select from './ui/Select';
+
+const SERVERS = [
+  { value: 'vidy', label: 'Vidy (Recommended)' },
+  { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
+  { value: 'vidsrc', label: 'VidSrc Provider' },
+];
+
+function SettingRow({ icon, title, desc, control, danger = false }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-5 first:pt-1 last:pb-1">
+      <div className="flex items-start gap-3 min-w-0">
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${
+            danger
+              ? 'bg-red-500/10 border-red-500/20 text-red-400'
+              : 'bg-white/5 border-white/10 text-[var(--cine-accent)]'
+          }`}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
+          <p className="text-xs text-white/45 leading-relaxed mt-0.5">{desc}</p>
+        </div>
+      </div>
+      <div className="flex-shrink-0 w-52">{control}</div>
+    </div>
+  );
+}
 
 export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, currentUsername }) {
   const [username, setUsername] = useState(currentUsername || '');
-  const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidlink'));
+  const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidy'));
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) setUsername(currentUsername || '');
+  }, [isOpen, currentUsername]);
 
   const handleSave = () => {
     localStorage.setItem('mz_letterboxd_user', username.trim());
@@ -22,66 +57,71 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xl animate-in fade-in duration-200">
-      <div className="fixed inset-0" onClick={onClose} />
-
-      <div className="relative z-10 w-full max-w-md rounded-3xl bg-[#0e0e14]/95 border border-white/15 backdrop-blur-3xl shadow-[0_24px_80px_rgba(0,0,0,0.85)] p-6 space-y-6">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <h2 className="text-base font-bold text-white tracking-tight">Preferences & Sync</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center text-xs transition cursor-pointer"
-          >
-            ✕
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-xl"
+      align="center"
+      showCloseButton={false}
+      panelClassName="p-6"
+    >
+      <div className="flex items-center justify-between pb-2">
+        <div>
+          <h2 className="text-lg font-bold text-white tracking-tight">Settings</h2>
+          <p className="text-xs text-white/45 mt-0.5">Preferences & sync</p>
         </div>
-
-        {/* Letterboxd Sync Input */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-white/80">Letterboxd Username</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="e.g. your_username"
-            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[#95ff50]"
-          />
-          <p className="text-[11px] text-white/40">
-            Syncs your public Letterboxd watchlist RSS directly into "My List".
-          </p>
-        </div>
-
-        {/* Default Provider */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-white/80">Default Embed Server</label>
-          <select
-            value={defaultServer}
-            onChange={(e) => setDefaultServer(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl bg-[#121218] border border-white/10 text-xs text-white focus:outline-none focus:border-[#95ff50]"
-          >
-            <option value="vidlink">VidLink (Fastest / Recommended)</option>
-            <option value="vidy">Vidy Stream</option>
-            <option value="vidsrc">VidSrc Provider</option>
-          </select>
-        </div>
-
-        {/* Cache / Storage Clean */}
-        <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-          <button
-            onClick={handleClearHistory}
-            className="text-xs text-red-400/80 hover:text-red-400 font-medium transition cursor-pointer"
-          >
-            Clear Watch History
-          </button>
-
-          <button
-            onClick={handleSave}
-            className="px-5 py-2 rounded-full bg-white text-black font-semibold text-xs hover:bg-white/90 transition cursor-pointer shadow-md"
-          >
-            Save Changes
-          </button>
-        </div>
+        <button onClick={onClose} className="cine-icon-btn" title="Close">
+          <X className="w-4 h-4" />
+        </button>
       </div>
-    </div>
+
+      <div className="divide-y divide-white/[0.07]">
+        <SettingRow
+          icon={<Clapperboard className="w-4 h-4" />}
+          title="Letterboxd Sync"
+          desc="Syncs your public Letterboxd watchlist into My List."
+          control={
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="username"
+            />
+          }
+        />
+
+        <SettingRow
+          icon={<Play className="w-4 h-4" fill="currentColor" />}
+          title="Default Server"
+          desc="First player tried for every title."
+          control={
+            <Select value={defaultServer} onChange={setDefaultServer} options={SERVERS} />
+          }
+        />
+
+        <SettingRow
+          danger
+          icon={<Trash2 className="w-4 h-4" />}
+          title="Watch History"
+          desc="Clears resume timestamps and continue watching."
+          control={
+            <button
+              onClick={handleClearHistory}
+              className="cine-control-btn w-full"
+            >
+              Clear
+            </button>
+          }
+        />
+      </div>
+
+      <div className="pt-5 mt-1 border-t border-white/10 flex justify-end">
+        <button
+          onClick={handleSave}
+          className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm"
+        >
+          Save Changes
+        </button>
+      </div>
+    </Modal>
   );
 }

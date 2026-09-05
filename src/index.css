@@ -1,6 +1,128 @@
 @import "tailwindcss";
 
-* {
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOVIEZILLA — Unified Design System
+   Inspired by cinejoy.to's liquid-glass aesthetic
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── CSS Custom Properties (Design Tokens) ────────────────────────────── */
+:root {
+  /* ── Color Palette (aligned to cinejoy.to verified values) ── */
+  --cine-bg: #050505;                       /* Primary background (cinejoy body) */
+  --cine-bg-deep: #05000d;                  /* Deep variant (cinejoy liquid-bg / hero) */
+  --cine-bg-alt: #050505;                   /* Background variant (near-black) */
+  --cine-surface: #0a0a0e;                /* Elevated surface */
+  --cine-surface-strong: #0d0d12;         /* Stronger elevated surface */
+
+  --cine-panel: #0e0e1061;                /* Glass panel base (semi-transparent) */
+  --cine-panel-deep: #14141699;           /* Deeper glass panel */
+  --cine-panel-dark: #0a0a0e90;           /* Dark glass panel */
+
+  --cine-accent: #95ff50;                 /* Lime green accent — the "pop" color */
+  --cine-accent-hover: #a0ff60;           /* Hover state */
+
+  --cine-white: #ffffff;
+  --cine-black: #000000;
+
+  /* ── Glass / Transparency ── */
+  --cine-glass-border: rgba(255, 255, 255, 0.07);
+  --cine-glass-border-hover: rgba(255, 255, 255, 0.12);
+  --cine-glass-border-strong: rgba(255, 255, 255, 0.16);
+
+  --cine-glass-tint: rgba(255, 255, 255, 0.04);
+  --cine-glass-tint-hover: rgba(255, 255, 255, 0.08);
+  --cine-glass-tint-strong: rgba(255, 255, 255, 0.12);
+
+  --cine-glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  --cine-glass-shadow-strong: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --cine-glass-inset: inset 0 0 2px 1px rgba(255, 255, 255, 0.08);
+
+  /* ── Blur Values ── */
+  --cine-blur-sm: blur(8px);
+  --cine-blur-md: blur(16px);
+  --cine-blur-lg: blur(24px);
+  --cine-blur-xl: blur(28px) saturate(180%);
+  --cine-blur-header: blur(20px) saturate(160%);
+
+  /* ── Text Colors ── */
+  --cine-text-primary: rgba(255, 255, 255, 0.95);    /* Main text */
+  --cine-text-secondary: rgba(255, 255, 255, 0.75);   /* Secondary text */
+  --cine-text-tertiary: rgba(255, 255, 255, 0.5);    /* Tertiary/muted */
+  --cine-text-quaternary: rgba(255, 255, 255, 0.35); /* Quaternary */
+  --cine-text-disabled: rgba(255, 255, 255, 0.25);   /* Disabled */
+
+  /* ── Spacing Scale (base 0.25rem) ── */
+  --cine-space-0: 0;
+  --cine-space-1: 0.25rem;
+  --cine-space-2: 0.5rem;
+  --cine-space-3: 0.75rem;
+  --cine-space-4: 1rem;
+  --cine-space-5: 1.25rem;
+  --cine-space-6: 1.5rem;
+  --cine-space-7: 1.75rem;
+  --cine-space-8: 2rem;
+  --cine-space-9: 2.25rem;
+  --cine-space-10: 2.5rem;
+  --cine-space-12: 3rem;
+  --cine-space-14: 3.5rem;
+  --cine-space-16: 4rem;
+
+  /* ── Border Radii (single family — Apple-like corner continuity) ── */
+  --cine-radius-sm: 0.625rem;       /* 10px — dots, thumbs, tiny bits */
+  --cine-radius-md: 0.75rem;        /* 12px — small controls */
+  --cine-radius-lg: 0.875rem;       /* 14px — list rows, inputs */
+  --cine-radius-xl: 1rem;           /* 16px — cards (inner) */
+  --cine-radius-2xl: 1.125rem;      /* 18px — posters, tiles */
+  --cine-radius-3xl: 1.25rem;       /* 20px — sheets, panels, drawers */
+  --cine-radius-full: 9999px;       /* Pills, buttons */
+
+  /* ── Elevation (3 levels only) ── */
+  --cine-shadow-1: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --cine-shadow-2: 0 12px 32px rgba(0, 0, 0, 0.4);
+  --cine-shadow-3: 0 20px 50px rgba(0, 0, 0, 0.5);
+
+  /* ── Motion (one family) ── */
+  --cine-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --cine-duration-fast: 0.15s;
+  --cine-duration-base: 0.25s;
+  --cine-duration-slow: 0.4s;
+
+  /* ── Focus (Apple-like: quiet white ring for keyboard, press states live
+     on :active — never a colored ring on tap) ── */
+  --cine-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(255, 255, 255, 0.65);
+
+  /* ── Typography Scale ── */
+  --cine-text-xs: 0.75rem;         /* 12px */
+  --cine-text-sm: 0.875rem;        /* 14px */
+  --cine-text-base: 1rem;          /* 16px */
+  --cine-text-lg: 1.125rem;        /* 18px */
+  --cine-text-xl: 1.25rem;         /* 20px */
+  --cine-text-2xl: 1.5rem;         /* 24px */
+  --cine-text-3xl: 1.875rem;       /* 30px */
+  --cine-text-4xl: 2.25rem;        /* 36px */
+  --cine-text-5xl: 3rem;           /* 48px */
+  --cine-text-6xl: 3.75rem;        /* 60px */
+
+  --cine-font-mono: 'Inter', system-ui, -apple-system, sans-serif;
+  --cine-font-display: 'Montserrat', var(--cine-font-mono);
+
+  --cine-font-normal: 400;
+  --cine-font-medium: 500;
+  --cine-font-semibold: 600;
+  --cine-font-bold: 700;
+  --cine-font-extrabold: 800;
+  --cine-font-black: 900;
+
+  /* ── Transitions & Animations ── */
+  --cine-transition-fast: 0.15s ease;
+  --cine-transition-base: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --cine-transition-slow: 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* ─── Base Reset ────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -8,21 +130,79 @@
 }
 
 html, body {
-  background-color: #05000d;
-  color: #ffffff;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background-color: var(--cine-bg);
+  color: var(--cine-text-primary);
+  font-family: var(--cine-font-mono);
+  letter-spacing: -0.011em;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
-/* Ambient Canvas */
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/* ─── Custom Scrollbar (Glass Style) ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+  background-clip: content-box;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ─── Focus (visible keyboard nav — Apple HIG) ──────────────────────────── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--cine-focus-ring);
+}
+
+/* ─── Glass Surface Primitives ──────────────────────────────────────────── */
+
+/* Aurora background canvas — layered liquid mesh (cinejoy parity:
+   base + drifting ribbon + sun glow). */
 .cine-aurora-canvas {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100vh;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  background-color: #05000d;
+  background-color: var(--cine-bg-deep);
+  background-image:
+    radial-gradient(ellipse at 20% 40%, rgba(139, 92, 246, 0.07) 0%, transparent 45%),
+    radial-gradient(ellipse at 80% 30%, rgba(99, 102, 241, 0.05) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 70%, rgba(255, 255, 255, 0.025) 0%, transparent 55%);
 }
 
 .cine-aurora-canvas::before {
@@ -33,30 +213,840 @@ html, body {
   width: 60vw;
   height: 60vw;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(99, 102, 241, 0.08) 45%, transparent 70%);
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.10) 0%, rgba(99, 102, 241, 0.05) 45%, transparent 70%);
   filter: blur(120px);
   will-change: transform;
+  animation:
+    cine-breathe 20s ease-in-out infinite alternate,
+    cine-ribbon-drift 70s ease-in-out infinite alternate;
+}
+
+.cine-aurora-canvas::after {
+  content: '';
+  position: absolute;
+  right: -10%;
+  top: -20%;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.10) 0%, rgba(160, 220, 255, 0.05) 30%, transparent 60%);
+  filter: blur(40px);
+  will-change: transform, opacity;
+  animation: cine-sun-breathe 26s ease-in-out infinite alternate;
+}
+
+@keyframes cine-sun-breathe {
+  0% { opacity: 0.55; transform: scale(1) translate(0, 0); }
+  100% { opacity: 0.95; transform: scale(1.06) translate(-2%, 2%); }
+}
+
+@keyframes cine-ribbon-drift {
+  0% { translate: 0 0; }
+  100% { translate: -4% 3%; }
+}
+
+@keyframes cine-breathe {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.05) translate(-2%, 1%); }
+  100% { transform: scale(1.1) translate(2%, -1%); }
+}
+
+/* ─── Glass Header (Navbar) ─────────────────────────────────────────────── */
+.cine-glass-header {
+  background: var(--cine-panel);
+  backdrop-filter: var(--cine-blur-header);
+  -webkit-backdrop-filter: var(--cine-blur-header);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.07), 0 8px 30px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cine-glass-header.is-scrolled {
+  background: rgba(12, 12, 14, 0.55);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), 0 10px 36px rgba(0, 0, 0, 0.2);
+}
+
+/* ─── Glass Panel (modals, drawers, sheets) ─────────────────────────────── */
+.cine-glass-panel {
+  background: var(--cine-panel-deep);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: var(--cine-shadow-3);
+  isolation: isolate;
+}
+
+.cine-glass-panel--strong {
+  background: var(--cine-panel-dark);
+  backdrop-filter: var(--cine-blur-xl);
+  -webkit-backdrop-filter: var(--cine-blur-xl);
+  border: 1px solid var(--cine-glass-border-hover);
+  box-shadow: var(--cine-glass-shadow-strong);
+}
+
+/* ─── Glass Card ────────────────────────────────────────────────────────── */
+.cine-glass-card {
+  background: var(--cine-panel-deep);
+  border-radius: var(--cine-radius-2xl);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: var(--cine-shadow-2);
+  backdrop-filter: var(--cine-blur-md);
+  -webkit-backdrop-filter: var(--cine-blur-md);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  overflow: hidden;
+}
+
+.cine-glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--cine-shadow-3);
+  border-color: var(--cine-glass-border-hover);
+}
+
+/* ─── List Row material (search results, history, menus) ──────────────────
+   Replaces ad-hoc `bg-white/[0.02] border-white/5` slabs everywhere. */
+.mat-row {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--cine-radius-lg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background var(--cine-duration-base) var(--cine-ease-out),
+    border-color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.mat-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--cine-glass-border-hover);
+}
+
+/* Card entrance animation */
+@keyframes cine-card-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.cine-card-in {
+  animation: 0.2s ease-out both cine-card-in;
+}
+
+/* ─── Glass Button (Primary Action) ─────────────────────────────────────── */
+.cine-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--cine-radius-full);
+  font-weight: var(--cine-font-semibold);
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: var(--cine-blur-sm);
+  -webkit-backdrop-filter: var(--cine-blur-sm);
+  will-change: transform, box-shadow;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.cine-btn-primary {
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+}
+
+.cine-btn-primary:hover {
+  background: #f0f0f0;
+  transform: scale(1.03);
+  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.2);
+}
+
+.cine-btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--cine-glass-border);
+  color: var(--cine-text-primary);
+}
+
+.cine-btn-ghost:hover {
+  background: var(--cine-glass-tint-hover);
+  border-color: var(--cine-glass-border-hover);
+  transform: scale(1.05);
+}
+
+.cine-btn-accent {
+  background: var(--cine-accent);
+  color: var(--cine-bg);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--cine-accent) 30%, transparent);
+}
+
+.cine-btn-accent:hover {
+  background: var(--cine-accent-hover);
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--cine-accent) 40%, transparent);
+}
+
+/* Liquid-glass sheen (cinejoy .glassy-button parity) — progressive
+   enhancement layered over .cine-btn. Sweep on hover, idle top-light. */
+@property --cine-sheen-angle {
+  syntax: '<angle>';
+  initial-value: -75deg;
+  inherits: false;
+}
+
+.cine-btn-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    var(--cine-sheen-angle),
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.22) 45%,
+    rgba(255, 255, 255, 0.05) 60%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.cine-btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 1px 1px auto 1px;
+  height: 45%;
+  border-radius: inherit;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.22), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.cine-btn-shimmer:hover::before {
+  opacity: 1;
+  animation: cine-sheen-rotate 1.2s ease;
+}
+
+@keyframes cine-sheen-rotate {
+  0% { --cine-sheen-angle: -75deg; }
+  100% { --cine-sheen-angle: 105deg; }
+}
+
+/* Circle / Icon button */
+.cine-btn-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid var(--cine-glass-border);
+  background: var(--cine-glass-tint);
+  color: var(--cine-text-primary);
+  backdrop-filter: var(--cine-blur-md);
+  -webkit-backdrop-filter: var(--cine-blur-md);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.cine-btn-circle:hover {
+  background: var(--cine-glass-tint-hover);
+  border-color: var(--cine-glass-border-hover);
+  transform: scale(1.06);
+}
+
+/* ─── Control Bar Scale (Apple HIG: 40px targets, one recipe everywhere) ───
+   Player chrome, drawers, pickers and modal chrome all use these two.
+   Navbar keeps its own denser scale by design — do not "fix" it toward this. */
+.cine-control-btn {
+  height: 2.75rem;
+  padding: 0 1.5rem;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-semibold);
+  letter-spacing: 0.01em;
+  color: var(--cine-text-primary);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--cine-accent) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.08);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cine-control-btn:hover {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--cine-accent) 8%, transparent);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.cine-control-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.cine-icon-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: var(--cine-text-primary);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--cine-accent) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.08);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cine-icon-btn:hover {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06)),
+    color-mix(in srgb, var(--cine-accent) 8%, transparent);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.cine-icon-btn:active {
+  transform: scale(0.96);
+}
+
+/* Hero-grade CTA (cinejoy Play pill parity: 52px, generous padding) */
+.cine-cta {
+  height: 3.25rem;
+  padding: 0 2rem;
+  font-size: 0.9375rem;
+  font-weight: var(--cine-font-bold);
+  letter-spacing: 0.01em;
+}
+
+/* ─── Rating / Accent Badge ─────────────────────────────────────────────── */
+.cine-rating-badge {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--cine-radius-full);
+  background: rgba(10, 10, 14, 0.75);
+  backdrop-filter: var(--cine-blur-sm);
+  -webkit-backdrop-filter: var(--cine-blur-sm);
+  color: var(--cine-accent);
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-bold);
+  border: 1px solid var(--cine-glass-border);
+}
+
+/* ─── Section Header ────────────────────────────────────────────────────── */
+.cine-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--cine-space-4);
+}
+
+.cine-section-title {
+  font-size: 1.05rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.01em;
+}
+
+/* ─── Main Layout Container ───────────────────────────────────────────────
+   NOTE: top padding lives here, NOT in Tailwind classes. This stylesheet is
+   unlayered author CSS, which beats Tailwind v4's layered utilities at equal
+   specificity — so `pt-32` etc. on the same element were silently dead and
+   every page rendered with padding-top: 0 under the fixed navbar. */
+.cine-container {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding-inline: var(--cine-space-14);
+  padding-bottom: var(--cine-space-16);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cine-space-12);
+  position: relative;
+  z-index: 10;
+}
+
+/* Standard pages (Movies / Shows / Watchlist) clear the fixed navbar. */
+.cine-container--page {
+  padding-top: 8rem;
+}
+
+@media (max-width: 768px) {
+  .cine-container {
+    padding-inline: var(--cine-space-4);
+  }
+
+  .cine-container--page {
+    padding-top: 6.5rem;
+  }
+}
+
+/* ─── Hero Section ──────────────────────────────────────────────────────── */
+.cine-hero {
+  position: relative;
+  width: 100%;
+  height: 85vh;
+  min-height: 560px;
+  overflow: hidden;
+  z-index: 10;
+}
+
+/* Bright in-flow poster: visible at top, scrolls away naturally. */
+.cine-hero-media {
+  position: absolute;
+  inset: 0;
+}
+
+.cine-hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.cine-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.35) 35%, transparent 65%),
+    linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
+}
+
+/* Frozen home backdrop (cinejoy parity): the SAME picture as a dim ghost
+   fixed behind everything. At top the bright in-flow hero covers it;
+   scrolled down, only the ghost remains while rails glide over it. */
+.cine-home-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cine-home-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0.22;
+  filter: brightness(0.6) saturate(0.9);
+}
+
+.cine-home-bg-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, var(--cine-bg) 8%, rgba(5, 5, 5, 0.85) 38%, rgba(5, 5, 5, 0.5) 60%, rgba(5, 5, 5, 0.32) 100%),
+    linear-gradient(90deg, rgba(5, 5, 5, 0.45) 0%, transparent 45%);
+}
+
+.cine-hero-content {
+  position: absolute;
+  bottom: 4rem;
+  left: 3.5rem;
+  max-width: 600px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.cine-hero-title {
+  font-size: clamp(2.75rem, 6vw, 5.5rem);
+  font-weight: var(--cine-font-black);
+  text-transform: uppercase;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--cine-white);
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.85);
+  font-family: var(--cine-font-display);
+}
+
+.cine-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cine-hero-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cine-star-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--cine-accent);
+  font-weight: var(--cine-font-black);
+}
+
+.cine-hero-desc {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--cine-text-tertiary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cine-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.375rem;
+}
+
+/* Combined + | ⓘ pill (cinejoy hero parity) */
+.cine-duo-btn {
+  height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--cine-radius-full);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--cine-accent) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.cine-duo-btn button {
+  height: 100%;
+  padding: 0 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cine-text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-duo-btn button:first-child {
+  padding-left: 1.35rem;
+  border-radius: var(--cine-radius-full) 0 0 var(--cine-radius-full);
+}
+
+.cine-duo-btn button:last-child {
+  padding-right: 1.35rem;
+  border-radius: 0 var(--cine-radius-full) var(--cine-radius-full) 0;
+}
+
+.cine-duo-btn button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.cine-duo-divider {
+  width: 1px;
+  height: 1.25rem;
+  background: rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
+/* Title-logo treatment */
+.cine-hero-logo {
+  max-height: 7.5rem;
+  max-width: min(420px, 70vw);
+  width: auto;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 4px 24px rgba(0, 0, 0, 0.6));
+}
+
+.cine-hero-fade {
+  animation: cine-fade-in var(--cine-duration-slow) ease-out both;
+}
+
+/* Spotlight dots */
+.cine-hero-dots {
+  position: absolute;
+  right: 3.5rem;
+  bottom: 4rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cine-hero-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--cine-radius-full);
+  background: rgba(255, 255, 255, 0.35);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-hero-dot:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.cine-hero-dot.is-active {
+  width: 1.75rem;
+  background: var(--cine-white);
+}
+
+/* ─── Media Grid ────────────────────────────────────────────────────────── */
+.cine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 1.5rem;
+}
+
+.cine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cine-card:hover {
+  transform: translateY(-6px);
+}
+
+.cine-card-poster {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2/3;
+  border-radius: var(--cine-radius-2xl);
+  overflow: hidden;
+  background: var(--cine-surface-strong);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: var(--cine-shadow-2);
+}
+
+.cine-card-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cine-card:hover .cine-card-poster img {
+  transform: scale(1.04);
+}
+
+.cine-card-title {
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cine-card-year {
+  font-size: 0.75rem;
+  color: var(--cine-text-quaternary);
+}
+
+/* ─── Horizontal Scroll Rail ────────────────────────────────────────────── */
+.cine-rail {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+/* ─── Continue Watching Card ────────────────────────────────────────────── */
+.cine-cw-card {
+  position: relative;
+  width: 250px;
+  flex-shrink: 0;
+  padding: 0.75rem;
+  border-radius: var(--cine-radius-2xl);
+  background: var(--cine-panel-deep);
+  border: 1px solid var(--cine-glass-border);
+  backdrop-filter: var(--cine-blur-xl);
+  -webkit-backdrop-filter: var(--cine-blur-xl);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  overflow: visible;
+}
+
+.cine-cw-card:hover {
+  border-color: var(--cine-glass-border-hover);
+  background: var(--cine-panel);
+}
+
+.cine-cw-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+  margin-bottom: 0.625rem;
+}
+
+.cine-cw-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cine-cw-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cine-cw-card:hover .cine-cw-play {
+  opacity: 1;
+}
+
+.cine-cw-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: var(--cine-font-bold);
+  box-shadow: var(--cine-shadow-1);
+}
+
+.cine-cw-title {
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cine-cw-meta {
+  font-size: 0.6875rem;
+  color: var(--cine-text-quaternary);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cine-cw-progress {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.cine-cw-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--cine-accent);
+  transition: width 0.3s ease;
+}
+
+/* ─── Provider Pills ────────────────────────────────────────────────────── */
+.cine-provider-pill {
+  height: 52px;
+  min-width: 105px;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--cine-glass-border);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  box-shadow: var(--cine-shadow-2);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-medium);
+}
+
+.cine-provider-pill:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--cine-glass-border-hover);
+  transform: translateY(-2px);
+}
+
+/* ─── Navbar (kept as-is per user preference — floating pill) ──────────── */
+/* NOTE: no global `header` override — Navbar.jsx owns its own padding via
+   Tailwind classes so the fixed top bar never fights the stylesheet. */
+
+/* Top-bar insets live HERE, not in Tailwind md: utilities: generated
+   responsive classes proved unreliable in dev (applied base, dropped md:),
+   while unlayered CSS always wins. Tune these two numbers to move the bar. */
+.cine-topbar {
+  padding: 16px 20px;
+}
+
+@media (min-width: 768px) {
+  .cine-topbar {
+    padding: 40px 72px;
+  }
 }
 
 /* Floating Glass Pill Navigation */
 .cine-nav-pill-box {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 4px;
+  gap: 0.375rem;
+  padding: 6px;
   border-radius: 9999px;
-  background: rgba(12, 12, 16, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-blur: blur(32px) saturate(190%);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(32px) saturate(190%);
   -webkit-backdrop-filter: blur(32px) saturate(190%);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 .cine-nav-btn {
-  padding: 7px 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 12px 26px;
   border-radius: 9999px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 0.9375rem;
+  font-weight: var(--cine-font-medium);
   color: rgba(255, 255, 255, 0.65);
   background: transparent;
   border: none;
@@ -66,20 +1056,20 @@ html, body {
 }
 
 .cine-nav-btn:hover {
-  color: #ffffff;
+  color: var(--cine-white);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .cine-nav-btn.is-active {
-  background: #ffffff;
-  color: #000000;
-  font-weight: 700;
-  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  font-weight: var(--cine-font-black);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
 }
 
 .cine-nav-icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -92,163 +1082,192 @@ html, body {
 }
 
 .cine-nav-icon-btn:hover {
-  color: #ffffff;
+  color: var(--cine-white);
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Hero Section */
-.cine-hero {
-  position: relative;
-  width: 100vw;
-  height: 85vh;
-  min-height: 560px;
-  overflow: hidden;
-}
-
-.cine-hero-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
-}
-
-.cine-hero-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 75% 30%, transparent 15%, rgba(5, 0, 13, 0.5) 60%, #05000d 95%),
-              linear-gradient(0deg, #05000d 0%, rgba(5, 0, 13, 0.4) 40%, transparent 100%),
-              linear-gradient(90deg, #05000d 0%, rgba(5, 0, 13, 0.8) 30%, transparent 60%);
-}
-
-.cine-hero-content {
-  position: absolute;
-  bottom: 4rem;
-  left: 3.5rem;
-  max-width: 600px;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-}
-
-.cine-hero-title {
-  font-size: clamp(2.2rem, 5vw, 4rem);
-  font-weight: 900;
-  text-transform: uppercase;
-  line-height: 1.02;
-  letter-spacing: -0.035em;
-  color: #ffffff;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.85);
-}
-
-.cine-hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.cine-star-tag {
-  color: #95ff50;
-  font-weight: 700;
-}
-
-.cine-hero-desc {
-  font-size: 14px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.7);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.cine-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.4rem;
-}
-
-.cine-play-btn {
+/* ─── Chip / Tag ────────────────────────────────────────────────────────── */
+.cine-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  height: 44px;
-  padding: 0 2rem;
+  gap: 0.25rem;
+  padding: 0.2rem 0.625rem;
   border-radius: 9999px;
-  background: #ffffff;
-  color: #000000;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-bold);
+  backdrop-filter: var(--cine-blur-sm);
+  -webkit-backdrop-filter: var(--cine-blur-sm);
+  border: 1px solid var(--cine-glass-border);
+}
+
+.cine-chip--accent {
+  background: color-mix(in srgb, var(--cine-accent) 12%, transparent);
+  color: var(--cine-accent);
+  border-color: color-mix(in srgb, var(--cine-accent) 20%, transparent);
+}
+
+.cine-chip--neutral {
+  background: var(--cine-glass-tint);
+  color: var(--cine-text-tertiary);
+  border-color: var(--cine-glass-border);
+}
+
+/* ─── Select / Dropdown ────────────────────────────────────────────────── */
+.cine-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  max-width: 100%;
+  height: 2.75rem;
+  padding: 0 2.75rem 0 1.5rem;
+  border-radius: var(--cine-radius-full);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--cine-accent) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.08);
+  color: var(--cine-text-primary);
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-semibold);
+  letter-spacing: 0.01em;
+  outline: none;
+  cursor: pointer;
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
+    linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  background-repeat: no-repeat, no-repeat;
+  background-position: right 1.1rem center, 0 0;
+  background-size: 12px, auto;
+  white-space: nowrap;
+}
+
+.cine-select:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.cine-select:focus {
+  border-color: var(--cine-accent);
+}
+
+.cine-select option {
+  background: var(--cine-surface-strong);
+  color: var(--cine-white);
+}
+
+/* ─── Input ─────────────────────────────────────────────────────────────── */
+.cine-input {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--cine-glass-tint);
+  border: 1px solid var(--cine-glass-border);
+  color: var(--cine-text-primary);
+  font-size: 0.875rem;
+  outline: none;
+  transition: all 0.2s ease;
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+}
+
+.cine-input:focus {
+  border-color: var(--cine-accent);
+  background: var(--cine-glass-tint-hover);
+}
+
+.cine-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ─── Modal Backdrop ────────────────────────────────────────────────────── */
+.cine-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: cine-fade-in 0.2s ease-out both;
+}
+
+/* Top-anchored sheets (search). Own class for the same cascade reason:
+   Tailwind `items-start` would lose to the unlayered rule above. */
+.cine-modal-backdrop--top {
+  align-items: flex-start;
+  padding-top: 5rem;
+}
+
+@media (min-width: 768px) {
+  .cine-modal-backdrop--top {
+    padding-top: 7rem;
+  }
+}
+
+@keyframes cine-fade-in {
+  0% { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cine-fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ─── Legacy Aliases (classes used in JSX before the ui/ lib existed) ──────
+   Maps old names to the canonical system so nothing renders unstyled.
+   New code should use the canonical names or src/components/ui/. */
+.cine-play-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--cine-radius-full);
+  font-weight: var(--cine-font-semibold);
+  font-size: 0.875rem;
   border: none;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  height: 2.75rem;
+  padding: 0 1.75rem;
 }
 
 .cine-play-btn:hover {
-  background: #e8e8e8;
+  background: #f0f0f0;
   transform: scale(1.03);
+  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.2);
 }
 
 .cine-circle-btn {
   width: 44px;
   height: 44px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  font-size: 16px;
-  display: flex;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  font-size: 16px;
+  border: 1px solid var(--cine-glass-border);
+  background: var(--cine-glass-tint);
+  color: var(--cine-text-primary);
+  backdrop-filter: var(--cine-blur-md);
+  -webkit-backdrop-filter: var(--cine-blur-md);
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .cine-circle-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--cine-glass-tint-hover);
+  border-color: var(--cine-glass-border-hover);
   transform: scale(1.06);
-}
-
-/* Container & Cards */
-.cine-container {
-  max-width: 1560px;
-  margin: 0 auto;
-  padding: 0 3.5rem 6rem 3.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 3rem;
-  position: relative;
-  z-index: 10;
-}
-
-.provider-pill {
-  height: 50px;
-  min-width: 105px;
-  padding: 0 1.25rem;
-  flex-shrink: 0;
-  border-radius: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.provider-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
 }
 
 .cine-grid-cards {
@@ -269,24 +1288,6 @@ html, body {
   transform: translateY(-6px);
 }
 
-.cine-card-poster {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 2/3;
-  border-radius: 1.15rem;
-  overflow: hidden;
-  background: #0d0d12;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-}
-
-.cine-card-poster img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
 .cine-card-item:hover .cine-card-poster img {
   transform: scale(1.04);
 }
@@ -295,36 +1296,88 @@ html, body {
   position: absolute;
   top: 0.55rem;
   right: 0.55rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 9999px;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--cine-radius-full);
   background: rgba(10, 10, 14, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #95ff50;
-  font-size: 10px;
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: var(--cine-blur-sm);
+  -webkit-backdrop-filter: var(--cine-blur-sm);
+  color: var(--cine-accent);
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-bold);
+  border: 1px solid var(--cine-glass-border);
 }
 
-.cine-card-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.provider-pill {
+  height: 52px;
+  min-width: 132px;
+  padding: 0 1.5rem;
+  flex-shrink: 0;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--cine-glass-border);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-medium);
 }
 
-.cine-card-year {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+.provider-pill:hover {
+  background: var(--cine-glass-tint-hover);
+  border-color: var(--cine-glass-border-hover);
+  transform: translateY(-2px);
 }
 
-/* Force Header Inner Spacing & Padding */
-header {
-  padding-top: 2rem !important;
-  padding-bottom: 2rem !important;
-  padding-left: 3.5rem !important;
-  padding-right: 3.5rem !important;
-  width: 100% !important;
+/* ─── Cinejoy Parity (verified from cinejoy.to live CSS) ─────────────────── */
+.glass-filter {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  filter: url(#lg-dist) saturate(150%);
+  isolation: isolate;
+  pointer-events: none;
+}
+
+.card-in {
+  animation: 0.2s ease-out both cine-card-in;
+}
+
+.glass-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.glass-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px;
+}
+
+.glass-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.glass-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-aurora-canvas::before,
+  .cine-aurora-canvas::after,
+  .cine-card-in,
+  .card-in,
+  .cine-btn-shimmer:hover::before {
+    animation: none;
+    translate: none;
+  }
 }

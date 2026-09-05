@@ -1,13 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { tmdb, GUARANTEED_TITLES } from './services/tmdb';
+import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
+import { tmdb, GUARANTEED_TITLES, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage } from './services/storage';
-import { letterboxd } from './services/letterboxd';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
+import RowRail from './components/RowRail';
+import WatchlistView from './components/WatchlistView';
+import Card from './components/ui/Card';
+import Select from './components/ui/Select';
 import MediaDetailPage from './components/MediaDetailPage';
 import SearchModal from './components/SearchModal';
 import SettingsModal from './components/SettingsModal';
 import Player from './components/Player';
+
+const GENRE_NAME = {};
+[...MOVIE_GENRES, ...TV_GENRES].forEach((g) => {
+  if (g.id !== '' && !GENRE_NAME[g.id]) GENRE_NAME[g.id] = g.name;
+});
+
+// Genre → icon (cinejoy hero meta parity).
+const GENRE_ICON = {
+  Action: Swords,
+  Adventure: Rocket,
+  Comedy: Laugh,
+  Horror: Skull,
+  'Sci-Fi': Rocket,
+  'Sci-Fi & Fantasy': Rocket,
+  Romance: Heart,
+  Thriller: Flame,
+};
 
 const PROVIDERS = [
   { id: '8', name: 'Netflix', color: '#E50914' },
@@ -35,10 +56,19 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState('All Years');
   const [selectedSort, setSelectedSort] = useState('popularity.desc');
   const [selectedProvider, setSelectedProvider] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('');
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [activePlayer, setActivePlayer] = useState(null);
+
+  // Home rails
+  const [popularMovies, setPopularMovies] = useState([]);
+  const [popularTV, setPopularTV] = useState([]);
+  const [topRated, setTopRated] = useState([]);
+  const [animeSpotlight, setAnimeSpotlight] = useState([]);
+  const [homeProvider, setHomeProvider] = useState('8');
+  const [providerMovies, setProviderMovies] = useState([]);
 
   useEffect(() => {
     setContinueWatching(storage.getAllContinueWatching());
@@ -52,14 +82,7 @@ export default function App() {
         let res;
 
         if (activeTab === 'watchlist') {
-          const localList = storage.getWatchlist();
-          let letterboxdList = [];
-
-          if (letterboxdUser) {
-            letterboxdList = await letterboxd.fetchUserWatchlist(letterboxdUser);
-          }
-
-          if (isMounted) setItems([...localList, ...letterboxdList]);
+          // WatchlistView owns its data (history + list + Letterboxd).
           return;
         } else if (activeTab === 'movie') {
           res = await tmdb.getMovies({
@@ -67,14 +90,16 @@ export default function App() {
             year: selectedYear,
             sort: selectedSort,
             provider: selectedProvider,
+            country: selectedCountry,
           });
         } else if (activeTab === 'tv') {
           res = await tmdb.getSeries({
             genre: selectedGenre,
+            year: selectedYear,
             sort: selectedSort,
+            provider: selectedProvider,
+            country: selectedCountry,
           });
-        } else if (activeTab === 'anime') {
-          res = await tmdb.getAnime();
         } else {
           res = await tmdb.getTrending();
         }
@@ -103,10 +128,108 @@ export default function App() {
     selectedYear,
     selectedSort,
     selectedProvider,
+    selectedCountry,
     letterboxdUser,
   ]);
 
-  const heroItem = featuredItem || items[0] || GUARANTEED_TITLES[0];
+  const playRandom = () => {
+    if (items.length === 0) return;
+    const pick = items[Math.floor(Math.random() * items.length)];
+    setSelectedMedia(pick);
+  };
+
+  // Home rails load once per visit to Home (independent of filters).
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    let isMounted = true;
+
+    async function loadRails() {
+      try {
+        const [movies, series, rated, anime] = await Promise.all([
+          tmdb.getPopularMovies(),
+          tmdb.getPopularTV(),
+          tmdb.getTopRatedMovies(),
+          tmdb.getAnime(),
+        ]);
+
+        if (!isMounted) return;
+
+        const clean = (res) =>
+          (res?.results || []).filter((x) => x.poster_path).slice(0, 14);
+
+        setPopularMovies(clean(movies));
+        setPopularTV(clean(series));
+        setTopRated(clean(rated));
+        setAnimeSpotlight(clean(anime));
+      } catch (err) {
+        console.error('Failed to load home rails:', err);
+      }
+    }
+
+    loadRails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab]);
+
+  // "Movies on {provider}" rail follows the home provider picker.
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    let isMounted = true;
+
+    tmdb
+      .getMovies({ provider: homeProvider })
+      .then((res) => {
+        if (!isMounted) return;
+        setProviderMovies(
+          (res?.results || []).filter((x) => x.poster_path).slice(0, 14)
+        );
+      })
+      .catch((err) => console.error('Failed to load provider rail:', err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, homeProvider]);
+
+  // Home hero carousel (cinejoy spotlight parity)
+  const heroItems = activeTab === 'home' ? items.slice(0, 6) : [];
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroLogo, setHeroLogo] = useState(null);
+
+  useEffect(() => {
+    setHeroIndex(0);
+    setHeroLogo(null);
+  }, [activeTab, items.length > 0 ? items[0].id : null]);
+
+  const heroItem = heroItems[heroIndex] || featuredItem || items[0] || GUARANTEED_TITLES[0];
+  const heroMediaType = heroItem.media_type || (heroItem.first_air_date ? 'tv' : 'movie');
+
+  // Rotate spotlight; pause while reading details or watching.
+  useEffect(() => {
+    if (activeTab !== 'home' || selectedMedia || activePlayer || heroItems.length < 2) return;
+    const timer = setTimeout(() => {
+      setHeroIndex((i) => (i + 1) % heroItems.length);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [activeTab, selectedMedia, activePlayer, heroIndex, heroItems.length]);
+
+  // Title logo for the spotlight treatment.
+  useEffect(() => {
+    if (activeTab !== 'home' || !heroItem?.id) return;
+    let isMounted = true;
+    setHeroLogo(null);
+    tmdb.getLogos(heroMediaType, heroItem.id).then((logo) => {
+      if (isMounted && logo?.file_path) setHeroLogo(logo.file_path);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, heroItem?.id]);
+
+  // Discovery pages (Movies / Shows) are poster-only rails like cinejoy.
+  const posterOnly = activeTab === 'movie' || activeTab === 'tv';
 
   // Always fetch full TMDB details before starting playback.
   // Catalog/trending objects do not contain all TV metadata such as
@@ -154,18 +277,19 @@ export default function App() {
 
       <Navbar
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          if (tab === 'search') {
-            setIsSearchOpen(true);
-          } else {
-            setSelectedMedia(null);
-            setActiveTab(tab);
-            setSelectedGenre('');
-            setSelectedYear('All Years');
-            setSelectedSort('popularity.desc');
-            setSelectedProvider('');
-          }
-        }}
+          onTabChange={(tab) => {
+            if (tab === 'search') {
+              setIsSearchOpen(true);
+            } else {
+              setSelectedMedia(null);
+              setActiveTab(tab);
+              setSelectedGenre('');
+              setSelectedYear('All Years');
+              setSelectedSort('popularity.desc');
+              setSelectedProvider('');
+              setSelectedCountry('');
+            }
+          }}
         isDetailView={Boolean(selectedMedia)}
         onBack={() => setSelectedMedia(null)}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -175,7 +299,7 @@ export default function App() {
         <MediaDetailPage
           media={selectedMedia}
           mediaType={
-            activeTab === 'tv' || activeTab === 'anime' ? 'tv' : 'movie'
+            activeTab === 'tv' ? 'tv' : 'movie'
           }
           onPlay={(media, details) =>
             setActivePlayer({ media, details })
@@ -185,32 +309,58 @@ export default function App() {
       ) : (
         <>
           {activeTab === 'home' && (
-            <section className="cine-hero">
+            <div className="cine-home-bg" aria-hidden="true">
               <img
+                key={heroItem.id}
                 src={tmdb.getImageUrl(
                   heroItem.backdrop_path,
                   'original',
                   heroItem.backdrop_fallback
                 )}
-                alt={heroItem.title || heroItem.name}
-                className="cine-hero-img"
+                alt=""
+                className="cine-home-bg-img cine-hero-fade"
               />
+              <div className="cine-home-bg-shade" />
+            </div>
+          )}
 
-              <div className="cine-hero-overlay" />
+          {activeTab === 'home' && (
+            <section className="cine-hero">
+              <div className="cine-hero-media" aria-hidden="true">
+                <img
+                  key={heroItem.id}
+                  src={tmdb.getImageUrl(
+                    heroItem.backdrop_path,
+                    'original',
+                    heroItem.backdrop_fallback
+                  )}
+                  alt=""
+                  className="cine-hero-fade"
+                />
+                <div className="cine-hero-scrim" />
+              </div>
 
               <div className="cine-hero-content">
-                <h1 className="cine-hero-title">
-                  {heroItem.title || heroItem.name}
-                </h1>
+                {heroLogo ? (
+                  <img
+                    src={tmdb.getImageUrl(heroLogo, 'w500')}
+                    alt={heroItem.title || heroItem.name}
+                    className="cine-hero-logo"
+                  />
+                ) : (
+                  <h1 className="cine-hero-title">
+                    {heroItem.title || heroItem.name}
+                  </h1>
+                )}
 
                 <div className="cine-hero-meta">
                   <span className="cine-star-tag">
-                    ★ {(heroItem.vote_average || 8.4).toFixed(1)}/10
+                    <Star className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
+                    {(heroItem.vote_average || 8.4).toFixed(1)}/10
                   </span>
 
-                  <span>•</span>
-
-                  <span>
+                  <span className="cine-hero-meta-item">
+                    <CalendarDays className="w-3.5 h-3.5" />
                     {(
                       heroItem.release_date ||
                       heroItem.first_air_date ||
@@ -218,11 +368,16 @@ export default function App() {
                     ).split('-')[0]}
                   </span>
 
-                  <span>•</span>
-
-                  <span className="text-white/60">
-                    Trending Spotlight
-                  </span>
+                  {(heroItem.genre_ids || []).slice(0, 1).map((gid) => {
+                    const gname = GENRE_NAME[String(gid)] || GENRE_NAME[gid] || 'Featured';
+                    const GIcon = GENRE_ICON[gname] || Clapperboard;
+                    return (
+                      <span key={gid} className="cine-hero-meta-item">
+                        <GIcon className="w-3.5 h-3.5" />
+                        {gname}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 <p className="cine-hero-desc">
@@ -232,52 +387,67 @@ export default function App() {
                 <div className="cine-actions">
                   <button
                     onClick={() => playMedia(heroItem, heroItem)}
-                    className="cine-play-btn"
+                    className="cine-btn cine-btn-primary cine-btn-shimmer cine-cta"
                   >
-                    <span>▶</span>
+                    <Play className="w-[18px] h-[18px]" fill="currentColor" />
                     <span>Play</span>
                   </button>
 
-                  <button
-                    onClick={() => storage.toggleWatchlist(heroItem)}
-                    className="cine-circle-btn"
-                    title="Add to Watchlist"
-                  >
-                    +
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedMedia(heroItem)}
-                    className="cine-circle-btn"
-                    title="Details"
-                  >
-                    ⓘ
-                  </button>
+                  <div className="cine-duo-btn">
+                    <button
+                      onClick={() => storage.toggleWatchlist(heroItem)}
+                      title="Add to Watchlist"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                    <span className="cine-duo-divider" />
+                    <button
+                      onClick={() => setSelectedMedia(heroItem)}
+                      title="Details"
+                    >
+                      <Info className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {heroItems.length > 1 && (
+                <div className="cine-hero-dots">
+                  {heroItems.map((item, i) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setHeroIndex(i)}
+                      title={item.title || item.name}
+                      className={`cine-hero-dot ${i === heroIndex ? 'is-active' : ''}`}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
           {/* Main Container */}
           <main
             className={`cine-container ${
-              activeTab !== 'home' ? 'pt-32' : 'pt-4'
+              activeTab !== 'home' ? 'cine-container--page' : ''
             }`}
           >
             {/* Cinejoy Movies/Shows Page Header & Filter Rail */}
             {activeTab === 'movie' && (
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-3xl font-extrabold text-white tracking-tight">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex-shrink-0">
+                  <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
                     Movies
                   </h1>
 
-                  <p className="text-xs text-white/50 mt-0.5">
+                  <p className="text-sm text-white/60 mt-1">
                     Discover new movies to watch
                   </p>
                 </div>
 
                 <FilterBar
+                  genres={MOVIE_GENRES}
+                  sorts={SORTS}
                   selectedGenre={selectedGenre}
                   onSelectGenre={setSelectedGenre}
                   selectedYear={selectedYear}
@@ -286,23 +456,28 @@ export default function App() {
                   onSelectSort={setSelectedSort}
                   selectedProvider={selectedProvider}
                   onSelectProvider={setSelectedProvider}
+                  selectedCountry={selectedCountry}
+                  onSelectCountry={setSelectedCountry}
+                  onRandom={playRandom}
                 />
               </div>
             )}
 
             {activeTab === 'tv' && (
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-3xl font-extrabold text-white tracking-tight">
-                    TV Shows
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="flex-shrink-0">
+                  <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
+                    Shows
                   </h1>
 
-                  <p className="text-xs text-white/50 mt-0.5">
+                  <p className="text-sm text-white/60 mt-1">
                     Explore hit series and episodic dramas
                   </p>
                 </div>
 
                 <FilterBar
+                  genres={TV_GENRES}
+                  sorts={TV_SORTS}
                   selectedGenre={selectedGenre}
                   onSelectGenre={setSelectedGenre}
                   selectedYear={selectedYear}
@@ -311,19 +486,10 @@ export default function App() {
                   onSelectSort={setSelectedSort}
                   selectedProvider={selectedProvider}
                   onSelectProvider={setSelectedProvider}
+                  selectedCountry={selectedCountry}
+                  onSelectCountry={setSelectedCountry}
+                  onRandom={playRandom}
                 />
-              </div>
-            )}
-
-            {activeTab === 'anime' && (
-              <div className="space-y-2">
-                <h1 className="text-3xl font-extrabold text-white tracking-tight">
-                  Anime
-                </h1>
-
-                <p className="text-xs text-white/50">
-                  Japanese animation and top-tier series
-                </p>
               </div>
             )}
 
@@ -354,36 +520,36 @@ export default function App() {
                           }
                         )
                       }
-                      className="relative w-64 flex-shrink-0 p-3 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-white/20 backdrop-blur-xl transition cursor-pointer group"
+                      className="cine-cw-card group"
                     >
-                      <div className="relative aspect-video rounded-xl overflow-hidden bg-black/50 mb-2.5">
+                      <div className="cine-cw-thumb">
                         <img
                           src={tmdb.getImageUrl(item.poster, 'w300')}
                           alt={item.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         />
 
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                          <div className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center font-bold text-xs">
-                            ▶
+                        <div className="cine-cw-play">
+                          <div className="cine-cw-play-btn">
+                            <Play className="w-3 h-3" fill="currentColor" />
                           </div>
                         </div>
                       </div>
 
-                      <h4 className="text-xs font-semibold text-white/90 truncate">
+                      <h4 className="cine-cw-title">
                         {item.title}
                       </h4>
 
-                      <p className="text-[11px] text-white/40 mt-0.5">
+                      <p className="cine-cw-meta">
                         {item.type === 'tv'
                           ? `Season ${item.season} • Episode ${item.episode}`
                           : 'Movie'}{' '}
                         • {item.percent}%
                       </p>
 
-                      <div className="w-full bg-white/10 h-1 rounded-full mt-2 overflow-hidden">
+                      <div className="cine-cw-progress">
                         <div
-                          className="bg-[#95ff50] h-full rounded-full"
+                          className="cine-cw-progress-fill"
                           style={{ width: `${item.percent}%` }}
                         />
                       </div>
@@ -399,7 +565,7 @@ export default function App() {
                   Browse by Provider
                 </h3>
 
-                <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+                <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
                   {PROVIDERS.map((p) => (
                     <div
                       key={p.name}
@@ -407,12 +573,18 @@ export default function App() {
                         setActiveTab('movie');
                         setSelectedProvider(p.id);
                       }}
-                      className="provider-pill"
+                      className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
+                      title={p.name}
                     >
-                      <span
-                        className="text-xs font-bold"
-                        style={{ color: p.color }}
-                      >
+                      <div className="cine-provider-pill min-w-[132px]">
+                        <span
+                          className="text-sm font-bold tracking-tight"
+                          style={{ color: p.color }}
+                        >
+                          {p.name}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-medium text-white/45 group-hover:text-white/80 transition">
                         {p.name}
                       </span>
                     </div>
@@ -422,67 +594,81 @@ export default function App() {
             )}
 
             <section>
-              {activeTab === 'home' && (
-                <div className="cine-section-head">
-                  <h2 className="cine-section-title">
-                    Recommended For You
-                  </h2>
-
-                  <span className="text-xs text-white/40">
-                    {items.length} titles
-                  </span>
-                </div>
-              )}
-
-              <div className="cine-grid-cards">
-                {items.map((media) => {
-                  const title = media.title || media.name;
-                  const poster = tmdb.getImageUrl(
-                    media.poster_path,
-                    'w500'
-                  );
-                  const rating = media.vote_average
-                    ? media.vote_average.toFixed(1)
-                    : null;
-                  const year = (
-                    media.release_date ||
-                    media.first_air_date ||
-                    ''
-                  ).split('-')[0];
-
-                  return (
-                    <div
-                      key={`${media.id}_${title}`}
-                      onClick={() => setSelectedMedia(media)}
-                      className="cine-card-item"
-                    >
-                      <div className="cine-card-poster">
-                        <img
-                          src={poster}
-                          alt={title}
-                          loading="lazy"
-                          onError={(e) => {
-                            e.target.src =
-                              'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
-                          }}
-                        />
-
-                        {rating && (
-                          <span className="cine-card-badge">
-                            ★ {rating}
-                          </span>
-                        )}
+              {activeTab === 'home' ? (
+                <div className="flex flex-col gap-10">
+                  <RowRail title="Trending Now" items={items} onSelect={setSelectedMedia} />
+                  <RowRail
+                    title="Popular Movies"
+                    items={popularMovies}
+                    onSelect={setSelectedMedia}
+                    mediaType="movie"
+                    action={{ label: 'View All', onClick: () => setActiveTab('movie') }}
+                  />
+                  <RowRail
+                    title="Popular Shows"
+                    items={popularTV}
+                    onSelect={setSelectedMedia}
+                    mediaType="tv"
+                    action={{ label: 'View All', onClick: () => setActiveTab('tv') }}
+                  />
+                  <RowRail
+                    title="Top Rated Movies"
+                    items={topRated}
+                    onSelect={setSelectedMedia}
+                    mediaType="movie"
+                    action={{
+                      label: 'View All',
+                      onClick: () => {
+                        setSelectedSort('vote_average.desc');
+                        setActiveTab('movie');
+                      },
+                    }}
+                  />
+                  <RowRail
+                    titleNode={
+                      <div className="flex items-center gap-2">
+                        <h2 className="cine-section-title">Movies on</h2>
+                        <div className="w-44">
+                          <Select
+                            value={homeProvider}
+                            onChange={setHomeProvider}
+                            options={PROVIDERS.filter((p) => p.id !== '').map((p) => ({
+                              value: p.id,
+                              label: p.name,
+                            }))}
+                          />
+                        </div>
                       </div>
-
-                      <h4 className="cine-card-title">
-                        {title}
-                      </h4>
-
-                      <p className="cine-card-year">{year}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    }
+                    title="Movies on provider"
+                    items={providerMovies}
+                    onSelect={setSelectedMedia}
+                    mediaType="movie"
+                  />
+                  <RowRail title="Anime Spotlight" items={animeSpotlight} onSelect={setSelectedMedia} mediaType="tv" />
+                </div>
+              ) : activeTab === 'watchlist' ? (
+                <WatchlistView
+                  onSelectMedia={(item) => setSelectedMedia(item)}
+                  onResume={(media, fallback) => playMedia(media, fallback)}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
+                  letterboxdUser={letterboxdUser}
+                />
+              ) : (
+                <>
+                  <div className="cine-grid">
+                    {items.map((media) => (
+                      <Card
+                        key={`${media.id}_${media.title || media.name}`}
+                        media={media}
+                        onClick={setSelectedMedia}
+                        size="fluid"
+                        posterOnly={posterOnly}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
           </main>
         </>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { X, Check, ListVideo } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 
 export default function EpisodeDrawer({
@@ -59,29 +60,34 @@ export default function EpisodeDrawer({
     <div className="fixed inset-0 z-50 pointer-events-none flex items-start justify-end p-4 md:p-6 md:pt-20">
       <div 
         ref={popoverRef}
-        className="pointer-events-auto w-full max-w-sm max-h-[82vh] rounded-3xl bg-[#0c0c12]/95 border border-white/15 backdrop-blur-3xl shadow-[0_24px_70px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
+        className="pointer-events-auto w-full max-w-sm max-h-[82vh] rounded-3xl cine-glass-panel flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
       >
         {/* Popover Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <div>
-            <h3 className="text-sm font-bold text-white tracking-tight">Episodes</h3>
-            <p className="text-[11px] text-white/40">Season {activeSeason} • {episodes.length} episodes</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[var(--cine-accent)]">
+              <ListVideo className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white tracking-tight">Episodes</h3>
+              <p className="text-[11px] text-white/40">Season {activeSeason} • {episodes.length} episodes</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/80 flex items-center justify-center text-xs transition cursor-pointer"
+            className="cine-icon-btn"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Season Selector Pills */}
-        <div className="flex gap-1.5 p-3 overflow-x-auto no-scrollbar border-b border-white/5">
+        <div className="flex gap-1.5 p-3 overflow-x-auto no-scrollbar border-b border-white/10">
           {seasons.map((sNum) => (
             <button
               key={sNum}
               onClick={() => setActiveSeason(sNum)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              className={`h-10 px-5 inline-flex items-center rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 activeSeason === sNum
                   ? 'bg-white text-black shadow-sm'
                   : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
@@ -96,7 +102,7 @@ export default function EpisodeDrawer({
         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <div className="w-6 h-6 border-2 border-[#95ff50] border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-[var(--cine-accent)] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : episodes.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-xs text-white/40">
@@ -116,10 +122,8 @@ export default function EpisodeDrawer({
                     onSelectEpisode(activeSeason, ep.episode_number);
                     onClose();
                   }}
-                  className={`group flex items-center gap-3 p-2 rounded-2xl border cursor-pointer transition ${
-                    isCurrent
-                      ? 'bg-white/15 border-[#95ff50]/60 shadow-md'
-                      : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.07] hover:border-white/10'
+                  className={`mat-row group flex items-center gap-3 p-2 cursor-pointer ${
+                    isCurrent ? 'border-[var(--cine-accent)]/50' : ''
                   }`}
                 >
                   <div className="relative w-20 h-14 rounded-xl overflow-hidden bg-black/50 flex-shrink-0">
@@ -130,13 +134,17 @@ export default function EpisodeDrawer({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h4 className={`text-xs font-semibold truncate ${isCurrent ? 'text-[#95ff50]' : 'text-white/90 group-hover:text-white'}`}>
+                    <h4 className={`text-xs font-semibold truncate ${isCurrent ? 'text-[var(--cine-accent)]' : 'text-white/90 group-hover:text-white'}`}>
                       {ep.episode_number}. {ep.name || `Episode ${ep.episode_number}`}
                     </h4>
                     <p className="text-[11px] text-white/40 line-clamp-1 mt-0.5">
                       {ep.overview || 'Play episode'}
                     </p>
                   </div>
+
+                  {isCurrent && (
+                    <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0 mr-1" />
+                  )}
                 </div>
               );
             })

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ChevronDown, Check, Server } from 'lucide-react';
 import { storage } from '../services/storage';
 
 export default function ServerSwitcher({ currentServer, onSelectServer }) {
@@ -6,9 +7,9 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
   const dropdownRef = useRef(null);
 
   const servers = [
+    { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal' },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal' },
-    { id: 'vidy', name: 'Vidy Stream', quality: 'Multi', ping: 'good' },
-    { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'optimal' },
+    { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good' },
     { id: 'alpha', name: 'Server Alpha (Direct)', quality: 'Original', ping: 'stable' },
   ];
 
@@ -34,47 +35,43 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
     <div className="relative inline-block" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="h-9 px-4 rounded-full flex items-center gap-2 text-xs font-semibold text-white/90 bg-white/10 hover:bg-white/15 border border-white/15 backdrop-blur-xl transition cursor-pointer shadow-md"
+        className="cine-control-btn"
       >
-        <span className="w-2 h-2 rounded-full bg-[#95ff50] animate-pulse" />
+        <span className="w-2 h-2 rounded-full bg-[var(--cine-accent)] animate-pulse" />
         <span>{activeServer.name}</span>
-        <svg
+        <ChevronDown
           className={`w-3.5 h-3.5 text-white/50 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M19 9l-7 7-7-7" />
-        </svg>
+        />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 p-2 rounded-2xl bg-[#0e0e14]/95 border border-white/15 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 animate-in fade-in zoom-in-95 duration-150">
-          <div className="px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider text-white/40 border-b border-white/10 mb-1">
+        <div className="absolute right-0 mt-2 w-72 p-3 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/40 border-b border-white/10 mb-2">
+            <Server className="w-3.5 h-3.5" />
             Playback Servers
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {servers.map((s) => {
               const isSelected = s.id === activeServer.id;
               return (
                 <button
                   key={s.id}
                   onClick={() => handleSelect(s.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition cursor-pointer ${
-                    isSelected
-                      ? 'bg-white/15 text-white font-bold shadow-inner'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  className={`mat-row w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-xs transition cursor-pointer ${
+                    isSelected ? 'border-[var(--cine-accent)]/50' : ''
                   }`}
                 >
-                  <div className="flex flex-col">
-                    <span className={isSelected ? 'text-[#95ff50]' : ''}>{s.name}</span>
-                    <span className="text-[10px] text-white/40">{s.quality}</span>
+                  <div className="flex flex-col min-w-0">
+                    <span className={`font-semibold truncate ${isSelected ? 'text-[var(--cine-accent)]' : 'text-white/90'}`}>
+                      {s.name}
+                    </span>
+                    <span className="text-[10px] text-white/40">{s.quality} • {s.ping}</span>
                   </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      s.ping === 'optimal' ? 'bg-[#95ff50]' : 'bg-emerald-400'
-                    }`}
-                  />
+                  {isSelected ? (
+                    <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/25 flex-shrink-0" />
+                  )}
                 </button>
               );
             })}

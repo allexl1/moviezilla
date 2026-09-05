@@ -24,7 +24,7 @@ function safeSet(key, value) {
 
 export const storage = {
   // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode, currentTime, duration
-  saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '' }) {
+  saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '', genres = [] }) {
     if (!mediaId) return;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const key = `${type}_${mediaId}`;
@@ -41,6 +41,7 @@ export const storage = {
       percent: Math.min(100, Math.floor(progressPercent)),
       title,
       poster,
+      genres,
       updatedAt: Date.now(),
     };
 
@@ -62,8 +63,24 @@ export const storage = {
       .sort((a, b) => b.updatedAt - a.updatedAt);
   },
 
+  // Full watch history (everything with a timestamp), newest first,
+  // deduplicated per title (latest sighting wins).
+  getWatchHistory() {
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const seen = new Set();
+    return Object.values(allProgress)
+      .filter((item) => item.updatedAt)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .filter((item) => {
+        const key = `${item.type}_${item.mediaId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  },
+
   // Preferred Server memory
-  getPreferredServer(defaultServer = 'VidLink') {
+  getPreferredServer(defaultServer = 'vidy') {
     try {
       return localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
     } catch {

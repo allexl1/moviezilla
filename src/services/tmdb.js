@@ -25,6 +25,73 @@ export const GUARANTEED_TITLES = [
   }
 ];
 
+export const MOVIE_GENRES = [
+  { id: '', name: 'All Genres' },
+  { id: '28', name: 'Action' },
+  { id: '12', name: 'Adventure' },
+  { id: '16', name: 'Animation' },
+  { id: '35', name: 'Comedy' },
+  { id: '80', name: 'Crime' },
+  { id: '99', name: 'Documentary' },
+  { id: '18', name: 'Drama' },
+  { id: '10751', name: 'Family' },
+  { id: '14', name: 'Fantasy' },
+  { id: '36', name: 'History' },
+  { id: '27', name: 'Horror' },
+  { id: '10402', name: 'Music' },
+  { id: '9648', name: 'Mystery' },
+  { id: '10749', name: 'Romance' },
+  { id: '878', name: 'Sci-Fi' },
+  { id: '53', name: 'Thriller' },
+  { id: '10752', name: 'War' },
+  { id: '37', name: 'Western' },
+];
+
+export const TV_GENRES = [
+  { id: '', name: 'All Genres' },
+  { id: '10759', name: 'Action & Adventure' },
+  { id: '16', name: 'Animation' },
+  { id: '35', name: 'Comedy' },
+  { id: '80', name: 'Crime' },
+  { id: '99', name: 'Documentary' },
+  { id: '18', name: 'Drama' },
+  { id: '10751', name: 'Family' },
+  { id: '10762', name: 'Kids' },
+  { id: '9648', name: 'Mystery' },
+  { id: '10763', name: 'News' },
+  { id: '10764', name: 'Reality' },
+  { id: '10765', name: 'Sci-Fi & Fantasy' },
+  { id: '10767', name: 'Talk' },
+  { id: '10768', name: 'War & Politics' },
+  { id: '37', name: 'Western' },
+];
+
+export const COUNTRIES = [
+  { id: '', name: 'All Countries' },
+  { id: 'US', name: 'United States' },
+  { id: 'GB', name: 'United Kingdom' },
+  { id: 'JP', name: 'Japan' },
+  { id: 'KR', name: 'South Korea' },
+  { id: 'FR', name: 'France' },
+  { id: 'DE', name: 'Germany' },
+  { id: 'IN', name: 'India' },
+  { id: 'ES', name: 'Spain' },
+  { id: 'IT', name: 'Italy' },
+  { id: 'CA', name: 'Canada' },
+];
+
+export const SORTS = [
+  { id: 'popularity.desc', name: 'Popular' },
+  { id: 'vote_average.desc', name: 'Top Rated' },
+  { id: 'primary_release_date.desc', name: 'Newest' },
+];
+
+export const TV_SORTS = [
+  { id: 'popularity.desc', name: 'Popular' },
+  { id: 'vote_average.desc', name: 'Top Rated' },
+  { id: 'first_air_date.desc', name: 'Newest' },
+];
+
 async function proxyFetch(endpoint, params = {}) {
   try {
     const query = new URLSearchParams({
@@ -72,7 +139,8 @@ export const tmdb = {
     genre = '',
     year = '',
     sort = 'popularity.desc',
-    provider = ''
+    provider = '',
+    country = '',
   } = {}) {
     const params = {
       page,
@@ -92,13 +160,20 @@ export const tmdb = {
       params.watch_region = 'US';
     }
 
+    if (country) {
+      params.with_origin_country = country;
+    }
+
     return proxyFetch('discover/movie', params);
   },
 
   async getSeries({
     page = 1,
     genre = '',
-    sort = 'popularity.desc'
+    year = '',
+    sort = 'popularity.desc',
+    provider = '',
+    country = '',
   } = {}) {
     const params = {
       page,
@@ -109,16 +184,68 @@ export const tmdb = {
       params.with_genres = genre;
     }
 
+    if (year && year !== 'All Years') {
+      params.first_air_date_year = year;
+    }
+
+    if (provider) {
+      params.with_watch_providers = provider;
+      params.watch_region = 'US';
+    }
+
+    if (country) {
+      params.with_origin_country = country;
+    }
+
     return proxyFetch('discover/tv', params);
   },
 
-  async getAnime({ page = 1 } = {}) {
+  async getAnime({ page = 1, sort = 'popularity.desc' } = {}) {
     return proxyFetch('discover/tv', {
       page,
-      sort_by: 'popularity.desc',
+      sort_by: sort,
       with_genres: '16',
       with_original_language: 'ja',
     });
+  },
+
+  async getPopularMovies({ page = 1 } = {}) {
+    return proxyFetch('discover/movie', {
+      page,
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 100,
+    });
+  },
+
+  async getPopularTV({ page = 1 } = {}) {
+    return proxyFetch('discover/tv', {
+      page,
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 100,
+    });
+  },
+
+  async getTopRatedMovies({ page = 1 } = {}) {
+    return proxyFetch('discover/movie', {
+      page,
+      sort_by: 'vote_average.desc',
+      'vote_count.gte': 500,
+    });
+  },
+
+  // Watch-provider catalog (logos) for the provider rail.
+  async getProviderCatalog() {
+    try {
+      const query = new URLSearchParams({
+        path: 'watch/providers/movie',
+        watch_region: 'US',
+      });
+      const res = await fetch(`/api/tmdb?${query.toString()}`);
+      if (!res.ok) throw new Error();
+      return await res.json();
+    } catch {
+      return { results: [] };
+    }
   },
 
   async getMediaDetails(mediaType, id) {
@@ -143,6 +270,21 @@ export const tmdb = {
     }
   },
 
+  // Title logo (cinejoy-style hero treatment), English preferred.
+  async getLogos(mediaType, id) {
+    try {
+      const query = new URLSearchParams({ path: `${mediaType}/${id}/images` });
+      const res = await fetch(`/api/tmdb?${query.toString()}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const logos = data?.logos || [];
+      return (
+        logos.find((l) => l.iso_639_1 === 'en') || logos[0] || null
+      );
+    } catch {
+      return null;
+    }
+  },
   async getSeasonDetails(tvId, seasonNumber) {
     try {
       const query = new URLSearchParams({
