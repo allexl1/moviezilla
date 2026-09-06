@@ -194,6 +194,9 @@ export const tmdb = {
     const params = {
       page,
       sort_by: sort,
+      // Released grids only: newest-first discover otherwise fills page 1
+      // with future (unreleased) titles that belong in Coming Soon.
+      'primary_release_date.lte': new Date().toISOString().slice(0, 10),
     };
 
     if (genre) {
@@ -243,6 +246,8 @@ export const tmdb = {
     const params = {
       page,
       sort_by: sort,
+      // Same as movies: keep unreleased pilots out of Released Series.
+      'first_air_date.lte': new Date().toISOString().slice(0, 10),
     };
 
     if (genre) {

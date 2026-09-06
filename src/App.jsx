@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
+import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard, Radio } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage, progressLabel } from './services/storage';
 import Navbar from './components/Navbar';
@@ -48,6 +48,56 @@ function resolveMediaType(media) {
   if (media?.type === 'tv' || media?.type === 'movie') return media.type;
   if (media?.first_air_date) return 'tv';
   return 'movie';
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Strict first, relaxed fallback so the shelf never renders empty while
+// the endpoint returns data. Movies: future-dated only, soonest first.
+// TV: airing order kept as TMDB returns it.
+function pickUpcoming(results) {
+  const today = todayISO();
+  const strict = (results || []).filter(
+    (x) =>
+      x.backdrop_path &&
+      x.poster_path &&
+      (x.overview || '').trim().length > 20 &&
+      x.release_date &&
+      x.release_date >= today
+  );
+  if (strict.length >= 4) {
+    return strict.sort((a, b) => a.release_date.localeCompare(b.release_date)).slice(0, 10);
+  }
+  return (results || [])
+    .filter((x) => x.backdrop_path && x.poster_path && x.release_date)
+    .sort((a, b) => {
+      const fa = a.release_date >= today ? 0 : 1;
+      const fb = b.release_date >= today ? 0 : 1;
+      return fa - fb || a.release_date.localeCompare(b.release_date);
+    })
+    .slice(0, 10);
+}
+
+function pickAiring(results) {
+  const strict = (results || []).filter(
+    (x) => x.backdrop_path && x.poster_path && (x.overview || '').trim().length > 20
+  );
+  if (strict.length >= 4) return strict.slice(0, 10);
+  return (results || [])
+    .filter((x) => x.backdrop_path && x.poster_path)
+    .slice(0, 10);
+}
+
+// Released grids must never contain future-dated titles — those belong
+// in Coming Soon / On The Air. Missing dates are kept (can't judge).
+function isReleased(item, tab) {
+  const today = todayISO();
+  if (tab === 'movie') {
+    return !(item.release_date && item.release_date > today);
+  }
+  return !(item.first_air_date && item.first_air_date > today);
 }
 
 export default function App() {
@@ -266,27 +316,10 @@ export default function App() {
         setTopRated(clean(rated));
         setAnimeSpotlight(clean(anime));
         setNowPlaying(clean(now));
-        // Coming Soon: single line, reputable only (backdrop + poster +
-        // real overview 20+ chars + dated future release), soonest first.
-        const today = new Date().toISOString().slice(0, 10);
-        setUpcomingMovies(
-          (soon?.results || [])
-            .filter(
-              (x) =>
-                x.backdrop_path &&
-                x.poster_path &&
-                (x.overview || '').trim().length > 20 &&
-                x.release_date &&
-                x.release_date >= today
-            )
-            .sort((a, b) => a.release_date.localeCompare(b.release_date))
-            .slice(0, 10)
-        );
-        setOnAirToday(
-          (airing?.results || [])
-            .filter((x) => x.backdrop_path && x.poster_path && (x.overview || '').trim().length > 10)
-            .slice(0, 10)
-        );
+        // Coming Soon: single line, reputable + future-dated, soonest
+        // first, with a relaxed fallback so the shelf never goes empty.
+        setUpcomingMovies(pickUpcoming(soon?.results));
+        setOnAirToday(pickAiring(airing?.results));
       } catch (err) {
         console.error('Failed to load home rails:', err);
       }
@@ -310,24 +343,8 @@ export default function App() {
     (activeTab === 'movie' ? tmdb.getUpcoming() : tmdb.getOnTheAir())
       .then((res) => {
         if (!isMounted) return;
-        const byDate = (a, b) =>
-          String(a.release_date || a.first_air_date || '').localeCompare(
-            String(b.release_date || b.first_air_date || '')
-          );
-        const today = new Date().toISOString().slice(0, 10);
-        const list = (res?.results || [])
-          .filter(
-            (x) =>
-              x.backdrop_path &&
-              x.poster_path &&
-              (x.overview || '').trim().length > 20 &&
-              (activeTab === 'tv' ||
-                (x.release_date && x.release_date >= today))
-          )
-          .sort(activeTab === 'movie' ? byDate : () => 0)
-          .slice(0, 10);
-        if (activeTab === 'movie') setUpcomingMovies(list);
-        else setOnAirToday(list);
+        if (activeTab === 'movie') setUpcomingMovies(pickUpcoming(res?.results));
+        else setOnAirToday(pickAiring(res?.results));
       })
       .catch((err) => console.error('Failed to load upcoming rail:', err));
     return () => {
@@ -337,6 +354,8 @@ export default function App() {
 
   // Full provider catalog for the icon wall (sorted by TMDB priority).
   const [providers, setProviders] = useState([]);
+  // Shows-page shelf toggle: Released grid vs On-The-Air grid.
+  const [showAiring, setShowAiring] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -449,6 +468,13 @@ export default function App() {
   // Discovery pages (Movies / Shows) are poster-only rails like cinejoy.
   const posterOnly = activeTab === 'movie' || activeTab === 'tv';
 
+  // Released grids exclude future-dated titles (those live in Coming Soon
+  // / On The Air). Raw `items` stay untouched for hero + random + paging.
+  const releasedItems =
+    activeTab === 'movie' || activeTab === 'tv'
+      ? items.filter((x) => isReleased(x, activeTab))
+      : items;
+
   // The detail page must follow the selected item's own type, not the nav tab
   // (a TV pick from Search/Watchlist/Home must stay 'tv').
   const selectedMediaType = selectedMedia ? resolveMediaType(selectedMedia) : 'movie';
@@ -517,6 +543,7 @@ export default function App() {
               setSelectedProvider('');
               setSelectedCountry('');
               setSelectedLanguage('');
+              setShowAiring(false);
             }
           }}
         isDetailView={Boolean(selectedMedia)}
@@ -719,6 +746,16 @@ export default function App() {
                   <p className="text-sm text-white/60 mt-1">
                     Explore hit series and episodic dramas
                   </p>
+
+                  <button
+                    onClick={() => setShowAiring((v) => !v)}
+                    aria-pressed={showAiring}
+                    className={`cine-control-btn mt-3 ${showAiring ? 'border-[var(--cine-accent)]/60' : ''}`}
+                    title="Show series currently on the air"
+                  >
+                    <Radio className={`w-3.5 h-3.5 ${showAiring ? 'text-[var(--cine-accent)]' : ''}`} />
+                    <span>On The Air</span>
+                  </button>
                 </div>
 
                 <FilterBar
@@ -937,39 +974,58 @@ export default function App() {
                       dateKey="release_date"
                     />
                   )}
-                  {activeTab === 'tv' && (
-                    <UpcomingRail
-                      title="On The Air"
-                      items={onAirToday}
-                      onSelect={setSelectedMedia}
-                      mediaType="tv"
-                      badge="Airing"
-                      dateKey="first_air_date"
-                    />
-                  )}
-                  <div className="cine-section-head">
-                    <h2 className="cine-section-title">
-                      {activeTab === 'movie' ? 'Released Movies' : 'Released Series'}
-                    </h2>
-                    <span className="text-xs text-white/60">
-                      {items.length} titles • available now
-                    </span>
-                  </div>
-                  <div className="cine-grid">
-                    {items.map((media) => (
-                      <Card
-                        key={`${media.id}_${media.title || media.name}`}
-                        media={media}
-                        onClick={setSelectedMedia}
-                        size="fluid"
-                        posterOnly={posterOnly}
-                      />
-                    ))}
-                  </div>
-                  {items.length === 0 && (
-                    <p className="text-center py-16 text-xs text-white/60">
-                      No titles found. Try clearing filters.
-                    </p>
+                  {activeTab === 'tv' && showAiring ? (
+                    <>
+                      <div className="cine-section-head">
+                        <h2 className="cine-section-title">On The Air</h2>
+                        <span className="text-xs text-white/60">
+                          {onAirToday.length} titles • airing now
+                        </span>
+                      </div>
+                      <div className="cine-grid">
+                        {onAirToday.map((media) => (
+                          <Card
+                            key={`${media.id}_${media.title || media.name}`}
+                            media={{ ...media, media_type: media.media_type || 'tv' }}
+                            onClick={setSelectedMedia}
+                            size="fluid"
+                            posterOnly={posterOnly}
+                          />
+                        ))}
+                      </div>
+                      {onAirToday.length === 0 && (
+                        <p className="text-center py-16 text-xs text-white/60">
+                          Nothing on the air right now. Check back later.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="cine-section-head">
+                        <h2 className="cine-section-title">
+                          {activeTab === 'movie' ? 'Released Movies' : 'Released Series'}
+                        </h2>
+                        <span className="text-xs text-white/60">
+                          {releasedItems.length} titles • available now
+                        </span>
+                      </div>
+                      <div className="cine-grid">
+                        {releasedItems.map((media) => (
+                          <Card
+                            key={`${media.id}_${media.title || media.name}`}
+                            media={media}
+                            onClick={setSelectedMedia}
+                            size="fluid"
+                            posterOnly={posterOnly}
+                          />
+                        ))}
+                      </div>
+                      {releasedItems.length === 0 && (
+                        <p className="text-center py-16 text-xs text-white/60">
+                          No titles found. Try clearing filters.
+                        </p>
+                      )}
+                    </>
                   )}
                   {(activeTab === 'movie' || activeTab === 'tv') &&
                     page < totalPages &&

@@ -6,14 +6,16 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // resume: provider reports real position + honors resume param, so
+  // History reopens at the exact second. Others only get wall-clock.
   const servers = [
-    { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal' },
-    { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal' },
-    { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good' },
-    { id: 'vidsrccc', name: 'VidSrc.cc', quality: '1080p', ping: 'good' },
-    { id: 'embedsu', name: 'Embed.su', quality: 'HD', ping: 'good' },
-    { id: 'smashy', name: 'SmashyStream', quality: 'HD', ping: 'good' },
-    { id: 'autoembed', name: 'AutoEmbed', quality: 'HD', ping: 'good' },
+    { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal', resume: true },
+    { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal', resume: true },
+    { id: 'vidsrccc', name: 'VidSrc.cc', quality: '1080p', ping: 'good', resume: true },
+    { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good', resume: false },
+    { id: 'embedsu', name: 'Embed.su', quality: 'HD', ping: 'good', resume: false },
+    { id: 'smashy', name: 'SmashyStream', quality: 'HD', ping: 'good', resume: false },
+    { id: 'autoembed', name: 'AutoEmbed', quality: 'HD', ping: 'good', resume: false },
   ];
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
                     <span className={`font-semibold truncate ${isSelected ? 'text-[var(--cine-accent)]' : 'text-white/90'}`}>
                       {s.name}
                     </span>
-                    <span className="text-xs text-white/60">{s.quality} • {s.ping}</span>
+                    <span className="text-xs text-white/60">{s.quality} • {s.ping}{s.resume ? ' • resumes' : ''}</span>
                   </div>
                   {isSelected ? (
                     <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0" />

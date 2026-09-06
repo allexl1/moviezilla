@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Play, ListVideo, X, Check, Pencil } from 'lucide-react';
-import { tmdb, FALLBACK_POSTER, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
+import { ListVideo, X, Check, Pencil } from 'lucide-react';
+import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage, progressLabel } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
@@ -247,13 +247,6 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     );
   })();
 
-  const continueItems = history.filter(
-    (h) =>
-      matchType(h.type) &&
-      matchGenre(h.genres) &&
-      ((h.percent > 2 && h.percent < 95) || (!h.duration && h.currentTime >= 30))
-  );
-
   const watchedItems = history.filter(
     (h) => h.percent >= 95 && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter)
   );
@@ -397,54 +390,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
       {view === 'watchlater' && (
       <>
-      {/* Continue Watching */}
-      {continueItems.length > 0 && (
-        <section className="space-y-3">
-        <div className="cine-section-head">
-          <h2 className="cine-section-title">Continue Watching</h2>
-        </div>
-          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-            {continueItems.map((item) => {
-              const { media, fallback } = resumePayload(item);
-              return (
-                <div
-                  key={`${item.type}_${item.mediaId}`}
-                  onClick={() => onResume(media, fallback)}
-                  className="cine-cw-card group"
-                >
-                  <div className="cine-cw-thumb">
-                    <img
-                      src={tmdb.getImageUrl(item.poster, 'w300')}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                      onError={(e) => {
-                        e.target.src = FALLBACK_POSTER;
-                      }}
-                    />
-                    <div className="cine-cw-play">
-                      <div className="cine-cw-play-btn">
-                        <Play className="w-3 h-3" fill="currentColor" />
-                      </div>
-                    </div>
-                  </div>
-                  <h4 className="cine-cw-title">{item.title}</h4>
-                  <p className="cine-cw-meta">
-                    {item.type === 'tv'
-                      ? `Season ${item.season} • Episode ${item.episode}`
-                      : 'Movie'}{' '}
-                    • {progressLabel(item)}
-                  </p>
-                  <div className="cine-cw-progress">
-                    <div className="cine-cw-progress-fill" style={{ width: `${item.percent}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Watch Later */}
+      {/* Watch Later — Continue Watching lives on Home + History only. */}
       <section className="space-y-3">
         <div className="cine-section-head">
           <h2 className="cine-section-title">Watch Later</h2>

@@ -52,11 +52,11 @@ export default function FilterBar({
         {onRandom && (
           <button
             onClick={onRandom}
-            className="cine-control-btn flex-shrink-0"
+            className="cine-icon-btn flex-shrink-0"
             title="Surprise me"
+            aria-label="Random title"
           >
-            <Shuffle className="w-3.5 h-3.5" />
-            <span>Random</span>
+            <Shuffle className="w-4 h-4" />
           </button>
         )}
 
@@ -64,6 +64,7 @@ export default function FilterBar({
           value={selectedGenre}
           onChange={onSelectGenre}
           label="Genre"
+          className="cine-select--wide"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize, RotateCcw, RotateCw } from 'lucide-react';
-import { storage, formatClock } from '../services/storage';
+import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
+import { storage } from '../services/storage';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -20,11 +20,12 @@ const TRUSTED_PLAYER_ORIGINS = [
 
 function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
   const t = Math.max(0, Math.floor(resumeTime || 0));
+  // NOTE: VidLink's resume param is `startAt` — `start` does nothing.
   if (server === 'vidlink') {
     const base = isTv
       ? `https://vidlink.pro/tv/${mediaId}/${season}/${episode}`
       : `https://vidlink.pro/movie/${mediaId}`;
-    return `${base}?primaryColor=95ff50&secondaryColor=101014&start=${t}`;
+    return `${base}?primaryColor=95ff50&secondaryColor=101014&startAt=${t}`;
   }
   if (server === 'vidy') {
     const base = isTv
@@ -43,10 +44,12 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
       ? `https://vidsrc.to/embed/tv/${mediaId}/${season}/${episode}`
       : `https://vidsrc.to/embed/movie/${mediaId}`;
   }
+  // vidsrc.cc supports startAt resume + time events every ~5s.
   if (server === 'vidsrccc') {
-    return isTv
+    const base = isTv
       ? `https://vidsrc.cc/v2/embed/tv/${mediaId}/${season}/${episode}`
       : `https://vidsrc.cc/v2/embed/movie/${mediaId}`;
+    return t > 0 ? `${base}?startAt=${t}` : base;
   }
   if (server === 'embedsu') {
     return isTv
@@ -94,8 +97,6 @@ export default function Player({ media, details, onClose }) {
   const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
   const [key, setKey] = useState(0);
   const [showChrome, setShowChrome] = useState(true);
-  // Display-only resume clock (state, not a ref read in render).
-  const [displayTime, setDisplayTime] = useState(initialPlayback.time);
 
   const containerRef = useRef(null);
   const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
@@ -184,7 +185,6 @@ export default function Player({ media, details, onClose }) {
     const beat = setInterval(() => {
       accumulateWallClock();
       saveNowRef.current();
-      setDisplayTime(estimatedPosition().time);
     }, 5000);
     const onHide = () => {
       if (document.hidden) {
@@ -274,13 +274,19 @@ export default function Player({ media, details, onClose }) {
         if (!payload) return;
         const inner = payload.data || {};
         const type = payload.type || inner.type || payload.event || inner.event || '';
+        // Accepted names across providers: VidLink (play/pause/seeked/
+        // ended/timeupdate), Vidy (timeupdate/play/pause/ended as JSON
+        // strings), vidsrc.cc (play/pause/time/complete every ~5s).
         if (
           type === 'PLAYER_EVENT' ||
           type === 'MEDIA_DATA' ||
           type === 'timeupdate' ||
+          type === 'time' ||
           type === 'play' ||
           type === 'pause' ||
           type === 'seeked' ||
+          type === 'ended' ||
+          type === 'complete' ||
           payload.currentTime != null ||
           inner.currentTime != null
         ) {
@@ -294,7 +300,6 @@ export default function Player({ media, details, onClose }) {
             wallBaseRef.current = Number(time);
             activeMsRef.current = 0;
             lastTickRef.current = Date.now();
-            setDisplayTime(Math.floor(Number(time)));
             storage.saveProgress({
               mediaId,
               type: isTv ? 'tv' : 'movie',
@@ -312,24 +317,6 @@ export default function Player({ media, details, onClose }) {
     window.addEventListener('message', handlePlayerMessage);
     return () => window.removeEventListener('message', handlePlayerMessage);
   }, [mediaId, isTv, currentSeason, currentEpisode, details, media]);
-
-  // Manual position correction (Apple HIG: explicit user control next to
-  // the status). Cross-origin iframes hide seeks, so +/-15s lets the user
-  // align our resume clock with the in-player position; it rebuilds the
-  // embed URL once (no per-render reloads).
-  const nudgeResume = (delta) => {
-    const cur = estimatedPosition().time;
-    const next = Math.max(0, cur + delta);
-    wallBaseRef.current = next;
-    activeMsRef.current = 0;
-    lastTickRef.current = Date.now();
-    pmSeenRef.current = false;
-    playbackRef.current = { currentTime: next, duration: playbackRef.current.duration };
-    setDisplayTime(next);
-    saveNowRef.current();
-    rebuildEmbed(server, currentSeason, currentEpisode, next);
-    setKey((p) => p + 1);
-  };
 
   const handleSelectEpisode = (seasonNum, episodeNum) => {
     // Stamp the old episode's position before switching.
@@ -405,31 +392,6 @@ export default function Player({ media, details, onClose }) {
           )}
 
           <ServerSwitcher currentServer={server} onSelectServer={handleServerChange} />
-
-          {/* Resume clock (Apple HIG: status + stepper). The iframe is
-              cross-origin so in-player seeks are invisible to us — these
-              steppers let the user align the saved position exactly. */}
-          <div className="cine-control-btn" role="group" aria-label="Resume position">
-            <button
-              onClick={() => nudgeResume(-15)}
-              className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 transition"
-              title="Back 15 seconds (also moves saved position)"
-              aria-label="Back 15 seconds"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-bold tabular-nums min-w-12 text-center" title="Saved resume position — reopening starts here">
-              {formatClock(displayTime)}
-            </span>
-            <button
-              onClick={() => nudgeResume(15)}
-              className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 transition"
-              title="Forward 15 seconds (also moves saved position)"
-              aria-label="Forward 15 seconds"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-          </div>
 
           <button
             onClick={() => {
