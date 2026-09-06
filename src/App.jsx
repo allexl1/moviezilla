@@ -755,35 +755,38 @@ export default function App() {
                   <p className="text-sm text-white/60 mt-1">
                     Explore hit series and episodic dramas
                   </p>
+                </div>
 
+                {/* Right column mirrors Movies: toggle on top, filters below. */}
+                <div className="flex flex-col items-start lg:items-end gap-3">
                   <button
                     onClick={() => setShowAiring((v) => !v)}
                     aria-pressed={showAiring}
-                    className={`cine-control-btn mt-3 ${showAiring ? 'border-[var(--cine-accent)]/60' : ''}`}
+                    className={`cine-control-btn ${showAiring ? 'border-[var(--cine-accent)]/60' : ''}`}
                     title="Show series currently on the air"
                   >
                     <Radio className={`w-3.5 h-3.5 ${showAiring ? 'text-[var(--cine-accent)]' : ''}`} />
                     <span>On The Air</span>
                   </button>
-                </div>
 
-                <FilterBar
-                  genres={TV_GENRES}
-                  sorts={TV_SORTS}
-                  selectedGenre={selectedGenre}
-                  onSelectGenre={setSelectedGenre}
-                  selectedYear={selectedYear}
-                  onSelectYear={setSelectedYear}
-                  selectedSort={selectedSort}
-                  onSelectSort={setSelectedSort}
-                  selectedProvider={selectedProvider}
-                  onSelectProvider={setSelectedProvider}
-                  selectedCountry={selectedCountry}
-                  onSelectCountry={setSelectedCountry}
-                  selectedLanguage={selectedLanguage}
-                  onSelectLanguage={setSelectedLanguage}
-                  onRandom={pickRandom}
-                />
+                  <FilterBar
+                    genres={TV_GENRES}
+                    sorts={TV_SORTS}
+                    selectedGenre={selectedGenre}
+                    onSelectGenre={setSelectedGenre}
+                    selectedYear={selectedYear}
+                    onSelectYear={setSelectedYear}
+                    selectedSort={selectedSort}
+                    onSelectSort={setSelectedSort}
+                    selectedProvider={selectedProvider}
+                    onSelectProvider={setSelectedProvider}
+                    selectedCountry={selectedCountry}
+                    onSelectCountry={setSelectedCountry}
+                    selectedLanguage={selectedLanguage}
+                    onSelectLanguage={setSelectedLanguage}
+                    onRandom={pickRandom}
+                  />
+                </div>
               </div>
             )}
 

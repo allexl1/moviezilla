@@ -31,7 +31,7 @@ export const MOVIE_GENRES = [
 
 export const TV_GENRES = [
   { id: '', name: 'All Genres' },
-  { id: '10759', name: 'Action & Adventure' },
+  { id: '10759', name: 'Action' },
   { id: '16', name: 'Animation' },
   { id: '35', name: 'Comedy' },
   { id: '80', name: 'Crime' },
@@ -42,7 +42,7 @@ export const TV_GENRES = [
   { id: '9648', name: 'Mystery' },
   { id: '10763', name: 'News' },
   { id: '10764', name: 'Reality' },
-  { id: '10765', name: 'Sci-Fi & Fantasy' },
+  { id: '10765', name: 'Sci-Fi' },
   { id: '10767', name: 'Talk' },
   { id: '10768', name: 'War & Politics' },
   { id: '37', name: 'Western' },

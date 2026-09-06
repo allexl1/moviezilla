@@ -1283,6 +1283,16 @@ nav .cine-nav-btn {
   min-width: 13rem;
 }
 
+/* Genre dropdowns are one fixed compact width on BOTH tabs: native
+   selects auto-size to their longest option, which made Shows wider
+   than Movies. Long TV labels are shortened in code to match. */
+.cine-select--genre {
+  width: 11.5rem;
+  min-width: 11.5rem;
+  max-width: 11.5rem;
+  text-overflow: ellipsis;
+}
+
 /* Minimal toast (watchlist add/remove). One recipe, auto-dismissed. */
 .cine-toast {
   position: fixed;

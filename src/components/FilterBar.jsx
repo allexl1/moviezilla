@@ -48,7 +48,7 @@ export default function FilterBar({
 }) {
   return (
     <div className="w-full flex flex-col gap-3 py-1">
-      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1 lg:justify-end">
+      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar px-1 py-1 lg:justify-end">
         {onRandom && (
           <button
             onClick={onRandom}
@@ -64,6 +64,7 @@ export default function FilterBar({
           value={selectedGenre}
           onChange={onSelectGenre}
           label="Genre"
+          className="cine-select--genre"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,
