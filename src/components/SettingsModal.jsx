@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clapperboard, Play, Trash2 } from 'lucide-react';
+import { X, Clapperboard, Play, Trash2, Zap } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
@@ -9,6 +9,10 @@ const SERVERS = [
   { value: 'vidy', label: 'Vidy (Recommended)' },
   { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
   { value: 'vidsrc', label: 'VidSrc Provider' },
+  { value: 'vidsrccc', label: 'VidSrc.cc' },
+  { value: 'embedsu', label: 'Embed.su' },
+  { value: 'smashy', label: 'SmashyStream' },
+  { value: 'autoembed', label: 'AutoEmbed' },
 ];
 
 function SettingRow({ icon, title, desc, control, danger = false }) {
@@ -37,6 +41,13 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
 export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, currentUsername }) {
   const [username, setUsername] = useState(currentUsername || '');
   const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidy'));
+  const [lowPower, setLowPower] = useState(() => {
+    try {
+      return localStorage.getItem('mz_low_power') === '1' ? 'on' : 'off';
+    } catch {
+      return 'off';
+    }
+  });
 
   useEffect(() => {
     if (isOpen) setUsername(currentUsername || '');
@@ -45,6 +56,12 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
   const handleSave = () => {
     localStorage.setItem('mz_letterboxd_user', username.trim());
     storage.setPreferredServer(defaultServer);
+    try {
+      localStorage.setItem('mz_low_power', lowPower === 'on' ? '1' : '0');
+      document.body.classList.toggle('mz-low-power', lowPower === 'on');
+    } catch {
+      // Storage unavailable — preference simply doesn't persist.
+    }
     if (onSaveLetterboxd) onSaveLetterboxd(username.trim());
     onClose();
   };
@@ -96,6 +113,23 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
           desc="First player tried for every title."
           control={
             <Select value={defaultServer} onChange={setDefaultServer} options={SERVERS} />
+          }
+        />
+
+        <SettingRow
+          icon={<Zap className="w-4 h-4" />}
+          title="Low Power"
+          desc="Stills ambient motion to keep the laptop cool."
+          control={
+            <Select
+              value={lowPower}
+              onChange={setLowPower}
+              label="Low power mode"
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'on', label: 'On' },
+              ]}
+            />
           }
         />
 

@@ -89,6 +89,14 @@ export default function App() {
     setContinueWatching(storage.getAllContinueWatching());
   }, [activePlayer, activeTab]);
 
+  // Freeze ambient animation while the tab is hidden (thermal: no
+  // background frames burned for a page nobody looks at).
+  useEffect(() => {
+    const onVis = () => document.body.classList.toggle('mz-paused', document.hidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const filterKey = [

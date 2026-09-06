@@ -159,6 +159,30 @@ export default function Player({ media, details, onClose }) {
         : `https://vidsrc.to/embed/movie/${mediaId}`;
     }
 
+    if (server === 'vidsrccc') {
+      return isTv
+        ? `https://vidsrc.cc/v2/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
+        : `https://vidsrc.cc/v2/embed/movie/${mediaId}`;
+    }
+
+    if (server === 'embedsu') {
+      return isTv
+        ? `https://embed.su/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
+        : `https://embed.su/embed/movie/${mediaId}`;
+    }
+
+    if (server === 'smashy') {
+      return isTv
+        ? `https://player.smashystream.com/tv/${mediaId}?s=${currentSeason}&e=${currentEpisode}`
+        : `https://player.smashystream.com/movie/${mediaId}`;
+    }
+
+    if (server === 'autoembed') {
+      return isTv
+        ? `https://player.autoembed.cc/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
+        : `https://player.autoembed.cc/embed/movie/${mediaId}`;
+    }
+
     // Unknown/stale server ids fall back to the default (Vidy).
     return isTv
       ? `https://vidy.st/tv/${mediaId}/${currentSeason}/${currentEpisode}`
@@ -200,8 +224,9 @@ export default function Player({ media, details, onClose }) {
       onClick={poke}
       className={`fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`}
     >
-      {/* Top Floating Chrome */}
-      <div className={`absolute top-0 inset-x-0 z-30 flex items-center justify-between p-5 md:px-10 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+      {/* Top Floating Chrome — all controls stacked top-left: Vidy opens
+          its own quality/server menus top-right, so our bar stays clear. */}
+      <div className={`absolute top-0 inset-x-0 z-30 flex flex-col items-start gap-3 p-5 md:px-10 pb-10 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
         <div className={`flex items-center gap-3 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <button
             onClick={onClose}
@@ -223,8 +248,8 @@ export default function Player({ media, details, onClose }) {
           </div>
         </div>
 
-        {/* Right Actions: Episode Trigger, Server Switcher, and Fullscreen toggle */}
-        <div className={`flex items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        {/* Controls row: Episodes, Server Switcher, Fullscreen */}
+        <div className={`flex flex-wrap items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {isTv && (
             <button
               onClick={() => setIsEpisodeOpen(!isEpisodeOpen)}
@@ -262,6 +287,10 @@ export default function Player({ media, details, onClose }) {
           src={getEmbedUrl()}
           title={title}
           className="w-full h-full border-0"
+          // NOTE: no sandbox attribute on purpose — every provider (Vidy,
+          // VidLink, VidSrc, VidSrc.cc, Embed.su) refuses sandboxed frames
+          // or fails to load in one (verified per server). Popup/ad pressure
+          // is handled by offering multiple servers, not containment.
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
           allowFullScreen
         />

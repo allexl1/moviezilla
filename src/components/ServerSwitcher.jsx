@@ -10,6 +10,10 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
     { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal' },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal' },
     { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good' },
+    { id: 'vidsrccc', name: 'VidSrc.cc', quality: '1080p', ping: 'good' },
+    { id: 'embedsu', name: 'Embed.su', quality: 'HD', ping: 'good' },
+    { id: 'smashy', name: 'SmashyStream', quality: 'HD', ping: 'good' },
+    { id: 'autoembed', name: 'AutoEmbed', quality: 'HD', ping: 'good' },
   ];
 
   useEffect(() => {

@@ -34,11 +34,12 @@ function rateLimited(ip) {
 
 function cacheHeader(tmdbPath) {
   // Search results change fast and are query-specific: short cache.
-  // Catalog/details/seasons are near-immutable: longer edge cache.
+  // Catalog/details/seasons are near-immutable: longer edge + browser cache
+  // so repeat visits and back-navigation don't re-download.
   if (/^search\//.test(tmdbPath)) {
-    return 'public, s-maxage=60, stale-while-revalidate=120';
+    return 'public, max-age=30, s-maxage=60, stale-while-revalidate=120';
   }
-  return 'public, s-maxage=600, stale-while-revalidate=1200';
+  return 'public, max-age=300, s-maxage=600, stale-while-revalidate=1200';
 }
 
 export default async function handler(req, res) {

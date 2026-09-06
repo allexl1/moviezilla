@@ -817,8 +817,10 @@ select:focus-visible,
 }
 
 @keyframes cine-hero-in {
-  0% { opacity: 0; transform: scale(1.04); filter: blur(14px) brightness(0.7); }
-  100% { opacity: 1; transform: scale(1); filter: none; }
+  /* Opacity/scale only — filter animation here costs a full repaint per
+     frame for zero visible gain, and keeps the GPU hot. */
+  0% { opacity: 0; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 /* Spotlight dots */
@@ -890,6 +892,8 @@ select:focus-visible,
   flex-direction: column;
   gap: 0.5rem;
   cursor: pointer;
+  /* Scope repaints to the card so hover/animation never repaints siblings. */
+  contain: layout style;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1099,8 +1103,8 @@ select:focus-visible,
     rgba(12, 12, 16, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-top-color: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(32px) saturate(190%);
-  -webkit-backdrop-filter: blur(32px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
@@ -1330,4 +1334,19 @@ nav .cine-nav-btn {
     animation: none;
     translate: none;
   }
+}
+
+/* ─── Power saving (thermal) ──────────────────────────────────────────────
+   Body classes only — no visual redesign. `mz-paused` freezes ambient
+   motion while the tab is hidden; `mz-low-power` (Settings toggle) stills
+   the aurora entirely (static gradient remains, zero per-frame cost). */
+body.mz-paused .cine-aurora-canvas::before,
+body.mz-paused .cine-aurora-canvas::after {
+  animation-play-state: paused;
+}
+
+body.mz-low-power .cine-aurora-canvas::before,
+body.mz-low-power .cine-aurora-canvas::after,
+body.mz-low-power .cine-btn-shimmer:hover::before {
+  animation: none;
 }
