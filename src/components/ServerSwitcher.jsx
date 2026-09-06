@@ -50,7 +50,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] p-4 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] p-4 rounded-3xl cine-glass-panel z-50 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center gap-2 px-3 pt-1 pb-3 text-[10px] uppercase font-bold tracking-wider text-white/60 border-b border-[var(--cine-glass-border)] mb-2">
             <Server className="w-3.5 h-3.5" />
             Playback Servers

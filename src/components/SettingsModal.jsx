@@ -41,9 +41,10 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
 export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, currentUsername }) {
   const [username, setUsername] = useState(currentUsername || '');
   const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidy'));
-  const [lowPower, setLowPower] = useState(() => {
+  const [powerMode, setPowerMode] = useState(() => {
     try {
-      return localStorage.getItem('mz_low_power') === '1' ? 'on' : 'off';
+      const v = localStorage.getItem('mz_low_power');
+      return v === '2' ? 'max' : v === '1' ? 'low' : 'off';
     } catch {
       return 'off';
     }
@@ -57,8 +58,9 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
     localStorage.setItem('mz_letterboxd_user', username.trim());
     storage.setPreferredServer(defaultServer);
     try {
-      localStorage.setItem('mz_low_power', lowPower === 'on' ? '1' : '0');
-      document.body.classList.toggle('mz-low-power', lowPower === 'on');
+      localStorage.setItem('mz_low_power', powerMode === 'max' ? '2' : powerMode === 'low' ? '1' : '0');
+      document.body.classList.toggle('mz-low-power', powerMode === 'low');
+      document.body.classList.toggle('mz-max-power', powerMode === 'max');
     } catch {
       // Storage unavailable — preference simply doesn't persist.
     }
@@ -118,16 +120,17 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
 
         <SettingRow
           icon={<Zap className="w-4 h-4" />}
-          title="Low Power"
-          desc="Stills ambient motion to keep the laptop cool."
+          title="Power Mode"
+          desc="Low stills motion. Max also kills blurs and transitions — coolest, still usable."
           control={
             <Select
-              value={lowPower}
-              onChange={setLowPower}
-              label="Low power mode"
+              value={powerMode}
+              onChange={setPowerMode}
+              label="Power mode"
               options={[
                 { value: 'off', label: 'Off' },
-                { value: 'on', label: 'On' },
+                { value: 'low', label: 'Low' },
+                { value: 'max', label: 'Max' },
               ]}
             />
           }

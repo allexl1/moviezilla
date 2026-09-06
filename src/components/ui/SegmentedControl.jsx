@@ -1,10 +1,15 @@
 import React from 'react';
 
 /**
- * SegmentedControl — labeled group of exclusive chips (day / type filters).
- * Gives filter groups the labels the Watchlist blob was missing.
+ * SegmentedControl — labeled group of exclusive options.
+ * Two visual weights (Apple HIG prominence = importance):
+ * - `lg`: primary View switcher (larger, bolder — one per screen).
+ * - `sm`: subordinate inline filters (compact, clearly secondary).
  */
-export default function SegmentedControl({ label, options = [], value, onChange }) {
+export default function SegmentedControl({ label, options = [], value, onChange, size = 'sm' }) {
+  const sizing = size === 'lg'
+    ? 'h-11 px-6 text-sm font-bold'
+    : 'h-9 px-4 text-xs font-semibold';
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       {label && (
@@ -19,7 +24,7 @@ export default function SegmentedControl({ label, options = [], value, onChange 
             <button
               key={opt.id ?? opt.value}
               onClick={() => onChange(opt.id ?? opt.value)}
-            className={`h-10 px-5 rounded-full text-xs font-semibold whitespace-nowrap flex-shrink-0 transition cursor-pointer border backdrop-blur-xl ${
+            className={`${sizing} rounded-full whitespace-nowrap flex-shrink-0 transition cursor-pointer border backdrop-blur-xl ${
               active
                 ? 'bg-white text-black border-white shadow-md'
                 : 'bg-[var(--cine-glass-tint)] hover:bg-[var(--cine-glass-tint-hover)] border-[var(--cine-glass-border)] text-white/60 hover:text-white/90'

@@ -5,7 +5,10 @@ import './index.css';
 
 // Apply the saved power preference before first paint (no flash of motion).
 try {
-  if (localStorage.getItem('mz_low_power') === '1') {
+  const v = localStorage.getItem('mz_low_power');
+  if (v === '2') {
+    document.body.classList.add('mz-max-power');
+  } else if (v === '1') {
     document.body.classList.add('mz-low-power');
   }
 } catch {

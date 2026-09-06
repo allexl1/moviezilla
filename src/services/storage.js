@@ -3,6 +3,7 @@ const STORAGE_KEYS = {
   WATCHLIST: 'moviezilla_watchlist',
   ACTIVE_SERVER: 'moviezilla_preferred_server',
   SEARCH_HISTORY: 'moviezilla_search_history',
+  HIDDEN_LETTERBOXD: 'moviezilla_hidden_letterboxd',
 };
 
 function safeGet(key, fallback = {}) {
@@ -161,6 +162,20 @@ export const storage = {
       .getSearchHistory()
       .filter((t) => t.toLowerCase() !== clean.toLowerCase());
     safeSet(STORAGE_KEYS.SEARCH_HISTORY, [clean, ...list].slice(0, 8));
+  },
+
+  // Letterboxd rows are remote (can't delete from Letterboxd itself) —
+  // hiding stores a local blocklist so dismissed titles stay gone.
+  getHiddenLetterboxd() {
+    const list = safeGet(STORAGE_KEYS.HIDDEN_LETTERBOXD, []);
+    return Array.isArray(list) ? list : [];
+  },
+
+  hideLetterboxd(id) {
+    if (!id) return;
+    const hidden = storage.getHiddenLetterboxd();
+    if (!hidden.includes(id)) safeSet(STORAGE_KEYS.HIDDEN_LETTERBOXD, [...hidden, id]);
+    notifyWatchlist();
   },
 
   clearSearchHistory() {

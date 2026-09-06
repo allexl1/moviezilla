@@ -316,18 +316,26 @@ select:focus-visible,
 /* ─── List Row material (search results, history, menus) ──────────────────
    Replaces ad-hoc `bg-white/[0.02] border-white/5` slabs everywhere. */
 .mat-row {
-  background: rgba(255, 255, 255, 0.03);
+  /* Solid (not translucent, not blurred): dozens of these stack in
+     history/search, and nested backdrop-filters glitch white on Intel
+     iGPUs. Opaque rows also skip backdrop compositing = cooler. */
+  background-color: #0c0c10;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--cine-radius-lg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: background var(--cine-duration-base) var(--cine-ease-out),
+  transition: background-color var(--cine-duration-base) var(--cine-ease-out),
     border-color var(--cine-duration-base) var(--cine-ease-out);
 }
 
 .mat-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background-color: #15151b;
   border-color: var(--cine-glass-border-hover);
+}
+
+/* History / watched groups: skip rendering off-screen groups until
+   scrolled near (thermal — dozens of blurred rows otherwise all paint). */
+.cine-history-group {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 /* Card entrance animation */
@@ -480,6 +488,9 @@ select:focus-visible,
   font-weight: var(--cine-font-semibold);
   letter-spacing: 0.01em;
   color: var(--cine-text-primary);
+  /* Solid base first: if the color-mix gradient below is unsupported the
+     button stays dark glass instead of falling back to native white. */
+  background-color: rgba(18, 18, 24, 0.88);
   background:
     linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
     color-mix(in srgb, var(--cine-accent) 6%, transparent);
@@ -513,6 +524,8 @@ select:focus-visible,
   justify-content: center;
   font-size: 0.875rem;
   color: var(--cine-text-primary);
+  /* Solid base first (see .cine-control-btn): never native-white. */
+  background-color: rgba(18, 18, 24, 0.88);
   background:
     linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04)),
     color-mix(in srgb, var(--cine-accent) 6%, transparent);
@@ -536,6 +549,13 @@ select:focus-visible,
   transform: scale(0.96);
 }
 
+/* Compact icon button for dense list rows (history/search actions).
+   Real CSS — not Tailwind `!` overrides (v4 drops leading-`!`). */
+.cine-icon-btn--sm {
+  width: 2rem;
+  height: 2rem;
+}
+
 /* Hero-grade CTA (cinejoy Play pill parity: 52px, generous padding) */
 .cine-cta {
   height: 3.25rem;
@@ -555,9 +575,7 @@ select:focus-visible,
   gap: 0.25rem;
   padding: 0.2rem 0.55rem;
   border-radius: var(--cine-radius-full);
-  background: rgba(10, 10, 14, 0.75);
-  backdrop-filter: var(--cine-blur-sm);
-  -webkit-backdrop-filter: var(--cine-blur-sm);
+  background-color: rgba(10, 10, 14, 0.85);
   color: var(--cine-accent);
   font-size: 0.75rem;
   font-weight: var(--cine-font-bold);
@@ -1191,8 +1209,6 @@ nav .cine-nav-btn {
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: var(--cine-font-bold);
-  backdrop-filter: var(--cine-blur-sm);
-  -webkit-backdrop-filter: var(--cine-blur-sm);
   border: 1px solid var(--cine-glass-border);
 }
 
@@ -1330,8 +1346,8 @@ nav .cine-nav-btn {
   inset: 0;
   z-index: 50;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1397,4 +1413,64 @@ body.mz-low-power .cine-aurora-canvas::before,
 body.mz-low-power .cine-aurora-canvas::after,
 body.mz-low-power .cine-btn-shimmer:hover::before {
   animation: none;
+}
+
+/* ─── Max Power (thermal emergency — Intel iGPU friendly) ─────────────────
+   Freezes almost everything but keeps the site fully usable: no ambient
+   motion, no per-frame transitions, no backdrop-blurs (the #1 white-flash
+   + heat source on weak GPUs), aurora canvas off entirely. Layout,
+   navigation, playback and all actions keep working. */
+body.mz-max-power .cine-aurora-canvas,
+body.mz-max-power .glass-filter {
+  display: none;
+}
+
+body.mz-max-power *,
+body.mz-max-power *::before,
+body.mz-max-power *::after {
+  animation: none;
+  transition: none;
+}
+
+body.mz-max-power .cine-glass-header,
+body.mz-max-power .cine-glass-panel,
+body.mz-max-power .cine-glass-panel--strong,
+body.mz-max-power .cine-glass-card,
+body.mz-max-power .cine-nav-pill-box,
+body.mz-max-power .cine-control-btn,
+body.mz-max-power .cine-icon-btn,
+body.mz-max-power .cine-select,
+body.mz-max-power .cine-input,
+body.mz-max-power .cine-provider-pill,
+body.mz-max-power .cine-cw-card,
+body.mz-max-power .cine-duo-btn {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.mz-max-power .cine-glass-header,
+body.mz-max-power .cine-nav-pill-box {
+  background: rgba(10, 10, 14, 0.97);
+}
+
+body.mz-max-power .cine-glass-panel,
+body.mz-max-power .cine-glass-panel--strong,
+body.mz-max-power .cine-modal-backdrop {
+  background: #101014;
+}
+
+body.mz-max-power .cine-modal-backdrop {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body.mz-max-power .cine-home-bg-img {
+  filter: brightness(0.5);
+  transform: none;
+}
+
+body.mz-max-power .cine-card:hover,
+body.mz-max-power .cine-glass-card:hover,
+body.mz-max-power .cine-control-btn:hover {
+  transform: none;
 }

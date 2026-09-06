@@ -91,12 +91,13 @@ export default function App() {
     setContinueWatching(storage.getAllContinueWatching());
   }, [activePlayer, activeTab]);
 
-  // Freeze ambient animation while the tab is hidden or any overlay
-  // covers the page (search/settings/player/details): the aurora keeps
-  // compositing behind fixed overlays otherwise (thermal).
+  // Freeze ambient animation while the tab is hidden, any overlay
+  // covers the page (search/settings/player/details), or we're on a
+  // utility tab (movies/shows/watchlist): the aurora keeps compositing
+  // behind fixed overlays and dense lists otherwise (thermal).
   useEffect(() => {
     const apply = () => {
-      const covered = isSearchOpen || isSettingsOpen || Boolean(activePlayer) || Boolean(selectedMedia);
+      const covered = isSearchOpen || isSettingsOpen || Boolean(activePlayer) || Boolean(selectedMedia) || activeTab !== 'home';
       document.body.classList.toggle('mz-paused', covered || document.hidden);
     };
     apply();
@@ -105,7 +106,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', apply);
       document.body.classList.remove('mz-paused');
     };
-  }, [isSearchOpen, isSettingsOpen, activePlayer, selectedMedia]);
+  }, [isSearchOpen, isSettingsOpen, activePlayer, selectedMedia, activeTab]);
 
   // Minimal toast (watchlist add/remove), auto-dismissed.
   const toastTimer = useRef(null);
@@ -212,6 +213,15 @@ export default function App() {
     catalogRetry,
     page,
   ]);
+
+  const handleSaveLetterboxd = (user) => {
+    try {
+      localStorage.setItem('mz_letterboxd_user', user);
+    } catch {
+      // Storage unavailable — session-only.
+    }
+    setLetterboxdUser(user);
+  };
 
   // Picks a random visible title into the detail view (does not autoplay).
   const pickRandom = () => {
@@ -803,6 +813,7 @@ export default function App() {
                   onOpenSettings={() => setIsSettingsOpen(true)}
                   letterboxdUser={letterboxdUser}
                   onToast={showToast}
+                  onSaveLetterboxd={handleSaveLetterboxd}
                 />
               ) : (
                 <>
@@ -846,7 +857,7 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         currentUsername={letterboxdUser}
-        onSaveLetterboxd={(user) => setLetterboxdUser(user)}
+        onSaveLetterboxd={handleSaveLetterboxd}
       />
 
       <SearchModal
