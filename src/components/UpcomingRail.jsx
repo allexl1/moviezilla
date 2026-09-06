@@ -17,27 +17,37 @@ export default function UpcomingRail({
 }) {
   if (!items || items.length === 0) return null;
 
-  const dateOf = (m) => (m?.[dateKey] || '').split('-').slice(0, 2).join(' / ') || null;
+  // "Sep 16" like the reference — falls back to the raw year.
+  const dateOf = (m) => {
+    const iso = m?.[dateKey] || '';
+    const d = new Date(`${iso}T00:00:00`);
+    if (iso && !Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    return null;
+  };
   const yearOf = (m) => (m?.[dateKey] || '').split('-')[0] || null;
 
   return (
     <section className="space-y-3">
       <div className="cine-section-head">
         <h2 className="cine-section-title">{title}</h2>
-        <span className="text-xs text-white/60">{items.length} titles</span>
+        <span className="text-xs text-white/60">{items.length} titles • one line, scroll →</span>
       </div>
 
-      <div className="cine-rail no-scrollbar -mx-1 px-1">
+      {/* Single horizontal line only: no wrap, snap scroll, fixed 16:9 cards. */}
+      <div className="cine-rail no-scrollbar -mx-1 px-1 flex flex-nowrap overflow-x-auto">
         {items.map((media) => {
           const name = media.title || media.name || 'Untitled';
           const date = dateOf(media);
+          const year = yearOf(media);
           return (
             <button
               key={`${title}_${media.id}`}
               onClick={() => onSelect?.({ ...media, media_type: media.media_type || mediaType })}
-              className="cine-soon-card group"
-              title={name}
-              aria-label={`View ${name}`}
+              className="cine-soon-card group flex-shrink-0"
+              title={year ? `${name} — coming ${year}` : name}
+              aria-label={year ? `View ${name}, coming ${year}` : `View ${name}`}
             >
               <img
                 src={tmdb.getImageUrl(media.backdrop_path, 'w780')}
@@ -50,9 +60,9 @@ export default function UpcomingRail({
                 }}
               />
               <span className="cine-soon-scrim" aria-hidden="true" />
-              <span className="cine-soon-badge">{badge}</span>
-              {yearOf(media) && (
-                <span className="cine-soon-year">{yearOf(media)}</span>
+              <span className="cine-soon-badge">{year ? `${badge} • ${year}` : badge}</span>
+              {year && (
+                <span className="cine-soon-year">{year}</span>
               )}
               <span className="cine-soon-hover" aria-hidden="true">
                 <span className="cine-soon-play">

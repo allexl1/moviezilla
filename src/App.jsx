@@ -266,16 +266,26 @@ export default function App() {
         setTopRated(clean(rated));
         setAnimeSpotlight(clean(anime));
         setNowPlaying(clean(now));
-        // Upcoming, soonest first, reputable entries only (real overview +
-        // dated release — no placeholder junk rows).
+        // Coming Soon: single line, reputable only (backdrop + poster +
+        // real overview 20+ chars + dated future release), soonest first.
+        const today = new Date().toISOString().slice(0, 10);
         setUpcomingMovies(
           (soon?.results || [])
-            .filter((x) => x.backdrop_path && x.poster_path && x.overview && x.release_date)
+            .filter(
+              (x) =>
+                x.backdrop_path &&
+                x.poster_path &&
+                (x.overview || '').trim().length > 20 &&
+                x.release_date &&
+                x.release_date >= today
+            )
             .sort((a, b) => a.release_date.localeCompare(b.release_date))
             .slice(0, 10)
         );
         setOnAirToday(
-          (airing?.results || []).filter((x) => x.backdrop_path).slice(0, 10)
+          (airing?.results || [])
+            .filter((x) => x.backdrop_path && x.poster_path && (x.overview || '').trim().length > 10)
+            .slice(0, 10)
         );
       } catch (err) {
         console.error('Failed to load home rails:', err);
@@ -304,8 +314,16 @@ export default function App() {
           String(a.release_date || a.first_air_date || '').localeCompare(
             String(b.release_date || b.first_air_date || '')
           );
+        const today = new Date().toISOString().slice(0, 10);
         const list = (res?.results || [])
-          .filter((x) => x.backdrop_path && x.poster_path && x.overview)
+          .filter(
+            (x) =>
+              x.backdrop_path &&
+              x.poster_path &&
+              (x.overview || '').trim().length > 20 &&
+              (activeTab === 'tv' ||
+                (x.release_date && x.release_date >= today))
+          )
           .sort(activeTab === 'movie' ? byDate : () => 0)
           .slice(0, 10);
         if (activeTab === 'movie') setUpcomingMovies(list);
@@ -353,8 +371,16 @@ export default function App() {
     };
   }, [activeTab, homeProvider]);
 
-  // Home hero carousel (cinejoy spotlight parity)
-  const heroItems = activeTab === 'home' ? items.slice(0, 6) : [];
+  // Home hero carousel (cinejoy spotlight parity). Fresh theatrical
+  // releases lead so a 3-days-old title like Mayday surfaces even when
+  // the weekly trending list hasn't picked it up yet; trending fills out
+  // the rotation. Deduplicated, 6 max.
+  const heroItems =
+    activeTab === 'home'
+      ? [...nowPlaying, ...items]
+          .filter((x, i, a) => x && a.findIndex((y) => y.id === x.id) === i)
+          .slice(0, 6)
+      : [];
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroLogo, setHeroLogo] = useState(null);
   const heroContentRef = useRef(null);
@@ -903,7 +929,7 @@ export default function App() {
                 <>
                   {activeTab === 'movie' && (
                     <UpcomingRail
-                      title="Upcoming"
+                      title="Coming Soon"
                       items={upcomingMovies}
                       onSelect={setSelectedMedia}
                       mediaType="movie"
@@ -925,7 +951,9 @@ export default function App() {
                     <h2 className="cine-section-title">
                       {activeTab === 'movie' ? 'Released Movies' : 'Released Series'}
                     </h2>
-                    <span className="text-xs text-white/60">{items.length} titles</span>
+                    <span className="text-xs text-white/60">
+                      {items.length} titles • available now
+                    </span>
                   </div>
                   <div className="cine-grid">
                     {items.map((media) => (

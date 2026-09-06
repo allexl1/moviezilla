@@ -56,6 +56,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [logo, setLogo] = useState(null);
   const [expanded, setExpanded] = useState(false);
   const [imdb, setImdb] = useState(null);
+  const [rt, setRt] = useState(null);
 
   const mediaId = media?.id;
 
@@ -111,6 +112,25 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       isMounted = false;
     };
   }, [details, mediaType]);
+
+  // Rotten Tomatoes via our /api/rt proxy (free keyless backend by
+  // default; RapidAPI backend if RAPIDAPI_KEY is set server-side).
+  useEffect(() => {
+    let isMounted = true;
+    setRt(null);
+    const t = details?.title || details?.name || media?.title || media?.name;
+    const y = (details?.release_date || details?.first_air_date || '').slice(0, 4);
+    if (!t) return;
+    fetch(`/api/rt?title=${encodeURIComponent(t)}&year=${encodeURIComponent(y)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (isMounted && d && (d.critic != null || d.audience != null)) setRt(d);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [details, media]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
@@ -233,6 +253,16 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               <span className="cine-imdb-tag" title="IMDb rating">
                 <span className="cine-imdb-logo">IMDb</span>
                 {imdb.toFixed(1)}
+              </span>
+            )}
+            {rt?.critic != null && (
+              <span className="cine-chip cine-chip--accent" title="Rotten Tomatoes critics">
+                🍅 {rt.critic}%
+              </span>
+            )}
+            {rt?.audience != null && (
+              <span className="cine-chip cine-chip--neutral" title="Rotten Tomatoes audience">
+                🍿 {rt.audience}%
               </span>
             )}
           </div>

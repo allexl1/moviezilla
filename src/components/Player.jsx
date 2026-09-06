@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
-import { storage } from '../services/storage';
+import { ArrowLeft, ListVideo, Maximize, RotateCcw, RotateCw } from 'lucide-react';
+import { storage, formatClock } from '../services/storage';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -10,7 +10,63 @@ const TRUSTED_PLAYER_ORIGINS = [
   'https://vidy.st',
   'https://vidlink.pro',
   'https://vidsrc.to',
+  'https://vidsrc.cc',
+  'https://embed.su',
+  'https://player.smashystream.com',
+  'https://player.autoembed.cc',
+  'https://vidfast.pro',
+  'https://vidfast.net',
 ];
+
+function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
+  const t = Math.max(0, Math.floor(resumeTime || 0));
+  if (server === 'vidlink') {
+    const base = isTv
+      ? `https://vidlink.pro/tv/${mediaId}/${season}/${episode}`
+      : `https://vidlink.pro/movie/${mediaId}`;
+    return `${base}?primaryColor=95ff50&secondaryColor=101014&start=${t}`;
+  }
+  if (server === 'vidy') {
+    const base = isTv
+      ? `https://vidy.st/tv/${mediaId}/${season}/${episode}`
+      : `https://vidy.st/movie/${mediaId}`;
+    const params = new URLSearchParams({ color: '95FF50', progress: String(t) });
+    if (isTv) {
+      params.set('nextEpisode', 'true');
+      params.set('episodeSelector', 'true');
+      params.set('autoplayNextEpisode', 'true');
+    }
+    return `${base}?${params.toString()}`;
+  }
+  if (server === 'vidsrc') {
+    return isTv
+      ? `https://vidsrc.to/embed/tv/${mediaId}/${season}/${episode}`
+      : `https://vidsrc.to/embed/movie/${mediaId}`;
+  }
+  if (server === 'vidsrccc') {
+    return isTv
+      ? `https://vidsrc.cc/v2/embed/tv/${mediaId}/${season}/${episode}`
+      : `https://vidsrc.cc/v2/embed/movie/${mediaId}`;
+  }
+  if (server === 'embedsu') {
+    return isTv
+      ? `https://embed.su/embed/tv/${mediaId}/${season}/${episode}`
+      : `https://embed.su/embed/movie/${mediaId}`;
+  }
+  if (server === 'smashy') {
+    return isTv
+      ? `https://player.smashystream.com/tv/${mediaId}?s=${season}&e=${episode}`
+      : `https://player.smashystream.com/movie/${mediaId}`;
+  }
+  if (server === 'autoembed') {
+    return isTv
+      ? `https://player.autoembed.cc/embed/tv/${mediaId}/${season}/${episode}`
+      : `https://player.autoembed.cc/embed/movie/${mediaId}`;
+  }
+  return isTv
+    ? `https://vidy.st/tv/${mediaId}/${season}/${episode}`
+    : `https://vidy.st/movie/${mediaId}`;
+}
 
 export default function Player({ media, details, onClose }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
@@ -38,6 +94,8 @@ export default function Player({ media, details, onClose }) {
   const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
   const [key, setKey] = useState(0);
   const [showChrome, setShowChrome] = useState(true);
+  // Display-only resume clock (state, not a ref read in render).
+  const [displayTime, setDisplayTime] = useState(initialPlayback.time);
 
   const containerRef = useRef(null);
   const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
@@ -70,12 +128,24 @@ export default function Player({ media, details, onClose }) {
     };
   };
 
+  const buildMeta = () => ({
+    title: details?.title || details?.name || media?.title || media?.name || 'Media',
+    poster: media?.poster_path || details?.poster_path,
+    genres: (details?.genres || []).map((g) => g.id),
+  });
+
   // Best-known playback state, written on a heartbeat + on close.
   // Source priority: real provider postMessage > wall-clock estimate.
+  // Never overwrite a real timestamp with 0 (mount/unmount races).
   const saveNowRef = useRef(() => {});
   saveNowRef.current = () => {
     if (!mediaId) return;
     const pos = estimatedPosition();
+    const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
+    if (pos.time <= 0 && (prev?.currentTime || 0) > 0) return;
+    // Don't spam History with 0s opens: first meaningful save happens
+    // after ~5s of actual watching (see heartbeat below).
+    if (pos.time <= 0 && !pmSeenRef.current && activeMsRef.current < 4000) return;
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
@@ -83,23 +153,59 @@ export default function Player({ media, details, onClose }) {
       episode: currentEpisode,
       currentTime: pos.time,
       duration: pos.duration,
-      title: details?.title || details?.name || media?.title || media?.name || 'Media',
-      poster: media?.poster_path || details?.poster_path,
-      genres: (details?.genres || []).map((g) => g.id),
+      ...buildMeta(),
     });
   };
 
-  // Log the visit immediately, refresh it every 10s, and stamp it on
-  // close — so every opened title lands in History even when the embed
-  // reports no playback time. Entries are deduped per title.
+  // The embed URL is built ONCE per server/episode change — never per
+  // render. The old code called getEmbedUrl() inline in src={}, so every
+  // chrome poke (mouse move) produced a new ?progress=N URL and the
+  // iframe reloaded constantly, resetting playback and wall-clock.
+  const [embedUrl, setEmbedUrl] = useState(() =>
+    buildEmbedUrl({
+      server: storage.getPreferredServer('vidy'),
+      mediaId,
+      isTv,
+      season: initialPlayback.season,
+      episode: initialPlayback.episode,
+      resumeTime: initialPlayback.time,
+    })
+  );
+
+  const rebuildEmbed = (srv, season, episode, resumeTime) => {
+    setEmbedUrl(
+      buildEmbedUrl({ server: srv, mediaId, isTv, season, episode, resumeTime })
+    );
+  };
+
+  // Log the visit on a 5s heartbeat + on hide/close — so tapping History
+  // always reopens the exact episode + second. Entries deduped per title.
   useEffect(() => {
-    saveNowRef.current();
     const beat = setInterval(() => {
       accumulateWallClock();
       saveNowRef.current();
-    }, 10000);
+      setDisplayTime(estimatedPosition().time);
+    }, 5000);
+    const onHide = () => {
+      if (document.hidden) {
+        accumulateWallClock();
+        saveNowRef.current();
+      } else {
+        lastTickRef.current = Date.now();
+      }
+    };
+    const onPageHide = () => {
+      accumulateWallClock();
+      saveNowRef.current();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onPageHide);
     return () => {
       clearInterval(beat);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onPageHide);
       accumulateWallClock();
       saveNowRef.current();
     };
@@ -157,32 +263,46 @@ export default function Player({ media, details, onClose }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, isEpisodeOpen]);
 
-  // 2. PostMessage listener to track real-time playback
+  // 2. PostMessage listener: real provider time always wins over the
+  // wall-clock estimate (play/pause/seek/timeupdate across Vidy, VidLink,
+  // VidFast-style PLAYER_EVENT / MEDIA_DATA shapes).
   useEffect(() => {
     function handlePlayerMessage(event) {
       if (!TRUSTED_PLAYER_ORIGINS.includes(event.origin)) return;
       try {
         const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (!payload) return;
-
-        if (payload.event === 'timeupdate' || payload.type === 'PLAYER_EVENT') {
-          const time = payload.currentTime || payload.data?.currentTime || 0;
-          const dur = payload.duration || payload.data?.duration || 0;
-
-          if (time > 0) {
+        const inner = payload.data || {};
+        const type = payload.type || inner.type || payload.event || inner.event || '';
+        if (
+          type === 'PLAYER_EVENT' ||
+          type === 'MEDIA_DATA' ||
+          type === 'timeupdate' ||
+          type === 'play' ||
+          type === 'pause' ||
+          type === 'seeked' ||
+          payload.currentTime != null ||
+          inner.currentTime != null
+        ) {
+          const time = payload.currentTime ?? inner.currentTime ?? payload.time ?? inner.time ?? 0;
+          const dur = payload.duration ?? inner.duration ?? playbackRef.current.duration ?? 0;
+          if (Number(time) > 0) {
             pmSeenRef.current = true;
-            playbackRef.current = { currentTime: time, duration: dur };
-
+            playbackRef.current = { currentTime: Number(time), duration: Number(dur) || 0 };
+            // Keep the wall estimate in sync so a later fallback save
+            // doesn't jump backwards.
+            wallBaseRef.current = Number(time);
+            activeMsRef.current = 0;
+            lastTickRef.current = Date.now();
+            setDisplayTime(Math.floor(Number(time)));
             storage.saveProgress({
               mediaId,
               type: isTv ? 'tv' : 'movie',
               season: currentSeason,
               episode: currentEpisode,
-              currentTime: time,
-              duration: dur,
-              title: details?.title || details?.name || media?.title || media?.name || 'Media',
-              poster: media?.poster_path || details?.poster_path,
-              genres: (details?.genres || []).map((g) => g.id),
+              currentTime: Number(time),
+              duration: Number(dur) || 0,
+              ...buildMeta(),
             });
           }
         }
@@ -190,89 +310,30 @@ export default function Player({ media, details, onClose }) {
     }
 
     window.addEventListener('message', handlePlayerMessage);
-    return () => {
-      window.removeEventListener('message', handlePlayerMessage);
-      if (playbackRef.current.currentTime > 0) {
-        storage.saveProgress({
-          mediaId,
-          type: isTv ? 'tv' : 'movie',
-          season: currentSeason,
-          episode: currentEpisode,
-          currentTime: playbackRef.current.currentTime,
-          duration: playbackRef.current.duration,
-          title: details?.title || details?.name || media?.title || media?.name || 'Media',
-          poster: media?.poster_path || details?.poster_path,
-          genres: (details?.genres || []).map((g) => g.id),
-        });
-      }
-    };
+    return () => window.removeEventListener('message', handlePlayerMessage);
   }, [mediaId, isTv, currentSeason, currentEpisode, details, media]);
 
-  const getEmbedUrl = () => {
-    // Resume where history says we stopped (saved start + watched
-    // seconds, or the provider's real reported time when available).
-    const resumeTime = estimatedPosition().time;
-
-    if (server === 'vidlink') {
-      const base = isTv
-        ? `https://vidlink.pro/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://vidlink.pro/movie/${mediaId}`;
-      return `${base}?primaryColor=95ff50&secondaryColor=101014&start=${resumeTime}`;
-    }
-
-    if (server === 'vidy') {
-      const base = isTv
-        ? `https://vidy.st/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://vidy.st/movie/${mediaId}`;
-      const params = new URLSearchParams({
-        color: '95FF50',
-        progress: String(resumeTime),
-      });
-      if (isTv) {
-        params.set('nextEpisode', 'true');
-        params.set('episodeSelector', 'true');
-        params.set('autoplayNextEpisode', 'true');
-      }
-      return `${base}?${params.toString()}`;
-    }
-
-    if (server === 'vidsrc') {
-      return isTv
-        ? `https://vidsrc.to/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://vidsrc.to/embed/movie/${mediaId}`;
-    }
-
-    if (server === 'vidsrccc') {
-      return isTv
-        ? `https://vidsrc.cc/v2/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://vidsrc.cc/v2/embed/movie/${mediaId}`;
-    }
-
-    if (server === 'embedsu') {
-      return isTv
-        ? `https://embed.su/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://embed.su/embed/movie/${mediaId}`;
-    }
-
-    if (server === 'smashy') {
-      return isTv
-        ? `https://player.smashystream.com/tv/${mediaId}?s=${currentSeason}&e=${currentEpisode}`
-        : `https://player.smashystream.com/movie/${mediaId}`;
-    }
-
-    if (server === 'autoembed') {
-      return isTv
-        ? `https://player.autoembed.cc/embed/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-        : `https://player.autoembed.cc/embed/movie/${mediaId}`;
-    }
-
-    // Unknown/stale server ids fall back to the default (Vidy).
-    return isTv
-      ? `https://vidy.st/tv/${mediaId}/${currentSeason}/${currentEpisode}`
-      : `https://vidy.st/movie/${mediaId}`;
+  // Manual position correction (Apple HIG: explicit user control next to
+  // the status). Cross-origin iframes hide seeks, so +/-15s lets the user
+  // align our resume clock with the in-player position; it rebuilds the
+  // embed URL once (no per-render reloads).
+  const nudgeResume = (delta) => {
+    const cur = estimatedPosition().time;
+    const next = Math.max(0, cur + delta);
+    wallBaseRef.current = next;
+    activeMsRef.current = 0;
+    lastTickRef.current = Date.now();
+    pmSeenRef.current = false;
+    playbackRef.current = { currentTime: next, duration: playbackRef.current.duration };
+    setDisplayTime(next);
+    saveNowRef.current();
+    rebuildEmbed(server, currentSeason, currentEpisode, next);
+    setKey((p) => p + 1);
   };
 
   const handleSelectEpisode = (seasonNum, episodeNum) => {
+    // Stamp the old episode's position before switching.
+    saveNowRef.current();
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
     // New episode starts at 0 — reset every clock, not just the ref.
@@ -281,25 +342,16 @@ export default function Player({ media, details, onClose }) {
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
     pmSeenRef.current = false;
+    rebuildEmbed(server, seasonNum, episodeNum, 0);
     setKey((prev) => prev + 1);
-
-    storage.saveProgress({
-      mediaId,
-      type: 'tv',
-      season: seasonNum,
-      episode: episodeNum,
-      currentTime: 0,
-      duration: 1,
-      title: details?.name || media?.name || 'Series',
-      poster: media?.poster_path,
-      genres: (details?.genres || []).map((g) => g.id),
-    });
   };
 
   const handleServerChange = (newServer) => {
-    setServer(newServer);
-    setKey((prev) => prev + 1);
     saveNowRef.current();
+    const pos = estimatedPosition().time;
+    setServer(newServer);
+    rebuildEmbed(newServer, currentSeason, currentEpisode, pos);
+    setKey((prev) => prev + 1);
   };
 
   const title = details?.title || details?.name || media?.title || media?.name || 'Now Playing';
@@ -339,7 +391,7 @@ export default function Player({ media, details, onClose }) {
           </div>
         </div>
 
-        {/* Controls row: Episodes, Server Switcher, Fullscreen */}
+        {/* Controls row: Episodes, Server Switcher, Resume adjust, Fullscreen */}
         <div className={`flex flex-wrap items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {isTv && (
             <button
@@ -353,6 +405,31 @@ export default function Player({ media, details, onClose }) {
           )}
 
           <ServerSwitcher currentServer={server} onSelectServer={handleServerChange} />
+
+          {/* Resume clock (Apple HIG: status + stepper). The iframe is
+              cross-origin so in-player seeks are invisible to us — these
+              steppers let the user align the saved position exactly. */}
+          <div className="cine-control-btn" role="group" aria-label="Resume position">
+            <button
+              onClick={() => nudgeResume(-15)}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 transition"
+              title="Back 15 seconds (also moves saved position)"
+              aria-label="Back 15 seconds"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <span className="text-xs font-bold tabular-nums min-w-12 text-center" title="Saved resume position — reopening starts here">
+              {formatClock(displayTime)}
+            </span>
+            <button
+              onClick={() => nudgeResume(15)}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 transition"
+              title="Forward 15 seconds (also moves saved position)"
+              aria-label="Forward 15 seconds"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
 
           <button
             onClick={() => {
@@ -387,11 +464,12 @@ export default function Player({ media, details, onClose }) {
         )}
       </div>
 
-      {/* Video Viewport */}
+      {/* Video Viewport — src is memoised state: chrome pokes and clock
+          ticks re-render without ever reloading the stream. */}
       <div className="relative w-full h-full flex-1 bg-black flex items-center justify-center">
         <iframe
           key={`${server}-${key}-${currentSeason}-${currentEpisode}`}
-          src={getEmbedUrl()}
+          src={embedUrl}
           title={title}
           className="w-full h-full border-0"
           // NOTE: no sandbox attribute on purpose — every provider (Vidy,

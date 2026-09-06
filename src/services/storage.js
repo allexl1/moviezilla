@@ -53,10 +53,21 @@ export function progressLabel(h) {
 
 export const storage = {
   // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode, currentTime, duration
+  // Never let a 0s write clobber a real timestamp (mount/unmount races).
   saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '', genres = [] }) {
     if (!mediaId) return;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const key = `${type}_${mediaId}`;
+    const prev = allProgress[key];
+
+    if ((currentTime || 0) <= 0 && (prev?.currentTime || 0) > 0) {
+      // Refresh recency but keep the real position + episode.
+      prev.updatedAt = Date.now();
+      if (title && !prev.title) prev.title = title;
+      if (poster && !prev.poster) prev.poster = poster;
+      safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+      return;
+    }
 
     const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 

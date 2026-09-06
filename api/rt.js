@@ -1,4 +1,8 @@
-// Rotten Tomatoes scores via the free keyless rt-api project.
+// Rotten Tomatoes scores. Two backends:
+// 1. RapidAPI (rottentomato.p.rapidapi.com) if RAPIDAPI_KEY is set —
+//    your curl was correct but missing the key header:
+//    x-rapidapi-key: $RAPIDAPI_KEY + x-rapidapi-host.
+// 2. Free keyless rt-api fallback (no key needed).
 // Client sends ?title=&year= ; we return { critic, audience } as integers.
 // Year-guarded: a title mismatch (remakes, same names) returns nothing
 // rather than a wrong film's score. Cached a day at the edge.
@@ -8,6 +12,41 @@ export default async function handler(req, res) {
 
   if (!title) {
     return res.status(400).json({ error: 'Missing title' });
+  }
+
+  // Optional paid backend — set RAPIDAPI_KEY in Vercel/.env.local.
+  if (process.env.RAPIDAPI_KEY) {
+    try {
+      const r = await fetch(
+        `https://rottentomato.p.rapidapi.com/?name=${encodeURIComponent(title)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'x-rapidapi-host': 'rottentomato.p.rapidapi.com',
+            'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+          },
+        }
+      );
+      if (r.ok) {
+        const body = await r.json();
+        const num = (v) => {
+          const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
+          return Number.isFinite(n) ? n : null;
+        };
+        // Best-effort across RapidAPI shape variants.
+        const critic =
+          num(body?.tomatometer ?? body?.critic ?? body?.data?.tomatometer ?? body?.rating?.critic);
+        const audience =
+          num(body?.audience_score ?? body?.audience ?? body?.data?.audience_score ?? body?.rating?.audience);
+        if (critic != null || audience != null) {
+          res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+          return res.status(200).json({ critic, audience });
+        }
+      }
+      // Fall through to free backend on shape/parse failure.
+    } catch {
+      // Fall through to free backend.
+    }
   }
 
   try {

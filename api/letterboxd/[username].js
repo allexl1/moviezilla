@@ -1,5 +1,34 @@
-const UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+// Rotate desktop UAs — Letterboxd bot protection 403s single-UA scrapers
+// from datacenter IPs. Retry with the next UA before giving up.
+const UAS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+];
+
+async function fetchWatchlistPage(url) {
+  let lastStatus = 0;
+  let lastRes = null;
+  for (const ua of UAS) {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': ua,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Referer: 'https://letterboxd.com/',
+      },
+    });
+    lastStatus = r.status;
+    lastRes = r;
+    if (r.ok) return r;
+    // Retry bot/rate blocks with the next UA; fail fast on real 404s.
+    if (r.status !== 403 && r.status !== 429) return r;
+  }
+  const err = new Error(`Letterboxd status ${lastStatus}`);
+  err.status = lastStatus;
+  err.response = lastRes;
+  throw err;
+}
 
 // Letterboxd exposes NO public watchlist RSS (/watchlist/rss/ is 403) —
 // only the diary feed (/rss/) is public. So the watchlist is read from the
@@ -68,12 +97,20 @@ export default async function handler(req, res) {
           ? `https://letterboxd.com/${encodeURIComponent(username)}/watchlist/`
           : `https://letterboxd.com/${encodeURIComponent(username)}/watchlist/page/${page}/`;
 
-      const r = await fetch(url, {
-        headers: { 'User-Agent': UA, Accept: 'text/html' },
-      });
+      let r;
+      try {
+        r = await fetchWatchlistPage(url);
+      } catch (e) {
+        if (page === 1) throw e;
+        break;
+      }
 
       if (!r.ok) {
-        if (page === 1) throw new Error(`Letterboxd status ${r.status}`);
+        if (page === 1) {
+          const e = new Error(`Letterboxd status ${r.status}`);
+          e.status = r.status;
+          throw e;
+        }
         break;
       }
 
@@ -100,6 +137,13 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
     return res.status(200).json({ films });
   } catch (err) {
+    // 403/429 = bot protection, not a bad username — say so honestly.
+    if (err.status === 403 || err.status === 429) {
+      return res.status(502).json({
+        error: 'Letterboxd blocked the sync (bot protection). Try again in a minute.',
+        message: err.message,
+      });
+    }
     return res.status(500).json({
       error: 'Letterboxd fetch failed',
       message: err.message,

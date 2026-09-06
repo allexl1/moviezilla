@@ -182,6 +182,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     }
   });
 
+  // Pending-poster count drives the loading shimmer (resolves take
+  // ~10-20s for a 40-title list — without feedback it reads as broken).
+  const [lbResolving, setLbResolving] = useState(0);
+
   React.useEffect(() => {
     if (!letterboxdList || letterboxdList.length === 0) return;
     let cancelled = false;
@@ -189,9 +193,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
       (r) => r.source === 'letterboxd' && !lbPosters[r.id]
     );
     if (pending.length === 0) return;
+    setLbResolving(pending.length);
 
     (async () => {
-      const BATCH = 4;
+      const BATCH = 8;
       for (let i = 0; i < pending.length && !cancelled; i += BATCH) {
         const batch = pending.slice(i, i + BATCH);
         const results = await Promise.all(
@@ -205,14 +210,17 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         if (cancelled) return;
         setLbPosters((prev) => {
           const next = { ...prev };
+          let done = 0;
           for (const { id, poster } of results) {
             if (poster) next[id] = poster;
+            done += 1;
           }
           try {
             localStorage.setItem('mz_lb_posters', JSON.stringify(next));
           } catch {
             // Storage full/blocked — memory cache still works this session.
           }
+          setLbResolving((n) => Math.max(0, n - done));
           return next;
         });
       }
@@ -445,6 +453,9 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         {resolvingId && (
           <p className="text-xs text-white/60">Looking up title on TMDB…</p>
         )}
+        {lbResolving > 0 && (
+          <p className="text-xs text-white/60">Loading posters… {lbResolving} left</p>
+        )}
         {!resolvingId && resolveError && (
           <p className="text-xs text-red-400/90">{resolveError}</p>
         )}
@@ -464,8 +475,9 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                 ? prog.percent >= 95 ? 'Watched' : `${prog.percent}% watched`
                 : item.source === 'letterboxd' ? 'Letterboxd' : 'To Watch';
               const isLocal = item.source !== 'letterboxd';
+              const lbPending = !isLocal && !lbPosters[item.id];
               return (
-              <div key={key} className="relative">
+              <div key={key} className={`relative ${lbPending ? 'animate-pulse' : ''}`}>
                 <Card
                   media={
                     !isLocal && lbPosters[item.id]
