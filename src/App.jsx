@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard, Radio } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage, progressLabel } from './services/storage';
 import Navbar from './components/Navbar';
@@ -1082,6 +1083,8 @@ export default function App() {
       <div className={`cine-toast ${toast ? 'is-visible' : ''}`} role="status" aria-live="polite">
         {toast}
       </div>
+
+      <Analytics />
     </div>
   );
 }
