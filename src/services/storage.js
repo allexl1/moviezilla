@@ -170,4 +170,30 @@ export const storage = {
       console.error('Failed to clear search history:', err);
     }
   },
+
+  removeSearchHistory(term) {
+    const clean = String(term || '').trim().toLowerCase();
+    if (!clean) return;
+    const list = storage.getSearchHistory().filter((t) => t.toLowerCase() !== clean);
+    safeSet(STORAGE_KEYS.SEARCH_HISTORY, list);
+  },
+
+  // Remove one title from playback history (all keys for this media).
+  removeProgress(type, mediaId) {
+    if (!mediaId) return;
+    try {
+      const all = safeGet(STORAGE_KEYS.PROGRESS, {});
+      delete all[`${type}_${mediaId}`];
+      safeSet(STORAGE_KEYS.PROGRESS, all);
+    } catch (err) {
+      console.error('Failed to remove playback history:', err);
+    }
+  },
+
+  // Remove one title from the watchlist by TMDB id.
+  removeFromWatchlist(id) {
+    const list = safeGet(STORAGE_KEYS.WATCHLIST, []).filter((x) => x.id !== id);
+    safeSet(STORAGE_KEYS.WATCHLIST, list);
+    notifyWatchlist();
+  },
 };

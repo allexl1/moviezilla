@@ -43,7 +43,7 @@ function certificationOf(details, mediaType) {
   }
 }
 
-export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia }) {
+export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailsError, setDetailsError] = useState('');
@@ -183,8 +183,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
             <button
               onClick={() => {
-                storage.toggleWatchlist(media);
+                const added = storage.toggleWatchlist(media);
                 setIsWatchlist(!isWatchlist);
+                onToast?.(added ? 'Added to Watchlist' : 'Removed from Watchlist');
               }}
               className="cine-btn-circle"
               title={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}

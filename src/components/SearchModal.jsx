@@ -116,13 +116,28 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {history.map((term) => (
-                    <button
+                    <span
                       key={term}
-                      onClick={() => setQuery(term)}
-                      className="cine-chip cine-chip--neutral hover:text-white transition cursor-pointer"
+                      className="cine-chip cine-chip--neutral pr-1.5"
                     >
-                      {term}
-                    </button>
+                      <button
+                        onClick={() => setQuery(term)}
+                        className="hover:text-white transition cursor-pointer"
+                      >
+                        {term}
+                      </button>
+                      <button
+                        onClick={() => {
+                          storage.removeSearchHistory(term);
+                          setHistory(storage.getSearchHistory());
+                        }}
+                        className="ml-1 w-5 h-5 rounded-full inline-flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                        title={`Remove "${term}"`}
+                        aria-label={`Remove "${term}" from search history`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -186,7 +201,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
               }}
               right={
                 rating && (
-                  <span className="cine-chip cine-chip--accent">
+                  <span className="cine-chip cine-chip--rating">
                     <Star className="w-3 h-3" fill="currentColor" strokeWidth={0} />
                     {rating}
                   </span>

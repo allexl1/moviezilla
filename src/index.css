@@ -7,6 +7,7 @@
 
 /* ─── CSS Custom Properties (Design Tokens) ────────────────────────────── */
 :root {
+  color-scheme: dark;
   /* ── Color Palette (aligned to cinejoy.to verified values) ── */
   --cine-bg: #050505;                       /* Primary background (cinejoy body) */
   --cine-bg-deep: #05000d;                  /* Deep variant (cinejoy liquid-bg / hero) */
@@ -1207,6 +1208,14 @@ nav .cine-nav-btn {
   border-color: var(--cine-glass-border);
 }
 
+/* High-contrast rating chip for list rows (search/history):
+   solid dark pill, lime figure — readable over glass, no cheap tint. */
+.cine-chip--rating {
+  background: rgba(0, 0, 0, 0.72);
+  color: var(--cine-accent);
+  border-color: rgba(149, 255, 80, 0.28);
+}
+
 /* ─── Select / Dropdown ────────────────────────────────────────────────── */
 .cine-select {
   appearance: none;
@@ -1250,6 +1259,45 @@ nav .cine-nav-btn {
 .cine-select option {
   background: var(--cine-surface-strong);
   color: var(--cine-white);
+}
+
+/* Genre carries the longest labels ("Action & Adventure") — fixed wide
+   so Movies/Shows filter rails never shift width between tabs. */
+.cine-select--wide {
+  min-width: 13rem;
+}
+
+/* Minimal toast (watchlist add/remove). One recipe, auto-dismissed. */
+.cine-toast {
+  position: fixed;
+  bottom: 6rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 80;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--cine-radius-full);
+  background: rgba(10, 10, 14, 0.85);
+  border: 1px solid var(--cine-glass-border-hover);
+  backdrop-filter: var(--cine-blur-lg);
+  -webkit-backdrop-filter: var(--cine-blur-lg);
+  color: var(--cine-text-primary);
+  font-size: 0.8125rem;
+  font-weight: var(--cine-font-semibold);
+  box-shadow: var(--cine-shadow-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.cine-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (min-width: 768px) {
+  .cine-toast {
+    bottom: 2.5rem;
+  }
 }
 
 /* ─── Input ─────────────────────────────────────────────────────────────── */

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Shuffle } from 'lucide-react';
 import Select from './ui/Select';
-import { COUNTRIES } from '../services/tmdb';
+import { COUNTRIES, LANGUAGES } from '../services/tmdb';
 
 // Full year range (TMDB has no year-list endpoint, so generate it):
 // every year back to 1970, then decades back to the 1900s.
@@ -42,6 +42,8 @@ export default function FilterBar({
   onSelectProvider,
   selectedCountry,
   onSelectCountry,
+  selectedLanguage,
+  onSelectLanguage,
   onRandom,
 }) {
   return (
@@ -62,6 +64,7 @@ export default function FilterBar({
           value={selectedGenre}
           onChange={onSelectGenre}
           label="Genre"
+          className="cine-select--wide"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,
@@ -102,6 +105,16 @@ export default function FilterBar({
           options={COUNTRIES.map((c) => ({
             value: c.id,
             label: c.id === '' ? 'Country' : c.name,
+          }))}
+        />
+
+        <Select
+          value={selectedLanguage}
+          onChange={onSelectLanguage}
+          label="Language"
+          options={LANGUAGES.map((l) => ({
+            value: l.id,
+            label: l.id === '' ? 'Language' : l.name,
           }))}
         />
       </div>

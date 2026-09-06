@@ -6,7 +6,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
     { id: 'home', label: 'Home', icon: House },
     { id: 'movie', label: 'Movies', icon: Clapperboard },
     { id: 'tv', label: 'Shows', icon: Tv },
-    { id: 'watchlist', label: 'My List', icon: Bookmark },
+    { id: 'watchlist', label: 'Watchlist', icon: Bookmark },
   ];
 
   return (

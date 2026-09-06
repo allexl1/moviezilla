@@ -92,6 +92,25 @@ export const SORTS = [
   { id: 'primary_release_date.desc', name: 'Newest' },
 ];
 
+export const LANGUAGES = [
+  { id: '', name: 'All Languages' },
+  { id: 'en', name: 'English' },
+  { id: 'es', name: 'Spanish' },
+  { id: 'fr', name: 'French' },
+  { id: 'de', name: 'German' },
+  { id: 'it', name: 'Italian' },
+  { id: 'pt', name: 'Portuguese' },
+  { id: 'ja', name: 'Japanese' },
+  { id: 'ko', name: 'Korean' },
+  { id: 'zh', name: 'Chinese' },
+  { id: 'hi', name: 'Hindi' },
+  { id: 'tr', name: 'Turkish' },
+  { id: 'pl', name: 'Polish' },
+  { id: 'nl', name: 'Dutch' },
+  { id: 'sv', name: 'Swedish' },
+  { id: 'da', name: 'Danish' },
+];
+
 export const TV_SORTS = [
   { id: 'popularity.desc', name: 'Popular' },
   { id: 'vote_average.desc', name: 'Top Rated' },
@@ -168,6 +187,7 @@ export const tmdb = {
     sort = 'popularity.desc',
     provider = '',
     country = '',
+    language = '',
   } = {}) {
     const params = {
       page,
@@ -197,6 +217,10 @@ export const tmdb = {
       params.with_origin_country = country;
     }
 
+    if (language) {
+      params.with_original_language = language;
+    }
+
     return proxyFetch('discover/movie', params);
   },
 
@@ -207,6 +231,7 @@ export const tmdb = {
     sort = 'popularity.desc',
     provider = '',
     country = '',
+    language = '',
   } = {}) {
     const params = {
       page,
@@ -234,6 +259,10 @@ export const tmdb = {
 
     if (country) {
       params.with_origin_country = country;
+    }
+
+    if (language) {
+      params.with_original_language = language;
     }
 
     return proxyFetch('discover/tv', params);

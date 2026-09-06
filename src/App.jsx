@@ -72,6 +72,8 @@ export default function App() {
   const [selectedSort, setSelectedSort] = useState('popularity.desc');
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('');
+  const [toast, setToast] = useState('');
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -89,12 +91,31 @@ export default function App() {
     setContinueWatching(storage.getAllContinueWatching());
   }, [activePlayer, activeTab]);
 
-  // Freeze ambient animation while the tab is hidden (thermal: no
-  // background frames burned for a page nobody looks at).
+  // Freeze ambient animation while the tab is hidden or any overlay
+  // covers the page (search/settings/player/details): the aurora keeps
+  // compositing behind fixed overlays otherwise (thermal).
   useEffect(() => {
-    const onVis = () => document.body.classList.toggle('mz-paused', document.hidden);
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    const apply = () => {
+      const covered = isSearchOpen || isSettingsOpen || Boolean(activePlayer) || Boolean(selectedMedia);
+      document.body.classList.toggle('mz-paused', covered || document.hidden);
+    };
+    apply();
+    document.addEventListener('visibilitychange', apply);
+    return () => {
+      document.removeEventListener('visibilitychange', apply);
+      document.body.classList.remove('mz-paused');
+    };
+  }, [isSearchOpen, isSettingsOpen, activePlayer, selectedMedia]);
+
+  // Minimal toast (watchlist add/remove), auto-dismissed.
+  const toastTimer = useRef(null);
+  const showToast = (msg) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2200);
+  };
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
 
   useEffect(() => {
@@ -106,6 +127,7 @@ export default function App() {
       selectedSort,
       selectedProvider,
       selectedCountry,
+      selectedLanguage,
       letterboxdUser,
     ].join('|');
 
@@ -134,6 +156,7 @@ export default function App() {
             sort: selectedSort,
             provider: selectedProvider,
             country: selectedCountry,
+            language: selectedLanguage,
           });
         } else if (activeTab === 'tv') {
           res = await tmdb.getSeries({
@@ -143,6 +166,7 @@ export default function App() {
             sort: selectedSort,
             provider: selectedProvider,
             country: selectedCountry,
+            language: selectedLanguage,
           });
         } else {
           res = await tmdb.getTrending();
@@ -183,6 +207,7 @@ export default function App() {
     selectedSort,
     selectedProvider,
     selectedCountry,
+    selectedLanguage,
     letterboxdUser,
     catalogRetry,
     page,
@@ -371,6 +396,7 @@ export default function App() {
               setSelectedSort('popularity.desc');
               setSelectedProvider('');
               setSelectedCountry('');
+              setSelectedLanguage('');
             }
           }}
         isDetailView={Boolean(selectedMedia)}
@@ -382,6 +408,7 @@ export default function App() {
         <MediaDetailPage
           media={selectedMedia}
           mediaType={selectedMediaType}
+          onToast={showToast}
           onPlay={(media, details) =>
             setActivePlayer({
               media: { ...media, media_type: resolveMediaType(media) },
@@ -480,7 +507,10 @@ export default function App() {
 
                   <div className="cine-duo-btn">
                     <button
-                      onClick={() => storage.toggleWatchlist(heroItem)}
+                      onClick={() => {
+                        const added = storage.toggleWatchlist(heroItem);
+                        showToast(added ? 'Added to Watchlist' : 'Removed from Watchlist');
+                      }}
                       title="Add to Watchlist"
                       aria-label="Add to Watchlist"
                     >
@@ -552,6 +582,8 @@ export default function App() {
                   onSelectProvider={setSelectedProvider}
                   selectedCountry={selectedCountry}
                   onSelectCountry={setSelectedCountry}
+                  selectedLanguage={selectedLanguage}
+                  onSelectLanguage={setSelectedLanguage}
                   onRandom={pickRandom}
                 />
               </div>
@@ -582,6 +614,8 @@ export default function App() {
                   onSelectProvider={setSelectedProvider}
                   selectedCountry={selectedCountry}
                   onSelectCountry={setSelectedCountry}
+                  selectedLanguage={selectedLanguage}
+                  onSelectLanguage={setSelectedLanguage}
                   onRandom={pickRandom}
                 />
               </div>
@@ -768,6 +802,7 @@ export default function App() {
                   onResume={(media, fallback) => playMedia(media, fallback)}
                   onOpenSettings={() => setIsSettingsOpen(true)}
                   letterboxdUser={letterboxdUser}
+                  onToast={showToast}
                 />
               ) : (
                 <>
@@ -827,6 +862,11 @@ export default function App() {
           onClose={() => setActivePlayer(null)}
         />
       )}
+
+      {/* Watchlist toast */}
+      <div className={`cine-toast ${toast ? 'is-visible' : ''}`} role="status" aria-live="polite">
+        {toast}
+      </div>
     </div>
   );
 }

@@ -27,11 +27,11 @@ export default function Player({ media, details, onClose }) {
   const playbackRef = useRef({ currentTime: 0, duration: 0 });
   const hideTimer = useRef(null);
 
-  // Auto-hide chrome after 3s idle (basic player behavior).
+  // Auto-hide chrome after 4s idle (basic player behavior).
   const poke = () => {
     setShowChrome(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setShowChrome(false), 3000);
+    hideTimer.current = setTimeout(() => setShowChrome(false), 4000);
   };
 
   useEffect(() => {
@@ -225,8 +225,10 @@ export default function Player({ media, details, onClose }) {
       className={`fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`}
     >
       {/* Top Floating Chrome — all controls stacked top-left: Vidy opens
-          its own quality/server menus top-right, so our bar stays clear. */}
-      <div className={`absolute top-0 inset-x-0 z-30 flex flex-col items-start gap-3 p-5 md:px-10 pb-10 bg-gradient-to-b from-black/95 via-black/50 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+          its own quality/server menus top-right, so our bar stays clear.
+          Solid gradient (not translucent) so Back/Episodes stay readable
+          over bright video frames. */}
+      <div className={`absolute top-0 inset-x-0 z-30 flex flex-col items-start gap-3 p-5 md:px-10 pb-16 bg-gradient-to-b from-black via-black/70 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
         <div className={`flex items-center gap-3 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <button
             onClick={onClose}
@@ -309,13 +311,15 @@ export default function Player({ media, details, onClose }) {
         />
       )}
 
-      {/* Hover strip: the embed iframe swallows all pointer events, so once
+      {/* Wake zone: the embed iframe swallows all pointer events, so once
           the chrome hides there is no hover path back. This transparent
-          strip sits above the video — entering the top edge wakes the UI. */}
+          zone sits above the video — top-LEFT only (providers open their
+          own menus top-right, so we never steal that corner). */}
       {!showChrome && (
         <div
           onMouseEnter={poke}
-          className="absolute inset-x-0 top-0 h-20 z-20 cursor-default"
+          onTouchStart={poke}
+          className="absolute left-0 top-0 h-32 w-1/3 max-w-md z-20 cursor-default"
         />
       )}
     </div>

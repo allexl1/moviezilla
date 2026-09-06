@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, ListVideo } from 'lucide-react';
+import { Play, ListVideo, X, Check } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
@@ -59,7 +59,14 @@ const TYPE_FILTERS = [
   { id: 'tv', name: 'Shows' },
 ];
 
-export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings, letterboxdUser }) {
+const VIEW_OPTIONS = [
+  { id: 'watchlater', name: 'Watch Later' },
+  { id: 'watched', name: 'Watched' },
+  { id: 'history', name: 'History' },
+];
+
+export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings, letterboxdUser, onToast }) {
+  const [view, setView] = useState('watchlater');
   const [dayFilter, setDayFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [genreFilter, setGenreFilter] = useState('');
@@ -67,10 +74,11 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   const [letterboxdError, setLetterboxdError] = useState('');
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveError, setResolveError] = useState('');
-  // Bumped by the storage event so toggles re-render immediately.
-  const [, setWlVersion] = useState(0);
+  // Bumped by storage changes so toggles/removals re-render immediately.
+  const [, setVersion] = useState(0);
+  const bump = () => setVersion((v) => v + 1);
 
-  React.useEffect(() => storage.subscribeWatchlist(() => setWlVersion((v) => v + 1)), []);
+  React.useEffect(() => storage.subscribeWatchlist(bump), []);
 
   // Letterboxd rows carry a URL id, not a TMDB id — resolve lazily on tap
   // so the detail/playback flow always receives a real TMDB ID + type.
@@ -95,6 +103,36 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
   const history = storage.getWatchHistory();
   const watchlist = storage.getWatchlist();
+
+  const progressByKey = new Map(history.map((h) => [`${h.type}_${h.mediaId}`, h]));
+
+  const handleRemoveHistory = (h) => {
+    storage.removeProgress(h.type, h.mediaId);
+    bump();
+    onToast?.('Removed from History');
+  };
+
+  const handleMarkWatched = (h) => {
+    storage.saveProgress({
+      mediaId: h.mediaId,
+      type: h.type,
+      season: h.season || 1,
+      episode: h.episode || 1,
+      currentTime: 1,
+      duration: 1,
+      title: h.title,
+      poster: h.poster,
+      genres: h.genres || [],
+    });
+    bump();
+    onToast?.('Marked as Watched');
+  };
+
+  const handleRemoveWatchlist = (id, title) => {
+    storage.removeFromWatchlist(id);
+    bump();
+    onToast?.(title ? `Removed "${title}"` : 'Removed from Watchlist');
+  };
 
   React.useEffect(() => {
     if (!letterboxdUser) return;
@@ -129,6 +167,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
   const continueItems = history.filter(
     (h) => h.percent > 2 && h.percent < 95 && matchType(h.type) && matchGenre(h.genres) && inDayFilter(h.updatedAt, dayFilter)
+  );
+
+  const watchedItems = history.filter(
+    (h) => h.percent >= 95 && matchType(h.type) && matchGenre(h.genres) && inDayFilter(h.updatedAt, dayFilter)
   );
 
   const historyGroups = (() => {
@@ -201,15 +243,20 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         )}
       </div>
 
-      {/* Filters — labeled groups */}
-      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-        <SegmentedControl label="When" options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} />
-        <div className="flex items-center gap-2.5">
-          <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
-          <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} label="Filter by genre" />
+      {/* View switch + filters — labeled groups */}
+      <div className="flex flex-col gap-3">
+        <SegmentedControl label="View" options={VIEW_OPTIONS} value={view} onChange={setView} />
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <SegmentedControl label="When" options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} />
+          <div className="flex items-center gap-2.5">
+            <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
+            <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} label="Filter by genre" />
+          </div>
         </div>
       </div>
 
+      {view === 'watchlater' && (
+      <>
       {/* Continue Watching */}
       {continueItems.length > 0 && (
         <section className="space-y-3">
@@ -257,7 +304,120 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         </section>
       )}
 
-      {/* History by day */}
+      {/* Watch Later */}
+      <section className="space-y-3">
+        <div className="cine-section-head">
+          <h2 className="cine-section-title">Watch Later</h2>
+          <span className="text-xs text-white/60">{myList.length} titles</span>
+        </div>
+        {resolvingId && (
+          <p className="text-xs text-white/60">Looking up title on TMDB…</p>
+        )}
+        {!resolvingId && resolveError && (
+          <p className="text-xs text-red-400/90">{resolveError}</p>
+        )}
+        {myList.length === 0 ? (
+          <EmptyState
+            icon={<ListVideo className="w-5 h-5" />}
+            title="Nothing saved yet"
+            description="Tap + on any title to park it here for later."
+          />
+        ) : (
+          <div className="cine-grid">
+            {myList.map((item) => {
+              const key = `${item.id}_${item.title}`;
+              const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+              const prog = progressByKey.get(`${mediaType}_${item.id}`);
+              const badge = prog
+                ? prog.percent >= 95 ? 'Watched' : `${prog.percent}% watched`
+                : item.source === 'letterboxd' ? 'Letterboxd' : 'To Watch';
+              const isLocal = item.source !== 'letterboxd';
+              return (
+              <div key={key} className="relative">
+                <Card
+                  media={item}
+                  size="fluid"
+                  onClick={(m) =>
+                    m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
+                  }
+                  showRating={false}
+                />
+                <span className="cine-chip cine-chip--neutral absolute left-2 top-2">
+                  {badge}
+                </span>
+                {isLocal && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveWatchlist(item.id, item.title || item.name);
+                    }}
+                    className="cine-icon-btn absolute right-2 top-2 !w-8 !h-8"
+                    title={`Remove "${item.title || item.name}"`}
+                    aria-label={`Remove "${item.title || item.name}" from Watch Later`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      </>
+      )}
+
+      {view === 'watched' && (
+      <section className="space-y-3">
+        <div className="cine-section-head">
+          <h2 className="cine-section-title">Watched</h2>
+          <span className="text-xs text-white/60">{watchedItems.length} titles</span>
+        </div>
+        {watchedItems.length === 0 ? (
+          <EmptyState
+            icon={<Check className="w-5 h-5" />}
+            title="Nothing marked watched yet"
+            description="Finish a title past 95%, or tap ✓ on any history row."
+          />
+        ) : (
+        <div className="space-y-2">
+          {watchedItems.map((h) => {
+            const { media, fallback } = resumePayload(h);
+            return (
+              <Row
+                key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
+                poster={tmdb.getImageUrl(h.poster, 'w185')}
+                title={h.title}
+                meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${dayLabel(h.updatedAt)}`}
+                onClick={() => onResume(media, fallback)}
+                right={
+                  <div className="flex items-center gap-2">
+                    <span className="cine-chip cine-chip--accent">
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                      Watched
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveHistory(h);
+                      }}
+                      className="cine-icon-btn !w-8 !h-8"
+                      title={`Remove "${h.title}"`}
+                      aria-label={`Remove "${h.title}" from history`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                }
+              />
+            );
+          })}
+        </div>
+        )}
+      </section>
+      )}
+
+      {view === 'history' && (
       <section className="space-y-6">
         <div className="cine-section-head">
           <h2 className="cine-section-title">History</h2>
@@ -271,6 +431,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
             <div className="space-y-2">
               {items.map((h) => {
                 const { media, fallback } = resumePayload(h);
+                const watched = h.percent >= 95;
                 return (
                   <Row
                     key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
@@ -279,9 +440,35 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                     meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${h.percent}%`}
                     onClick={() => onResume(media, fallback)}
                     right={
-                      <span className="cine-chip cine-chip--neutral">
-                        {h.type === 'tv' ? 'Show' : 'Movie'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="cine-chip cine-chip--neutral">
+                          {h.type === 'tv' ? 'Show' : 'Movie'}
+                        </span>
+                        {!watched && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkWatched(h);
+                            }}
+                            className="cine-icon-btn !w-8 !h-8"
+                            title={`Mark "${h.title}" watched`}
+                            aria-label={`Mark "${h.title}" as watched`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveHistory(h);
+                          }}
+                          className="cine-icon-btn !w-8 !h-8"
+                          title={`Remove "${h.title}"`}
+                          aria-label={`Remove "${h.title}" from history`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     }
                   />
                 );
@@ -290,41 +477,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
           </div>
         ))}
       </section>
-
-      {/* My List */}
-      <section className="space-y-3">
-        <div className="cine-section-head">
-          <h2 className="cine-section-title">My List</h2>
-          <span className="text-xs text-white/60">{myList.length} titles</span>
-        </div>
-        {resolvingId && (
-          <p className="text-xs text-white/60">Looking up title on TMDB…</p>
-        )}
-        {!resolvingId && resolveError && (
-          <p className="text-xs text-red-400/90">{resolveError}</p>
-        )}
-        {myList.length === 0 ? (
-          <EmptyState
-            icon={<ListVideo className="w-5 h-5" />}
-            title="No lists yet"
-            description="Save movies and shows to start organizing your list."
-          />
-        ) : (
-          <div className="cine-grid">
-            {myList.map((item) => (
-              <Card
-                key={`${item.id}_${item.title}`}
-                media={item}
-                size="fluid"
-                onClick={(m) =>
-                  m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
-                }
-                showRating={false}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+      )}
     </div>
   );
 }
