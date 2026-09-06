@@ -221,9 +221,12 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     return [...local, ...remote];
   })();
 
+  // Embeds rarely report real playback time, so 0% means "opened but no
+  // position known" — label it honestly instead of a confusing "0%".
   const watchedLabel = (h) => {
-    if (h.percent < 95) return `${h.percent}%`;
-    return 'Watched';
+    if (h.percent >= 95) return 'Watched';
+    if (!h.percent || h.percent <= 0) return 'Opened';
+    return `${h.percent}%`;
   };
 
   const resumePayload = (h) => ({

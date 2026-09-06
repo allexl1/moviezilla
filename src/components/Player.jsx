@@ -27,6 +27,38 @@ export default function Player({ media, details, onClose }) {
   const playbackRef = useRef({ currentTime: 0, duration: 0 });
   const hideTimer = useRef(null);
 
+  // Best-known playback state, written on a heartbeat + on close.
+  // Embed iframes are cross-origin and almost never post playback time,
+  // so without this nothing would ever reach History (the old code only
+  // saved when currentTime > 0, which postMessage alone could provide).
+  const saveNowRef = useRef(() => {});
+  saveNowRef.current = () => {
+    if (!mediaId) return;
+    storage.saveProgress({
+      mediaId,
+      type: isTv ? 'tv' : 'movie',
+      season: currentSeason,
+      episode: currentEpisode,
+      currentTime: playbackRef.current.currentTime,
+      duration: playbackRef.current.duration,
+      title: details?.title || details?.name || media?.title || media?.name || 'Media',
+      poster: media?.poster_path || details?.poster_path,
+      genres: (details?.genres || []).map((g) => g.id),
+    });
+  };
+
+  // Log the visit immediately, refresh it every 10s, and stamp it on
+  // close — so every opened title lands in History even when the embed
+  // reports no playback time. Entries are deduped per title.
+  useEffect(() => {
+    saveNowRef.current();
+    const beat = setInterval(() => saveNowRef.current(), 10000);
+    return () => {
+      clearInterval(beat);
+      saveNowRef.current();
+    };
+  }, [mediaId]);
+
   // Auto-hide chrome after 4s idle (basic player behavior).
   const poke = () => {
     setShowChrome(true);
@@ -40,6 +72,18 @@ export default function Player({ media, details, onClose }) {
       if (hideTimer.current) clearTimeout(hideTimer.current);
     };
   }, []);
+
+  // Keep the chrome up while the episode list is open — browsing episodes
+  // happens over the panel, which would otherwise let the chrome time out.
+  useEffect(() => {
+    if (isEpisodeOpen) {
+      setShowChrome(true);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    } else {
+      poke();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEpisodeOpen]);
 
   // 1. Restore saved playback position
   useEffect(() => {
@@ -211,6 +255,7 @@ export default function Player({ media, details, onClose }) {
   const handleServerChange = (newServer) => {
     setServer(newServer);
     setKey((prev) => prev + 1);
+    saveNowRef.current();
   };
 
   const title = details?.title || details?.name || media?.title || media?.name || 'Now Playing';

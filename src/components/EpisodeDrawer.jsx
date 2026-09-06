@@ -63,10 +63,10 @@ export default function EpisodeDrawer({
   const seasons = Array.from({ length: Math.max(1, totalSeasons) }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none flex items-start justify-end p-4 md:p-6 md:pt-20">
+    <div className="fixed inset-0 z-20 pointer-events-none flex items-start justify-start p-4 pt-60 md:p-6 md:pt-52 md:pl-10">
       <div 
         ref={popoverRef}
-        className="pointer-events-auto w-full max-w-sm max-h-[82vh] rounded-3xl cine-glass-panel flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
+        className="pointer-events-auto w-full max-w-sm max-h-[52vh] md:max-h-[62vh] rounded-3xl cine-glass-panel flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
       >
         {/* Popover Header */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--cine-glass-border)]">
