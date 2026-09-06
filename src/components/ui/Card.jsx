@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Play } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
 
 /**
@@ -44,6 +44,26 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
             {rating}
           </span>
         )}
+        {/* Hover quick-view: play + title + year/rating. Hover-capable
+            pointers only — touch users tap straight through to details. */}
+        <span className="cine-card-hover" aria-hidden="true">
+          <span className="cine-card-play">
+            <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+          </span>
+          <span className="cine-card-hover-title">{title}</span>
+          {(year || rating) && (
+            <span className="cine-card-hover-meta">
+              {year}
+              {year && rating ? '  •  ' : ''}
+              {rating && (
+                <>
+                  <Star className="w-3 h-3" fill="currentColor" strokeWidth={0} />
+                  {rating}
+                </>
+              )}
+            </span>
+          )}
+        </span>
       </div>
 
       {!posterOnly && (

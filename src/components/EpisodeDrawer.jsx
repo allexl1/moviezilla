@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Check, ListVideo } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 
@@ -16,7 +16,6 @@ export default function EpisodeDrawer({
   const [loading, setLoading] = useState(false);
   const [seasonError, setSeasonError] = useState('');
   const [seasonRetry, setSeasonRetry] = useState(0);
-  const popoverRef = useRef(null);
 
   useEffect(() => {
     setActiveSeason(currentSeason);
@@ -46,27 +45,19 @@ export default function EpisodeDrawer({
     return () => { isMounted = false; };
   }, [tvId, activeSeason, isOpen, seasonRetry]);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
-        onClose();
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
-
+  // NOTE: no click-outside-to-close on purpose. The video area is a
+  // cross-origin iframe (never fires document mousedown), and on the chrome
+  // the toggle button races it: mousedown closes, then click reopens, so the
+  // panel could never be toggled shut. Close via the Episodes button, X, Esc.
   if (!isOpen) return null;
 
   const seasons = Array.from({ length: Math.max(1, totalSeasons) }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none flex items-start justify-start p-4 pt-60 md:p-6 md:pt-52 md:pl-10">
-      <div 
-        ref={popoverRef}
-        className="pointer-events-auto w-full max-w-sm max-h-[52vh] md:max-h-[62vh] rounded-3xl cine-glass-panel flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200"
+      <div
+        role="dialog"
+        aria-label="Episode list"
+        className="absolute left-5 md:left-10 top-full mt-3 z-40 w-80 max-w-[calc(100vw-2.5rem)] max-h-[54vh] md:max-h-[60vh] rounded-3xl cine-glass-panel pointer-events-auto flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
       >
         {/* Popover Header */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--cine-glass-border)]">
@@ -88,15 +79,16 @@ export default function EpisodeDrawer({
         </div>
 
         {/* Season Selector Pills */}
-        <div className="flex gap-1.5 p-3 overflow-x-auto no-scrollbar border-b border-[var(--cine-glass-border)]">
+        <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto no-scrollbar border-b border-[var(--cine-glass-border)]">
           {seasons.map((sNum) => (
             <button
               key={sNum}
               onClick={() => setActiveSeason(sNum)}
-              className={`h-10 px-5 inline-flex items-center rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              aria-pressed={activeSeason === sNum}
+              className={`h-9 px-4 inline-flex items-center flex-shrink-0 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
                 activeSeason === sNum
-                  ? 'bg-white text-black shadow-sm'
-                  : 'bg-[var(--cine-glass-tint)] text-white/60 hover:text-white hover:bg-[var(--cine-glass-tint-hover)]'
+                  ? 'bg-white text-black border-white shadow-sm'
+                  : 'bg-[var(--cine-glass-tint)] text-white/60 hover:text-white hover:bg-[var(--cine-glass-tint-hover)] border-[var(--cine-glass-border)]'
               }`}
             >
               Season {sNum}
@@ -167,6 +159,5 @@ export default function EpisodeDrawer({
           )}
         </div>
       </div>
-    </div>
   );
 }

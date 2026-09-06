@@ -5,6 +5,7 @@ import { storage } from './services/storage';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
 import RowRail from './components/RowRail';
+import UpcomingRail from './components/UpcomingRail';
 import WatchlistView from './components/WatchlistView';
 import Card from './components/ui/Card';
 import Select from './components/ui/Select';
@@ -69,11 +70,14 @@ export default function App() {
   // Filters
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('All Years');
-  const [selectedSort, setSelectedSort] = useState('popularity.desc');
+  const [selectedSort, setSelectedSort] = useState('primary_release_date.desc');
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [toast, setToast] = useState('');
+
+  const defaultSortFor = (tab) =>
+    tab === 'tv' ? 'first_air_date.desc' : 'primary_release_date.desc';
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -84,6 +88,9 @@ export default function App() {
   const [popularTV, setPopularTV] = useState([]);
   const [topRated, setTopRated] = useState([]);
   const [animeSpotlight, setAnimeSpotlight] = useState([]);
+  const [nowPlaying, setNowPlaying] = useState([]);
+  const [upcomingMovies, setUpcomingMovies] = useState([]);
+  const [onAirToday, setOnAirToday] = useState([]);
   const [homeProvider, setHomeProvider] = useState('8');
   const [providerMovies, setProviderMovies] = useState([]);
 
@@ -230,18 +237,23 @@ export default function App() {
     setSelectedMedia(pick);
   };
 
-  // Home rails load once per visit to Home (independent of filters).
+  // Home rails load on every visit to Home (independent of filters) and
+  // refresh every 10 minutes while Home stays open and visible — new
+  // theatrical/streaming titles appear without a reload.
   useEffect(() => {
     if (activeTab !== 'home') return;
     let isMounted = true;
 
     async function loadRails() {
       try {
-        const [movies, series, rated, anime] = await Promise.all([
+        const [movies, series, rated, anime, now, soon, airing] = await Promise.all([
           tmdb.getPopularMovies(),
           tmdb.getPopularTV(),
           tmdb.getTopRatedMovies(),
           tmdb.getAnime(),
+          tmdb.getNowPlaying(),
+          tmdb.getUpcoming(),
+          tmdb.getAiringToday(),
         ]);
 
         if (!isMounted) return;
@@ -253,30 +265,58 @@ export default function App() {
         setPopularTV(clean(series));
         setTopRated(clean(rated));
         setAnimeSpotlight(clean(anime));
+        setNowPlaying(clean(now));
+        setUpcomingMovies(
+          (soon?.results || []).filter((x) => x.backdrop_path).slice(0, 10)
+        );
+        setOnAirToday(
+          (airing?.results || []).filter((x) => x.backdrop_path).slice(0, 10)
+        );
       } catch (err) {
         console.error('Failed to load home rails:', err);
       }
     }
 
     loadRails();
+    const refresh = setInterval(() => {
+      if (!document.hidden) loadRails();
+    }, 10 * 60 * 1000);
 
+    return () => {
+      isMounted = false;
+      clearInterval(refresh);
+    };
+  }, [activeTab]);
+
+  // Movies/Shows pages keep their own Upcoming/On-The-Air shelf fresh.
+  useEffect(() => {
+    if (activeTab !== 'movie' && activeTab !== 'tv') return;
+    let isMounted = true;
+    (activeTab === 'movie' ? tmdb.getUpcoming() : tmdb.getOnTheAir())
+      .then((res) => {
+        if (!isMounted) return;
+        const list = (res?.results || []).filter((x) => x.backdrop_path).slice(0, 10);
+        if (activeTab === 'movie') setUpcomingMovies(list);
+        else setOnAirToday(list);
+      })
+      .catch((err) => console.error('Failed to load upcoming rail:', err));
     return () => {
       isMounted = false;
     };
   }, [activeTab]);
 
-  // Provider logos for the home row (static catalog data, cached).
-  const [providerLogos, setProviderLogos] = useState({});
+  // Full provider catalog for the icon wall (sorted by TMDB priority).
+  const [providers, setProviders] = useState([]);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
     let isMounted = true;
     tmdb
-      .getProviderLogos()
-      .then((map) => {
-        if (isMounted) setProviderLogos(map);
+      .getProviders()
+      .then((list) => {
+        if (isMounted) setProviders(list.slice(0, 24));
       })
-      .catch((err) => console.error('Failed to load provider logos:', err));
+      .catch((err) => console.error('Failed to load providers:', err));
     return () => {
       isMounted = false;
     };
@@ -305,6 +345,38 @@ export default function App() {
   const heroItems = activeTab === 'home' ? items.slice(0, 6) : [];
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroLogo, setHeroLogo] = useState(null);
+  const heroContentRef = useRef(null);
+  const heroMediaRef = useRef(null);
+
+  // Scroll choreography: hero copy drifts up + fades while the backdrop
+  // settles, so the top nav's blur takes over exactly as the hero leaves —
+  // the "blurred piece" handoff from the reference design. rAF-throttled,
+  // two style writes, zero re-renders.
+  useEffect(() => {
+    if (activeTab !== 'home' || selectedMedia) return;
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const y = window.scrollY || 0;
+        const fade = Math.max(0, 1 - y / 420);
+        if (heroContentRef.current) {
+          heroContentRef.current.style.opacity = String(fade);
+          heroContentRef.current.style.transform = `translateY(${Math.min(y * 0.25, 110)}px)`;
+        }
+        if (heroMediaRef.current) {
+          heroMediaRef.current.style.transform = `translateY(${Math.min(y * 0.12, 60)}px)`;
+        }
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [activeTab, selectedMedia, heroIndex]);
 
   useEffect(() => {
     setHeroIndex(0);
@@ -403,7 +475,7 @@ export default function App() {
               setActiveTab(tab);
               setSelectedGenre('');
               setSelectedYear('All Years');
-              setSelectedSort('popularity.desc');
+              setSelectedSort(defaultSortFor(tab));
               setSelectedProvider('');
               setSelectedCountry('');
               setSelectedLanguage('');
@@ -447,7 +519,7 @@ export default function App() {
 
           {activeTab === 'home' && heroItem && (
             <section className="cine-hero">
-              <div className="cine-hero-media" aria-hidden="true">
+              <div ref={heroMediaRef} className="cine-hero-media" aria-hidden="true">
                 <img
                   key={heroItem.id}
                   src={tmdb.getImageUrl(
@@ -462,7 +534,7 @@ export default function App() {
                 <div className="cine-hero-scrim" />
               </div>
 
-              <div className="cine-hero-content">
+              <div ref={heroContentRef} className="cine-hero-content">
                 {heroLogo ? (
                   <img
                     src={tmdb.getImageUrl(heroLogo, 'w500')}
@@ -697,44 +769,37 @@ export default function App() {
               </section>
             )}
 
-            {activeTab === 'home' && (
+            {activeTab === 'home' && providers.length > 0 && (
               <section className="space-y-3">
                 <div className="cine-section-head">
                   <h2 className="cine-section-title">Browse by Provider</h2>
                 </div>
 
                 <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
-                  {PROVIDERS.map((p) => (
-                    <div
-                      key={p.name}
+                  {providers.map((p) => (
+                    <button
+                      key={p.id}
                       onClick={() => {
                         setActiveTab('movie');
                         setSelectedProvider(p.id);
                       }}
                       className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
                       title={p.name}
+                      aria-label={`Browse ${p.name} movies`}
                     >
-                      <div className="cine-provider-pill">
-                        {providerLogos[p.id] ? (
-                          <img
-                            src={tmdb.getImageUrl(providerLogos[p.id], 'w185')}
-                            alt={p.name}
-                            loading="lazy"
-                            className="h-8 w-auto rounded-md"
-                          />
-                        ) : (
-                          <span
-                            className="text-sm font-bold tracking-tight"
-                            style={{ color: p.color }}
-                          >
-                            {p.name}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition">
+                      <span className="cine-provider-icon">
+                        <img
+                          src={tmdb.getImageUrl(p.logo, 'w185')}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      </span>
+                      <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition max-w-20 truncate">
                         {p.name}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </section>
@@ -755,6 +820,13 @@ export default function App() {
               {activeTab === 'home' ? (
                 <div className="flex flex-col gap-10">
                   <RowRail title="Trending Now" items={items} onSelect={setSelectedMedia} />
+                  <RowRail
+                    title="Now Playing in Theaters"
+                    items={nowPlaying}
+                    onSelect={setSelectedMedia}
+                    mediaType="movie"
+                    action={{ label: 'View All', onClick: () => setActiveTab('movie') }}
+                  />
                   <RowRail
                     title="Popular Movies"
                     items={popularMovies}
@@ -817,6 +889,26 @@ export default function App() {
                 />
               ) : (
                 <>
+                  {activeTab === 'movie' && (
+                    <UpcomingRail
+                      title="Upcoming"
+                      items={upcomingMovies}
+                      onSelect={setSelectedMedia}
+                      mediaType="movie"
+                      badge="Coming Soon"
+                      dateKey="release_date"
+                    />
+                  )}
+                  {activeTab === 'tv' && (
+                    <UpcomingRail
+                      title="On The Air"
+                      items={onAirToday}
+                      onSelect={setSelectedMedia}
+                      mediaType="tv"
+                      badge="Airing"
+                      dateKey="first_air_date"
+                    />
+                  )}
                   <div className="cine-grid">
                     {items.map((media) => (
                       <Card
@@ -868,6 +960,7 @@ export default function App() {
 
       {activePlayer && (
         <Player
+          key={`${activePlayer.media?.media_type || 'media'}_${activePlayer.media?.id}`}
           media={activePlayer.media}
           details={activePlayer.details}
           onClose={() => setActivePlayer(null)}

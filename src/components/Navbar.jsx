@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark } from 'lucide-react';
 
 export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings }) {
@@ -9,10 +9,29 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
     { id: 'watchlist', label: 'Watchlist', icon: Bookmark },
   ];
 
+  // Blur handoff: past ~48px the floating bars go solid-blur so content
+  // sliding underneath melts instead of clipping. rAF-throttled, one bool.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setScrolled((window.scrollY || 0) > 48);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
   return (
     <>
       <header className="cine-topbar fixed top-0 inset-x-0 z-50 flex items-center justify-between pointer-events-none">
-        {/* Top Left: Back Arrow + Logo */}
         <div className="flex items-center gap-4 pointer-events-auto">
           {isDetailView && (
             <button
@@ -35,7 +54,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
         {/* Top Right: Cinejoy Floating Pill Navigation (desktop only —
             visibility lives in CSS: unlayered .cine-nav-pill-box display
             would beat a Tailwind `hidden` utility) */}
-        <div className="cine-nav-pill-box pointer-events-auto">
+        <div className={`cine-nav-pill-box pointer-events-auto ${scrolled ? 'is-scrolled' : ''}`}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;
             const Icon = tab.icon;
@@ -75,7 +94,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
 
       {/* Mobile Bottom Dock */}
       <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none" aria-label="Primary">
-        <div className="pointer-events-auto flex items-center gap-0.5 p-1.5 rounded-full cine-nav-pill-box shadow-2xl">
+        <div className={`pointer-events-auto flex items-center gap-0.5 p-1.5 rounded-full cine-nav-pill-box shadow-2xl ${scrolled ? 'is-scrolled' : ''}`}>
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;
             return (

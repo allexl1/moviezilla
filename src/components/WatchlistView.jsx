@@ -171,6 +171,59 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     };
   }, [letterboxdUser]);
 
+  // Letterboxd rows ship without posters (the watchlist HTML carries none),
+  // so resolve each title to TMDB in small batches and cache the poster in
+  // localStorage — first open fetches, every later open is instant.
+  const [lbPosters, setLbPosters] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('mz_lb_posters') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  React.useEffect(() => {
+    if (!letterboxdList || letterboxdList.length === 0) return;
+    let cancelled = false;
+    const pending = letterboxdList.filter(
+      (r) => r.source === 'letterboxd' && !lbPosters[r.id]
+    );
+    if (pending.length === 0) return;
+
+    (async () => {
+      const BATCH = 4;
+      for (let i = 0; i < pending.length && !cancelled; i += BATCH) {
+        const batch = pending.slice(i, i + BATCH);
+        const results = await Promise.all(
+          batch.map((r) =>
+            tmdb
+              .resolveTitle(r.title, r.release_date)
+              .then((m) => ({ id: r.id, poster: m?.poster_path || null }))
+              .catch(() => ({ id: r.id, poster: null }))
+          )
+        );
+        if (cancelled) return;
+        setLbPosters((prev) => {
+          const next = { ...prev };
+          for (const { id, poster } of results) {
+            if (poster) next[id] = poster;
+          }
+          try {
+            localStorage.setItem('mz_lb_posters', JSON.stringify(next));
+          } catch {
+            // Storage full/blocked — memory cache still works this session.
+          }
+          return next;
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letterboxdList]);
+
   const matchType = (t) => typeFilter === 'all' || t === typeFilter;
   const matchGenre = (ids) =>
     !genreFilter || (ids || []).map(String).includes(String(genreFilter));
@@ -415,7 +468,11 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               return (
               <div key={key} className="relative">
                 <Card
-                  media={item}
+                  media={
+                    !isLocal && lbPosters[item.id]
+                      ? { ...item, poster_path: lbPosters[item.id] }
+                      : item
+                  }
                   size="fluid"
                   onClick={(m) =>
                     m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)

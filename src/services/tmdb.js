@@ -87,9 +87,10 @@ export const COUNTRIES = [
 ];
 
 export const SORTS = [
-  { id: 'popularity.desc', name: 'Popular' },
-  { id: 'vote_average.desc', name: 'Top Rated' },
   { id: 'primary_release_date.desc', name: 'Newest' },
+  { id: 'primary_release_date.asc', name: 'Oldest' },
+  { id: 'vote_average.desc', name: 'Top Rated' },
+  { id: 'vote_average.asc', name: 'Least Rated' },
 ];
 
 export const LANGUAGES = [
@@ -112,9 +113,10 @@ export const LANGUAGES = [
 ];
 
 export const TV_SORTS = [
-  { id: 'popularity.desc', name: 'Popular' },
-  { id: 'vote_average.desc', name: 'Top Rated' },
   { id: 'first_air_date.desc', name: 'Newest' },
+  { id: 'first_air_date.asc', name: 'Oldest' },
+  { id: 'vote_average.desc', name: 'Top Rated' },
+  { id: 'vote_average.asc', name: 'Least Rated' },
 ];
 
 async function proxyFetch(endpoint, params = {}) {
@@ -221,6 +223,11 @@ export const tmdb = {
       params.with_original_language = language;
     }
 
+    // Rating sorts need a vote floor or obscure single-vote titles win.
+    if (String(sort).startsWith('vote_average')) {
+      params['vote_count.gte'] = 50;
+    }
+
     return proxyFetch('discover/movie', params);
   },
 
@@ -265,6 +272,10 @@ export const tmdb = {
       params.with_original_language = language;
     }
 
+    if (String(sort).startsWith('vote_average')) {
+      params['vote_count.gte'] = 50;
+    }
+
     return proxyFetch('discover/tv', params);
   },
 
@@ -301,16 +312,51 @@ export const tmdb = {
     });
   },
 
-  // Provider logo paths for the "Browse by Provider" row (id -> logo_path).
-  async getProviderLogos() {
+  // Full provider catalog (id, name, logo, priority) for the icon wall.
+  // Sorted by TMDB display priority so the big services come first.
+  async getProviders() {
     const res = await proxyFetch('watch/providers/movie', {
       watch_region: 'US',
     });
+    return (res?.results || [])
+      .filter((p) => p.provider_id && p.logo_path)
+      .map((p) => ({
+        id: String(p.provider_id),
+        name: p.provider_name,
+        logo: p.logo_path,
+        priority: p.display_priority ?? 999,
+      }))
+      .sort((a, b) => a.priority - b.priority);
+  },
+
+  // Provider logo paths for the "Browse by Provider" row (id -> logo_path).
+  async getProviderLogos() {
+    const list = await tmdb.getProviders();
     const map = {};
-    for (const p of res?.results || []) {
-      if (p.provider_id && p.logo_path) map[String(p.provider_id)] = p.logo_path;
-    }
+    for (const p of list) map[p.id] = p.logo;
     return map;
+  },
+
+  // Freshness rails — these endpoints (not trending-week) are what surface
+  // theatrical releases like a 3-days-ago Mayday on Home.
+  async getNowPlaying({ page = 1 } = {}) {
+    return proxyFetch('movie/now_playing', { page, region: 'US' });
+  },
+
+  async getUpcoming({ page = 1 } = {}) {
+    return proxyFetch('movie/upcoming', { page, region: 'US' });
+  },
+
+  async getAiringToday({ page = 1 } = {}) {
+    return proxyFetch('tv/airing_today', { page, timezone: 'America/New_York' });
+  },
+
+  async getOnTheAir({ page = 1 } = {}) {
+    return proxyFetch('tv/on_the_air', { page });
+  },
+
+  async getTrendingToday(mediaType = 'movie') {
+    return proxyFetch(`trending/${mediaType}/day`);
   },
 
   async getMediaDetails(mediaType, id) {
@@ -320,7 +366,7 @@ export const tmdb = {
 
     const query = new URLSearchParams({
       path: `${mediaType}/${id}`,
-      append_to_response: 'videos,credits,similar,release_dates,content_ratings',
+      append_to_response: 'videos,credits,similar,release_dates,content_ratings,external_ids',
     });
 
     const res = await fetch(`/api/tmdb?${query.toString()}`);

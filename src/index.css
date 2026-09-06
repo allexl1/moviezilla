@@ -1400,6 +1400,258 @@ nav .cine-nav-btn {
   }
 }
 
+/* ─── Provider Icon Wall (reference parity: rounded app icons) ────────── */
+.cine-provider-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 1.1rem;
+  overflow: hidden;
+  display: block;
+  background: var(--cine-surface-strong);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: var(--cine-shadow-2);
+  transition: transform var(--cine-duration-base) var(--cine-ease-out),
+    border-color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+button:hover .cine-provider-icon,
+.group:hover .cine-provider-icon {
+  transform: translateY(-3px) scale(1.04);
+  border-color: var(--cine-glass-border-hover);
+}
+
+/* ─── Upcoming / Soon Shelf (16:9 backdrop cards) ───────────────────────── */
+.cine-soon-card {
+  position: relative;
+  flex-shrink: 0;
+  width: clamp(240px, 30vw, 380px);
+  aspect-ratio: 16/9;
+  border-radius: var(--cine-radius-2xl);
+  overflow: hidden;
+  background: var(--cine-surface-strong);
+  border: 1px solid var(--cine-glass-border);
+  box-shadow: var(--cine-shadow-2);
+  cursor: pointer;
+  contain: layout style;
+  transition: transform var(--cine-duration-base) var(--cine-ease-out),
+    border-color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-soon-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--cine-glass-border-hover);
+}
+
+.cine-soon-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s var(--cine-ease-out);
+}
+
+.cine-soon-card:hover .cine-soon-img {
+  transform: scale(1.05);
+}
+
+.cine-soon-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-soon-card:hover .cine-soon-scrim,
+.cine-soon-card:focus-visible .cine-soon-scrim {
+  opacity: 1;
+}
+
+.cine-soon-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 0.6rem;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.8rem;
+  border-radius: 0.45rem;
+  background: rgba(74, 140, 40, 0.92);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: var(--cine-font-bold);
+  white-space: nowrap;
+}
+
+.cine-soon-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-soon-card:hover .cine-soon-hover,
+.cine-soon-card:focus-visible .cine-soon-hover {
+  opacity: 1;
+}
+
+.cine-soon-card:hover .cine-soon-badge {
+  opacity: 0;
+}
+
+.cine-soon-play {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--cine-radius-full);
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--cine-shadow-2);
+}
+
+.cine-soon-name {
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-bold);
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.cine-soon-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* ─── Grid Card Hover Quick-View ────────────────────────────────────────── */
+.cine-card-hover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.25) 60%, transparent 100%);
+  opacity: 0;
+  transition: opacity var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-card:hover .cine-card-hover,
+.cine-card:focus-visible .cine-card-hover {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cine-card-hover {
+    display: none;
+  }
+}
+
+.cine-card-play {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--cine-radius-full);
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--cine-shadow-2);
+}
+
+.cine-card-hover-title {
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-bold);
+  color: #fff;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cine-card-hover-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: var(--cine-font-semibold);
+  color: var(--cine-accent);
+}
+
+/* ─── Detail Blurred Continuation ─────────────────────────────────────────
+   The hero backdrop lives on below the fold as a dim frozen ghost, so the
+   page melts instead of hard-cutting (reference parity). Static — one
+   composite, zero per-frame cost. */
+.cine-detail-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background-color: var(--cine-bg-deep);
+}
+
+.cine-detail-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0.55;
+  filter: blur(32px) brightness(0.5) saturate(1.05);
+  transform: scale(1.06);
+}
+
+.cine-detail-bg-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(0deg, var(--cine-bg) 30%, rgba(5, 5, 5, 0.88) 55%, rgba(5, 5, 5, 0.45) 78%, rgba(5, 5, 5, 0.25) 100%);
+}
+
+/* ─── IMDb Tag ──────────────────────────────────────────────────────────── */
+.cine-imdb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-bold);
+  color: var(--cine-text-primary);
+}
+
+.cine-imdb-logo {
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  background: #f5c518;
+  color: #000;
+  font-size: 0.6875rem;
+  font-weight: var(--cine-font-black);
+  letter-spacing: 0.02em;
+}
+
+/* ─── Nav Scrolled State (blur handoff) ─────────────────────────────────── */
+.cine-nav-pill-box.is-scrolled {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(8, 8, 12, 0.78);
+  border-color: rgba(255, 255, 255, 0.16);
+}
 /* ─── Power saving (thermal) ──────────────────────────────────────────────
    Body classes only — no visual redesign. `mz-paused` freezes ambient
    motion while the tab is hidden; `mz-low-power` (Settings toggle) stills
@@ -1469,8 +1721,21 @@ body.mz-max-power .cine-home-bg-img {
   transform: none;
 }
 
+body.mz-max-power .cine-detail-bg-img {
+  filter: brightness(0.45);
+  transform: none;
+}
+
 body.mz-max-power .cine-card:hover,
 body.mz-max-power .cine-glass-card:hover,
-body.mz-max-power .cine-control-btn:hover {
+body.mz-max-power .cine-control-btn:hover,
+body.mz-max-power .cine-soon-card:hover,
+body.mz-max-power button:hover .cine-provider-icon,
+body.mz-max-power .group:hover .cine-provider-icon {
   transform: none;
+}
+
+body.mz-max-power .cine-card-hover,
+body.mz-max-power .cine-soon-hover {
+  display: none;
 }

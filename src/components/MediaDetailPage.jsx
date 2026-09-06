@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, X, CalendarDays } from 'lucide-react';
+import { Play, Plus, Check, Star, X } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
+import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { storage } from '../services/storage';
 import RowRail from './RowRail';
 
@@ -54,6 +55,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [logo, setLogo] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [imdb, setImdb] = useState(null);
 
   const mediaId = media?.id;
 
@@ -96,6 +98,20 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     });
   }, [mediaId]);
 
+  // IMDb rating via keyless Cinemeta lookup on the TMDB IMDb ID.
+  useEffect(() => {
+    let isMounted = true;
+    setImdb(null);
+    const imdbId = imdbIdOf(details, mediaType);
+    if (!imdbId) return;
+    getImdbRating(mediaType, imdbId).then((r) => {
+      if (isMounted) setImdb(r);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [details, mediaType]);
+
   const title = details?.title || details?.name || media?.title || media?.name;
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
   const rating = (details?.vote_average || media?.vote_average || 0).toFixed(1);
@@ -121,10 +137,16 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const overview = details?.overview || media?.overview || 'No storyline available.';
 
   return (
-    <div className="relative min-h-screen bg-[var(--cine-bg)] text-white pb-24 animate-in fade-in duration-300">
+    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
+      {/* Blurred continuation: below the hero the same backdrop lives on as
+          a dim frozen ghost, so the page melts instead of hard-cutting. */}
+      <div className="cine-detail-bg" aria-hidden="true">
+        <img src={backdrop} alt="" className="cine-detail-bg-img" />
+        <div className="cine-detail-bg-shade" />
+      </div>
       {/* Hero: still backdrop. Trailers play here only when the user picks
           one below — never autoplayed, so no player chrome or mute dance. */}
-      <div className="relative w-full h-[68vh] min-h-[500px] overflow-hidden bg-black">
+      <div className="relative w-full h-[86vh] min-h-[600px] overflow-hidden bg-black">
         {heroVideo ? (
           <iframe
             key={heroVideo}
@@ -158,10 +180,10 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             <img
               src={tmdb.getImageUrl(logo, 'w500')}
               alt={title}
-              className="max-h-28 max-w-md w-auto object-contain object-left-bottom drop-shadow-2xl"
+              className="max-h-36 max-w-md w-auto object-contain object-left-bottom drop-shadow-2xl"
             />
           ) : (
-            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white drop-shadow-2xl">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight text-white drop-shadow-2xl">
               {title}
             </h1>
           )}
@@ -207,6 +229,12 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               <Star className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
               {rating}
             </span>
+            {imdb != null && (
+              <span className="cine-imdb-tag" title="IMDb rating">
+                <span className="cine-imdb-logo">IMDb</span>
+                {imdb.toFixed(1)}
+              </span>
+            )}
           </div>
 
           {director && (
@@ -276,7 +304,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       </div>
 
       {/* Main Details Body */}
-      <div className="max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
+      <div className="relative z-10 max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
         {detailsError && (
           <div className="flex items-center gap-3 text-xs text-white/60">
             <span>{detailsError}</span>

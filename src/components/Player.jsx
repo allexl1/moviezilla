@@ -16,15 +16,31 @@ export default function Player({ media, details, onClose }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
   const mediaId = media?.id;
 
-  const [currentSeason, setCurrentSeason] = useState(1);
-  const [currentEpisode, setCurrentEpisode] = useState(1);
+  // Read the saved season/episode/time SYNCHRONOUSLY at mount (lazy
+  // initializer). The old restore-in-effect ran AFTER the heartbeat's first
+  // save, so opening History S4E4 instantly overwrote storage with S1E1 and
+  // then "restored" S1E1 — every series reopened at Season 1 Episode 1.
+  // There is no restore effect anymore by design: state starts correct, so
+  // no save can ever clobber it.
+  const getInitialPlayback = () => {
+    const saved = mediaId ? storage.getProgress(isTv ? 'tv' : 'movie', mediaId) : null;
+    return {
+      season: saved?.season || 1,
+      episode: saved?.episode || 1,
+      time: saved?.currentTime || 0,
+    };
+  };
+
+  const [initialPlayback] = useState(getInitialPlayback);
+  const [currentSeason, setCurrentSeason] = useState(initialPlayback.season);
+  const [currentEpisode, setCurrentEpisode] = useState(initialPlayback.episode);
   const [isEpisodeOpen, setIsEpisodeOpen] = useState(false);
   const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
   const [key, setKey] = useState(0);
   const [showChrome, setShowChrome] = useState(true);
 
   const containerRef = useRef(null);
-  const playbackRef = useRef({ currentTime: 0, duration: 0 });
+  const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
   const hideTimer = useRef(null);
 
   // Best-known playback state, written on a heartbeat + on close.
@@ -85,29 +101,19 @@ export default function Player({ media, details, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEpisodeOpen]);
 
-  // 1. Restore saved playback position
-  useEffect(() => {
-    if (!mediaId) return;
-    const saved = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
-    if (saved) {
-      if (isTv && saved.season && saved.episode) {
-        setCurrentSeason(saved.season);
-        setCurrentEpisode(saved.episode);
-      }
-      if (saved.currentTime) {
-        playbackRef.current.currentTime = saved.currentTime;
-      }
-    }
-  }, [mediaId, isTv]);
-
-  // 2. Keyboard shortcuts (Escape to exit, F for Fullscreen).
-  // Any key also wakes the chrome — pointer events over the embed iframe
-  // never reach this container, so keys are a guaranteed recovery path.
+  // 1. Keyboard shortcuts (Escape closes the episode list first, then the
+  // player; F toggles fullscreen). Any key also wakes the chrome — pointer
+  // events over the embed iframe never reach this container, so keys are a
+  // guaranteed recovery path.
   useEffect(() => {
     function handleKeyDown(e) {
       poke();
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (isEpisodeOpen) {
+          setIsEpisodeOpen(false);
+          return;
+        }
         onClose();
       } else if (e.key.toLowerCase() === 'f') {
         if (!document.fullscreenElement) {
@@ -119,9 +125,9 @@ export default function Player({ media, details, onClose }) {
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, isEpisodeOpen]);
 
-  // 3. PostMessage listener to track real-time playback
+  // 2. PostMessage listener to track real-time playback
   useEffect(() => {
     function handlePlayerMessage(event) {
       if (!TRUSTED_PLAYER_ORIGINS.includes(event.origin)) return;
@@ -325,6 +331,22 @@ export default function Player({ media, details, onClose }) {
             <Maximize className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Episodes panel — anchored directly under this chrome (top-full
+            tracks its height on every screen), same as the server dropdown
+            anchors under its button. Rendered only while the chrome is up
+            so no invisible-but-clickable ghost remains after fade-out. */}
+        {isTv && (
+          <EpisodeDrawer
+            isOpen={isEpisodeOpen && showChrome}
+            onClose={() => setIsEpisodeOpen(false)}
+            tvId={mediaId}
+            totalSeasons={totalSeasons}
+            currentSeason={currentSeason}
+            currentEpisode={currentEpisode}
+            onSelectEpisode={handleSelectEpisode}
+          />
+        )}
       </div>
 
       {/* Video Viewport */}
@@ -342,19 +364,6 @@ export default function Player({ media, details, onClose }) {
           allowFullScreen
         />
       </div>
-
-      {/* Anchored Episodes Drawer */}
-      {isTv && (
-        <EpisodeDrawer
-          isOpen={isEpisodeOpen}
-          onClose={() => setIsEpisodeOpen(false)}
-          tvId={mediaId}
-          totalSeasons={totalSeasons}
-          currentSeason={currentSeason}
-          currentEpisode={currentEpisode}
-          onSelectEpisode={handleSelectEpisode}
-        />
-      )}
 
       {/* Wake zone: the embed iframe swallows all pointer events, so once
           the chrome hides there is no hover path back. This transparent

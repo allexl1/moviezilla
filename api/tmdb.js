@@ -1,8 +1,11 @@
 const ALLOWED_PATHS = [
   /^trending\/all\/week$/,
+  /^trending\/(movie|tv)\/day$/,
   /^discover\/(movie|tv)$/,
   /^search\/(movie|multi)$/,
   /^watch\/providers\/movie$/,
+  /^movie\/(now_playing|upcoming|top_rated)$/,
+  /^tv\/(on_the_air|airing_today|top_rated)$/,
   /^(movie|tv)\/\d+$/,
   /^(movie|tv)\/\d+\/images$/,
   /^tv\/\d+\/season\/\d+$/,
