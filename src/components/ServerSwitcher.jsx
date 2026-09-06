@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Server } from 'lucide-react';
 import { storage } from '../services/storage';
 
-export default function ServerSwitcher({ currentServer, onSelectServer }) {
+export default function ServerSwitcher({ currentServer, onSelectServer, closeSignal = 0, onOpenChange = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -28,10 +28,24 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // External shut signal (e.g. episode popover opened — one at a time).
+  const firstSignal = useRef(closeSignal);
+  useEffect(() => {
+    if (closeSignal !== firstSignal.current) setIsOpen(false);
+  }, [closeSignal]);
+
+  const toggle = () => {
+    setIsOpen((v) => {
+      onOpenChange?.(!v);
+      return !v;
+    });
+  };
+
   const handleSelect = (id) => {
     storage.setPreferredServer(id);
     onSelectServer(id);
     setIsOpen(false);
+    onOpenChange?.(false);
   };
 
   const activeServer = servers.find((s) => s.id === currentServer) || servers[0];
@@ -39,7 +53,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer }) {
   return (
     <div className="relative inline-block" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggle}
         className="cine-control-btn"
         aria-label="Select playback server"
         aria-expanded={isOpen}

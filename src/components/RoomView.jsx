@@ -51,6 +51,17 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   const channelRef = useRef(null);
   const roomRef = useRef(null);
+  // Just applied someone else's target — don't echo it back as my own seek.
+  const followGraceRef = useRef(0);
+  // Mirrors pausedBy for channel callbacks (their closures go stale).
+  const pausedByRef = useRef(null);
+  // When the paused overlay was last (re)asserted — guards the heal path
+  // against clearing an overlay the host just set (patch lands async).
+  const pausedAtRef = useRef(0);
+  // A paused room's stamped position must not keep growing: the embed has
+  // no remote-pause, so the wall clock would inflate the resume second.
+  // Freeze at the pause moment; resume unfreezes.
+  const frozenPosRef = useRef(null);
   const myPos = useRef({ second: 0, season: 1, episode: 1, server: 'vidy' });
   const lastSeekSent = useRef({ at: 0, second: -1, season: -1, episode: -1 });
   const canControlRef = useRef(false);
@@ -69,6 +80,10 @@ export default function RoomView({ code, onLeave, onToast }) {
     setMessages((prev) => [...prev.slice(-119), m]);
 
   const pushSys = (text) => pushMsg({ id: msgId(), sys: true, text });
+
+  useEffect(() => {
+    pausedByRef.current = pausedBy;
+  }, [pausedBy]);
 
   // Room row + media details.
   useEffect(() => {
@@ -123,7 +138,10 @@ export default function RoomView({ code, onLeave, onToast }) {
           pushMsg({ id: payload.id, name: payload.name, text: payload.text, at: payload.at });
         } else if (type === 'seek' || type === 'play') {
           setPausedBy(null);
+          pausedAtRef.current = 0;
+          frozenPosRef.current = null;
           setSyncNote('Catching up…');
+          followGraceRef.current = Date.now();
           setRoomTarget({
             key: `evt:${payload.at || Date.now()}`,
             action: type,
@@ -143,6 +161,7 @@ export default function RoomView({ code, onLeave, onToast }) {
             });
           } else {
             setPausedBy(payload.name || 'Host');
+            pausedAtRef.current = Date.now();
           }
         } else if (type === 'host' || type === 'grants' || type === 'state') {
           fetchRoom(code).then((r) => {
@@ -155,11 +174,20 @@ export default function RoomView({ code, onLeave, onToast }) {
       },
       onPresence: (list) => {
         setMembers(list);
+        const newcomers = [];
         for (const m of list) {
           if (!seenDevices.current.has(m.device)) {
             seenDevices.current.add(m.device);
             pushSys(`${m.name} joined`);
+            if (m.device !== device) newcomers.push(m);
           }
+        }
+        // I paused the room: newcomers subscribed after the broadcast, so
+        // hand them the paused state directly (else they play until the
+        // next heartbeat/poll notices).
+        if (newcomers.length > 0 && pausedByRef.current === nickname) {
+          const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
+          channelRef.current?.send('pause', { device, name: nickname, second, at: Date.now() });
         }
       },
     });
@@ -183,6 +211,8 @@ export default function RoomView({ code, onLeave, onToast }) {
       pos.episode !== last.episode;
     if (!jumped) return;
     lastSeekSent.current = { at: Date.now(), second: pos.second, season: pos.season, episode: pos.episode };
+    // I just followed someone — sync silently, never echo.
+    if (Date.now() - followGraceRef.current < 4000) return;
     channelRef.current?.send('seek', {
       device,
       name: nickname,
@@ -194,12 +224,19 @@ export default function RoomView({ code, onLeave, onToast }) {
     });
   };
 
-  // Host heartbeat: stamp position so late joiners + drift checks land
-  // right even with no recent seek event.
+  // Host heartbeat: stamp position + episode + server so rejoiners land
+  // on the exact S/E/second even with no recent seek event. Frozen while
+  // the room is paused (see above).
   useEffect(() => {
     if (!room || !isHost) return;
     const beat = setInterval(() => {
-      patchRoom(code, { position: Math.floor(myPos.current.second || 0) }).catch(() => {});
+      const p = frozenPosRef.current || myPos.current;
+      patchRoom(code, {
+        position: Math.floor(p.second || 0),
+        season: p.season || roomRef.current?.season || 1,
+        episode: p.episode || roomRef.current?.episode || 1,
+        server: p.server || roomRef.current?.server || 'vidy',
+      }).catch(() => {});
     }, 10000);
     return () => clearInterval(beat);
   }, [code, room?.code, isHost]);
@@ -212,7 +249,30 @@ export default function RoomView({ code, onLeave, onToast }) {
         const r = await fetchRoom(code);
         if (!r) return;
         setRoom((prev) => (prev ? { ...prev, position: r.position, state: r.state, grants: r.grants, hostDevice: r.hostDevice } : prev));
-        if (r.state === 'paused' || pausedBy) return;
+        // Heal missed pause/resume broadcasts off the stamped row state
+        // (broadcasts are ephemeral — a late subscriber misses them). The
+        // timestamp guard keeps us from clearing an overlay the host set
+        // more recently than the row we just read.
+        const rowTs = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
+        if (r.state === 'paused') {
+          if (!pausedBy) {
+            setPausedBy('Host');
+            pausedAtRef.current = rowTs || Date.now();
+          }
+          return;
+        }
+        if (pausedBy && rowTs > pausedAtRef.current) {
+          setPausedBy(null);
+          setRoomTarget({
+            key: `heal:${Date.now()}`,
+            second: r.position || 0,
+            season: r.season,
+            episode: r.episode,
+            server: r.server,
+          });
+          return;
+        }
+        if (pausedBy) return;
         const elapsed = r.updatedAt ? Math.max(0, (Date.now() - new Date(r.updatedAt).getTime()) / 1000) : 0;
         const expected = (r.position || 0) + Math.min(elapsed, 30);
         const mine = myPos.current.second || 0;
@@ -282,7 +342,14 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   const broadcastPause = async () => {
     const second = Math.floor(myPos.current.second || 0);
-    channelRef.current?.send('pause', { device, name: nickname, second, at: Date.now() });
+    // Pause is the one event that must not be lost: a follower who misses
+    // it plays on. Triple-send (idempotent) + presence resend for late
+    // joiners + row-state poll healing on the follower side.
+    const payload = { device, name: nickname, second, at: Date.now() };
+    channelRef.current?.send('pause', payload);
+    setTimeout(() => channelRef.current?.send('pause', { ...payload, at: Date.now() }), 700);
+    setTimeout(() => channelRef.current?.send('pause', { ...payload, at: Date.now() }), 1400);
+    frozenPosRef.current = { ...myPos.current, second };
     if (room?.media?.kind === 'youtube') {
       setRoomTarget({ key: `me:${Date.now()}`, action: 'pause', second });
     } else {
@@ -301,6 +368,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       device, name: nickname, second, at: Date.now(),
     });
     setPausedBy(null);
+    frozenPosRef.current = null;
     // Own broadcasts don't echo (self:false) — apply YouTube locally too
     // (embed owners just press play in their own frame).
     if (room?.media?.kind === 'youtube') {
@@ -374,8 +442,13 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
 
   const waitingForHost = !hostPresent && !canControl;
+  // Hard lock (embed rooms): locked-out followers get NO iframe while
+  // paused or waiting — unmount kills video+audio, so nothing can drift.
+  // Resume remounts at the room's second. Drivers (host + granted) are
+  // never locked: they keep the controls that move the room.
+  const suspended = !isYouTube && !canControl && (!!pausedBy || waitingForHost);
   // YouTube pauses for real via the command API — no overlay needed.
-  const overlay = !isYouTube && pausedBy ? (
+  const overlay = !isYouTube && pausedBy && !canControl ? (
     <div className="text-center space-y-3 max-w-xs">
       <p className="text-sm font-bold text-white">Paused by {pausedBy}</p>
       <p className="text-xs text-white/60">Your player is held here — press play when the room resumes and you'll re-sync automatically.</p>
@@ -447,6 +520,7 @@ export default function RoomView({ code, onLeave, onToast }) {
               roomTarget={roomTarget}
               roomOverlay={overlay}
               roomLocked={!canControl}
+              suspended={suspended}
               framed
             />
           ) : (

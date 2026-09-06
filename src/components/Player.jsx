@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
 import { storage } from '../services/storage';
+import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -78,7 +79,7 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
     : `https://vidy.st/movie/${mediaId}`;
 }
 
-export default function Player({ media, details, onClose, onPosition = null, roomTarget = null, roomOverlay = null, roomLocked = false, framed = false }) {
+export default function Player({ media, details, onClose, onPosition = null, roomTarget = null, roomOverlay = null, roomLocked = false, framed = false, suspended = false }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
   const mediaId = media?.id;
 
@@ -104,6 +105,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
   const [key, setKey] = useState(0);
   const [showChrome, setShowChrome] = useState(true);
+  // Bumped to force the server dropdown shut (only one popover at a time).
+  const [serverSignal, setServerSignal] = useState(0);
 
   const containerRef = useRef(null);
   const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
@@ -450,11 +453,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           </div>
         </div>
 
-        {/* Controls row: Episodes, Server Switcher, Resume adjust, Fullscreen */}
-        <div className={`flex flex-wrap items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        {/* Controls row: Episodes, Server Switcher, Fullscreen. The row is
+            the positioning context for the episode popover, so it opens
+            flush under the buttons exactly like the server dropdown does. */}
+        <div className={`relative flex flex-wrap items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           {isTv && !roomLocked && (
             <button
-              onClick={() => setIsEpisodeOpen(!isEpisodeOpen)}
+              onClick={() => {
+                setIsEpisodeOpen(!isEpisodeOpen);
+                setServerSignal((s) => s + 1);
+              }}
               className="cine-control-btn"
               aria-label="Toggle episode list"
             >
@@ -463,7 +471,14 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             </button>
           )}
 
-          <ServerSwitcher currentServer={server} onSelectServer={handleServerChange} />
+          <ServerSwitcher
+            currentServer={server}
+            onSelectServer={handleServerChange}
+            closeSignal={serverSignal}
+            onOpenChange={(open) => {
+              if (open) setIsEpisodeOpen(false);
+            }}
+          />
 
           <button
             onClick={() => {
@@ -479,44 +494,57 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           >
             <Maximize className="w-4 h-4" />
           </button>
-        </div>
 
-        {/* Episodes panel — anchored directly under this chrome (top-full
-            tracks its height on every screen), same as the server dropdown
-            anchors under its button. Rendered only while the chrome is up
-            so no invisible-but-clickable ghost remains after fade-out. */}
-        {isTv && !roomLocked && (
-          <EpisodeDrawer
-            isOpen={isEpisodeOpen && showChrome}
-            onClose={() => setIsEpisodeOpen(false)}
-            tvId={mediaId}
-            totalSeasons={totalSeasons}
-            currentSeason={currentSeason}
-            currentEpisode={currentEpisode}
-            onSelectEpisode={handleSelectEpisode}
-          />
-        )}
+          {/* Episodes popover — lives inside the row so top-full means
+              "right under the buttons". Rendered only while the chrome is
+              up so no invisible-but-clickable ghost remains after fade-out. */}
+          {isTv && !roomLocked && (
+            <EpisodeDrawer
+              isOpen={isEpisodeOpen && showChrome}
+              onClose={() => setIsEpisodeOpen(false)}
+              tvId={mediaId}
+              totalSeasons={totalSeasons}
+              currentSeason={currentSeason}
+              currentEpisode={currentEpisode}
+              onSelectEpisode={handleSelectEpisode}
+              anchorClassName="left-0 top-full mt-2"
+            />
+          )}
+        </div>
       </div>
 
       {/* Video Viewport — src is memoised state: chrome pokes and clock
           ticks re-render without ever reloading the stream. */}
       <div className="relative w-full h-full flex-1 bg-black flex items-center justify-center">
-        <iframe
-          key={`${server}-${key}-${currentSeason}-${currentEpisode}`}
-          src={embedUrl}
-          title={title}
-          className="w-full h-full border-0"
-          // NOTE: no sandbox attribute on purpose — every provider (Vidy,
-          // VidLink, VidSrc, VidSrc.cc, Embed.su) refuses sandboxed frames
-          // or fails to load in one (verified per server). Popup/ad pressure
-          // is handled by offering multiple servers, not containment.
-          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-          allowFullScreen
-        />
-        {/* Room overlay (host paused / waiting): blocks the frame so a
-            follower can't silently diverge from the room while paused. */}
+        {/* Suspended (room hard pause): the iframe is GONE, not covered —
+            no video, no audio, nothing to diverge. Resume remounts it at
+            the room's second via roomTarget. */}
+        {suspended ? (
+          <div className="absolute inset-0 overflow-hidden" aria-hidden={!roomOverlay}>
+            <img
+              src={tmdb.getImageUrl(media?.backdrop_path || details?.backdrop_path, 'w780', FALLBACK_BACKDROP)}
+              alt=""
+              className="w-full h-full object-cover opacity-40 blur-md scale-105"
+            />
+            <div className="absolute inset-0 bg-black/55" />
+          </div>
+        ) : (
+          <iframe
+            key={`${server}-${key}-${currentSeason}-${currentEpisode}`}
+            src={embedUrl}
+            title={title}
+            className="w-full h-full border-0"
+            // NOTE: no sandbox attribute on purpose — every provider (Vidy,
+            // VidLink, VidSrc, VidSrc.cc, Embed.su) refuses sandboxed frames
+            // or fails to load in one (verified per server). Popup/ad pressure
+            // is handled by offering multiple servers, not containment.
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        )}
+        {/* Room overlay (host paused / waiting) sits above either state. */}
         {roomOverlay && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+          <div className={`absolute inset-0 z-10 flex items-center justify-center p-6 ${suspended ? '' : 'bg-black/60 backdrop-blur-sm'}`}>
             {roomOverlay}
           </div>
         )}

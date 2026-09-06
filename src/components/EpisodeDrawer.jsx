@@ -10,6 +10,7 @@ export default function EpisodeDrawer({
   currentSeason = 1,
   currentEpisode = 1,
   onSelectEpisode,
+  anchorClassName = 'left-5 md:left-10 top-full mt-3',
 }) {
   const [activeSeason, setActiveSeason] = useState(currentSeason);
   const [episodes, setEpisodes] = useState([]);
@@ -57,7 +58,7 @@ export default function EpisodeDrawer({
       <div
         role="dialog"
         aria-label="Episode list"
-        className="absolute left-5 md:left-10 top-full mt-3 z-40 w-80 max-w-[calc(100vw-2.5rem)] max-h-[54vh] md:max-h-[60vh] rounded-3xl cine-glass-panel pointer-events-auto flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+        className={`absolute ${anchorClassName} z-40 w-80 max-w-[calc(100vw-2.5rem)] max-h-[54vh] md:max-h-[60vh] rounded-3xl cine-glass-panel pointer-events-auto flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150`}
       >
         {/* Popover Header */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--cine-glass-border)]">
@@ -78,8 +79,9 @@ export default function EpisodeDrawer({
           </button>
         </div>
 
-        {/* Season Selector Pills */}
-        <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto no-scrollbar border-b border-[var(--cine-glass-border)]">
+        {/* Season Selector Pills — single horizontal strip: vertical
+            jiggle locked out, row height fixed. */}
+        <div className="flex flex-shrink-0 items-center gap-1.5 px-3 py-2.5 overflow-x-auto overflow-y-hidden no-scrollbar border-b border-[var(--cine-glass-border)]">
           {seasons.map((sNum) => (
             <button
               key={sNum}
