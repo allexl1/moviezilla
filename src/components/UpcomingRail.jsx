@@ -18,6 +18,7 @@ export default function UpcomingRail({
   if (!items || items.length === 0) return null;
 
   const dateOf = (m) => (m?.[dateKey] || '').split('-').slice(0, 2).join(' / ') || null;
+  const yearOf = (m) => (m?.[dateKey] || '').split('-')[0] || null;
 
   return (
     <section className="space-y-3">
@@ -50,6 +51,9 @@ export default function UpcomingRail({
               />
               <span className="cine-soon-scrim" aria-hidden="true" />
               <span className="cine-soon-badge">{badge}</span>
+              {yearOf(media) && (
+                <span className="cine-soon-year">{yearOf(media)}</span>
+              )}
               <span className="cine-soon-hover" aria-hidden="true">
                 <span className="cine-soon-play">
                   <Play className="w-4 h-4 ml-0.5" fill="currentColor" />

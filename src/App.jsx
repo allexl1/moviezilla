@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
-import { storage } from './services/storage';
+import { storage, progressLabel } from './services/storage';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
 import RowRail from './components/RowRail';
@@ -266,8 +266,13 @@ export default function App() {
         setTopRated(clean(rated));
         setAnimeSpotlight(clean(anime));
         setNowPlaying(clean(now));
+        // Upcoming, soonest first, reputable entries only (real overview +
+        // dated release — no placeholder junk rows).
         setUpcomingMovies(
-          (soon?.results || []).filter((x) => x.backdrop_path).slice(0, 10)
+          (soon?.results || [])
+            .filter((x) => x.backdrop_path && x.poster_path && x.overview && x.release_date)
+            .sort((a, b) => a.release_date.localeCompare(b.release_date))
+            .slice(0, 10)
         );
         setOnAirToday(
           (airing?.results || []).filter((x) => x.backdrop_path).slice(0, 10)
@@ -295,7 +300,14 @@ export default function App() {
     (activeTab === 'movie' ? tmdb.getUpcoming() : tmdb.getOnTheAir())
       .then((res) => {
         if (!isMounted) return;
-        const list = (res?.results || []).filter((x) => x.backdrop_path).slice(0, 10);
+        const byDate = (a, b) =>
+          String(a.release_date || a.first_air_date || '').localeCompare(
+            String(b.release_date || b.first_air_date || '')
+          );
+        const list = (res?.results || [])
+          .filter((x) => x.backdrop_path && x.poster_path && x.overview)
+          .sort(activeTab === 'movie' ? byDate : () => 0)
+          .slice(0, 10);
         if (activeTab === 'movie') setUpcomingMovies(list);
         else setOnAirToday(list);
       })
@@ -754,7 +766,7 @@ export default function App() {
                         {item.type === 'tv'
                           ? `Season ${item.season} • Episode ${item.episode}`
                           : 'Movie'}{' '}
-                        • {item.percent}%
+                        • {progressLabel(item)}
                       </p>
 
                       <div className="cine-cw-progress">
@@ -909,6 +921,12 @@ export default function App() {
                       dateKey="first_air_date"
                     />
                   )}
+                  <div className="cine-section-head">
+                    <h2 className="cine-section-title">
+                      {activeTab === 'movie' ? 'Released Movies' : 'Released Series'}
+                    </h2>
+                    <span className="text-xs text-white/60">{items.length} titles</span>
+                  </div>
                   <div className="cine-grid">
                     {items.map((media) => (
                       <Card

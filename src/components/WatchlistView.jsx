@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Play, ListVideo, X, Check, Pencil } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
-import { storage } from '../services/storage';
+import { storage, progressLabel } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
 import Select from './ui/Select';
@@ -240,7 +240,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   })();
 
   const continueItems = history.filter(
-    (h) => h.percent > 2 && h.percent < 95 && matchType(h.type) && matchGenre(h.genres)
+    (h) =>
+      matchType(h.type) &&
+      matchGenre(h.genres) &&
+      ((h.percent > 2 && h.percent < 95) || (!h.duration && h.currentTime >= 30))
   );
 
   const watchedItems = history.filter(
@@ -274,13 +277,9 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     return [...local, ...remote];
   })();
 
-  // Embeds rarely report real playback time, so 0% means "opened but no
-  // position known" — label it honestly instead of a confusing "0%".
-  const watchedLabel = (h) => {
-    if (h.percent >= 95) return 'Watched';
-    if (!h.percent || h.percent <= 0) return 'Opened';
-    return `${h.percent}%`;
-  };
+  // One honest progress string for every entry shape (percent, mm:ss,
+  // Opened, Watched) — shared with storage so rows agree everywhere.
+  const watchedLabel = (h) => progressLabel(h);
 
   const resumePayload = (h) => ({
     media: {
@@ -425,7 +424,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                     {item.type === 'tv'
                       ? `Season ${item.season} • Episode ${item.episode}`
                       : 'Movie'}{' '}
-                    • {groupLabel(item.updatedAt)}
+                    • {progressLabel(item)}
                   </p>
                   <div className="cine-cw-progress">
                     <div className="cine-cw-progress-fill" style={{ width: `${item.percent}%` }} />

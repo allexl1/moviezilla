@@ -1424,7 +1424,7 @@ button:hover .cine-provider-icon,
 .cine-soon-card {
   position: relative;
   flex-shrink: 0;
-  width: clamp(240px, 30vw, 380px);
+  width: clamp(200px, 26vw, 320px);
   aspect-ratio: 16/9;
   border-radius: var(--cine-radius-2xl);
   overflow: hidden;
@@ -1480,6 +1480,18 @@ button:hover .cine-provider-icon,
   font-size: 0.6875rem;
   font-weight: var(--cine-font-bold);
   white-space: nowrap;
+}
+
+.cine-soon-year {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 0.45rem;
+  background: rgba(0, 0, 0, 0.68);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.6875rem;
+  font-weight: var(--cine-font-bold);
 }
 
 .cine-soon-hover {

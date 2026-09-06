@@ -31,6 +31,26 @@ function notifyWatchlist() {
   }
 }
 
+// Seconds → "4:05" / "1:02:03" for position display when no duration (and
+// hence no percent) is known.
+export function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return `${h > 0 ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`;
+}
+
+// One honest progress string for every history entry shape.
+export function progressLabel(h) {
+  if (!h) return '';
+  if (h.percent >= 95) return 'Watched';
+  if (h.duration > 0 && h.percent > 0) return `${h.percent}%`;
+  if (h.currentTime > 0) return formatClock(h.currentTime);
+  return 'Opened';
+}
+
 export const storage = {
   // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode, currentTime, duration
   saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '', genres = [] }) {
@@ -64,11 +84,17 @@ export const storage = {
     return allProgress[`${type}_${mediaId}`] || null;
   },
 
-  // Get all partially watched items sorted by most recent
+  // Get all partially watched items sorted by most recent.
+  // Percent-based entries (real provider time) plus wall-clock entries
+  // (30s+ watched, duration unknown) both count as "in progress".
   getAllContinueWatching() {
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     return Object.values(allProgress)
-      .filter((item) => item.percent > 2 && item.percent < 95)
+      .filter(
+        (item) =>
+          (item.percent > 2 && item.percent < 95) ||
+          (!item.duration && item.currentTime >= 30)
+      )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   },
 

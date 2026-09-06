@@ -43,20 +43,46 @@ export default function Player({ media, details, onClose }) {
   const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
   const hideTimer = useRef(null);
 
+  // Wall-clock fallback: embeds never report real time, so measure it
+  // ourselves. Position = saved start + actively watched seconds (capped per
+  // tick so laptop sleep can't teleport you forward). Real postMessage data,
+  // when a provider actually sends it, always wins over the estimate.
+  const wallBaseRef = useRef(initialPlayback.time);
+  const activeMsRef = useRef(0);
+  const lastTickRef = useRef(Date.now());
+  const pmSeenRef = useRef(false);
+
+  const accumulateWallClock = () => {
+    const now = Date.now();
+    const dt = Math.min(now - lastTickRef.current, 15000);
+    lastTickRef.current = now;
+    if (!document.hidden) activeMsRef.current += dt;
+  };
+
+  const estimatedPosition = () => {
+    const pm = playbackRef.current;
+    if (pmSeenRef.current && pm.currentTime > 0) {
+      return { time: Math.floor(pm.currentTime), duration: Math.floor(pm.duration) };
+    }
+    return {
+      time: wallBaseRef.current + Math.floor(activeMsRef.current / 1000),
+      duration: Math.floor(pm.duration),
+    };
+  };
+
   // Best-known playback state, written on a heartbeat + on close.
-  // Embed iframes are cross-origin and almost never post playback time,
-  // so without this nothing would ever reach History (the old code only
-  // saved when currentTime > 0, which postMessage alone could provide).
+  // Source priority: real provider postMessage > wall-clock estimate.
   const saveNowRef = useRef(() => {});
   saveNowRef.current = () => {
     if (!mediaId) return;
+    const pos = estimatedPosition();
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
       season: currentSeason,
       episode: currentEpisode,
-      currentTime: playbackRef.current.currentTime,
-      duration: playbackRef.current.duration,
+      currentTime: pos.time,
+      duration: pos.duration,
       title: details?.title || details?.name || media?.title || media?.name || 'Media',
       poster: media?.poster_path || details?.poster_path,
       genres: (details?.genres || []).map((g) => g.id),
@@ -68,9 +94,13 @@ export default function Player({ media, details, onClose }) {
   // reports no playback time. Entries are deduped per title.
   useEffect(() => {
     saveNowRef.current();
-    const beat = setInterval(() => saveNowRef.current(), 10000);
+    const beat = setInterval(() => {
+      accumulateWallClock();
+      saveNowRef.current();
+    }, 10000);
     return () => {
       clearInterval(beat);
+      accumulateWallClock();
       saveNowRef.current();
     };
   }, [mediaId]);
@@ -140,6 +170,7 @@ export default function Player({ media, details, onClose }) {
           const dur = payload.duration || payload.data?.duration || 0;
 
           if (time > 0) {
+            pmSeenRef.current = true;
             playbackRef.current = { currentTime: time, duration: dur };
 
             storage.saveProgress({
@@ -178,7 +209,9 @@ export default function Player({ media, details, onClose }) {
   }, [mediaId, isTv, currentSeason, currentEpisode, details, media]);
 
   const getEmbedUrl = () => {
-    const resumeTime = Math.floor(playbackRef.current.currentTime || 0);
+    // Resume where history says we stopped (saved start + watched
+    // seconds, or the provider's real reported time when available).
+    const resumeTime = estimatedPosition().time;
 
     if (server === 'vidlink') {
       const base = isTv
@@ -242,7 +275,12 @@ export default function Player({ media, details, onClose }) {
   const handleSelectEpisode = (seasonNum, episodeNum) => {
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
+    // New episode starts at 0 — reset every clock, not just the ref.
     playbackRef.current = { currentTime: 0, duration: 0 };
+    wallBaseRef.current = 0;
+    activeMsRef.current = 0;
+    lastTickRef.current = Date.now();
+    pmSeenRef.current = false;
     setKey((prev) => prev + 1);
 
     storage.saveProgress({
