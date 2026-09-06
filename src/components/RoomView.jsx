@@ -136,6 +136,28 @@ export default function RoomView({ code, onLeave, onToast }) {
         const yt = roomRef.current?.media?.kind === 'youtube';
         if (type === 'chat') {
           pushMsg({ id: payload.id, name: payload.name, text: payload.text, at: payload.at });
+        } else if (type === 'tick') {
+          // Host heartbeat over realtime (5s): continuous catch-up so the
+          // follower trails by seconds, not by poll intervals. Paused or
+          // waiting followers ignore ticks — lock rules win.
+          if (payload.device === device || pausedByRef.current || !roomRef.current) return;
+          if (!canControlRef.current) {
+            const travel = Math.max(0, (Date.now() - (payload.at || Date.now())) / 1000);
+            const expected = (payload.second || 0) + Math.min(travel, 10);
+            const mine = myPos.current.second || 0;
+            if (Math.abs(mine - expected) > 5 && expected > 3) {
+              setSyncNote('Catching up…');
+              followGraceRef.current = Date.now();
+              setRoomTarget({
+                key: `tick:${payload.at || Date.now()}`,
+                second: Math.floor(expected),
+                season: payload.season,
+                episode: payload.episode,
+                server: payload.server,
+              });
+              setTimeout(() => setSyncNote('In sync'), 3000);
+            }
+          }
         } else if (type === 'seek' || type === 'play') {
           setPausedBy(null);
           pausedAtRef.current = 0;
@@ -226,7 +248,8 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   // Host heartbeat: stamp position + episode + server so rejoiners land
   // on the exact S/E/second even with no recent seek event. Frozen while
-  // the room is paused (see above).
+  // the room is paused (see above). Plus a 5s realtime tick so followers
+  // trail by seconds instead of poll intervals.
   useEffect(() => {
     if (!room || !isHost) return;
     const beat = setInterval(() => {
@@ -238,7 +261,24 @@ export default function RoomView({ code, onLeave, onToast }) {
         server: p.server || roomRef.current?.server || 'vidy',
       }).catch(() => {});
     }, 10000);
-    return () => clearInterval(beat);
+    const tick = setInterval(() => {
+      if (pausedByRef.current) return;
+      const p = myPos.current;
+      channelRef.current?.send('tick', {
+        device,
+        name: nickname,
+        second: Math.floor(p.second || 0),
+        season: p.season,
+        episode: p.episode,
+        server: p.server,
+        at: Date.now(),
+      });
+    }, 5000);
+    return () => {
+      clearInterval(beat);
+      clearInterval(tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, room?.code, isHost]);
 
   // Follower drift check against the host-stamped row.
@@ -359,6 +399,37 @@ export default function RoomView({ code, onLeave, onToast }) {
       await patchRoom(code, { state: 'paused', position: Math.floor(myPos.current.second || 0) });
     } catch {
       // broadcast already told the room
+    }
+  };
+
+  // Follower's manual sync: jump to the host's stamped second RIGHT NOW
+  // instead of waiting for the next tick/poll. The deterministic answer
+  // to "host's time doesn't matter".
+  const syncToHost = async () => {
+    try {
+      const r = await fetchRoom(code);
+      if (!r) {
+        onToast?.('Room not found.');
+        return;
+      }
+      setRoom(r);
+      if (r.state === 'paused') {
+        onToast?.('Room is paused — resume lands you on the host.');
+        return;
+      }
+      setSyncNote('Catching up…');
+      followGraceRef.current = Date.now();
+      setRoomTarget({
+        key: `manual:${Date.now()}`,
+        second: r.position || 0,
+        season: r.season,
+        episode: r.episode,
+        server: r.server,
+      });
+      onToast?.("Synced to host's position");
+      setTimeout(() => setSyncNote('In sync'), 3000);
+    } catch {
+      onToast?.('Sync failed — retry.');
     }
   };
 
@@ -490,16 +561,37 @@ export default function RoomView({ code, onLeave, onToast }) {
             <Copy className="w-3 h-3" />
             {room.code}
           </button>
-          {canControl &&
-            (pausedBy ? (
-              <button onClick={broadcastPlay} className="cine-control-btn h-9 px-4 text-xs" title="Resume for everyone">
-                <Play className="w-3.5 h-3.5" /> Resume
+          {canControl ? (
+            <>
+              <button
+                onClick={() => {
+                  broadcastPlay();
+                  onToast?.('Room synced to your position');
+                }}
+                className="cine-control-btn h-9 px-4 text-xs"
+                title="Pull everyone to your second right now"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Sync all
               </button>
-            ) : (
-              <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
-                <Pause className="w-3.5 h-3.5" /> Pause
-              </button>
-            ))}
+              {pausedBy ? (
+                <button onClick={broadcastPlay} className="cine-control-btn h-9 px-4 text-xs" title="Resume for everyone">
+                  <Play className="w-3.5 h-3.5" /> Resume
+                </button>
+              ) : (
+                <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
+                  <Pause className="w-3.5 h-3.5" /> Pause
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={syncToHost}
+              className="cine-control-btn h-9 px-4 text-xs"
+              title="Jump to the host's second right now"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Sync
+            </button>
+          )}
         </div>
 
         <div className="h-[42vh] md:h-auto md:flex-1 md:min-h-0 flex-shrink-0 md:flex-shrink">
