@@ -78,7 +78,7 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
     : `https://vidy.st/movie/${mediaId}`;
 }
 
-export default function Player({ media, details, onClose }) {
+export default function Player({ media, details, onClose, onPosition = null, roomTarget = null, roomOverlay = null, roomLocked = false, framed = false }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
   const mediaId = media?.id;
 
@@ -186,12 +186,54 @@ export default function Player({ media, details, onClose }) {
     );
   };
 
+  // Room sync tap: throttled position reports for the watch-party
+  // engine (absent in solo mode — zero behavior change there).
+  const lastSentRef = useRef({ at: 0, second: -1 });
+  const reportRef = useRef(() => {});
+  reportRef.current = () => {
+    if (!onPosition) return;
+    const pos = estimatedPosition();
+    const now = Date.now();
+    const last = lastSentRef.current;
+    if (now - last.at < 4000 && Math.abs(pos.time - last.second) < 10) return;
+    lastSentRef.current = { at: now, second: pos.time };
+    onPosition({
+      second: pos.time,
+      duration: pos.duration,
+      season: currentSeason,
+      episode: currentEpisode,
+      server,
+    });
+  };
+
+  // Room follow: host (or granted driver) moved — rebuild the embed at
+  // their second. Same code path as a local episode/server switch.
+  useEffect(() => {
+    if (!roomTarget || roomTarget.key == null) return;
+    const second = Math.max(0, roomTarget.second || 0);
+    const season = roomTarget.season || currentSeason;
+    const episode = roomTarget.episode || currentEpisode;
+    const srv = roomTarget.server || server;
+    if (srv !== server) setServer(srv);
+    if (season !== currentSeason) setCurrentSeason(season);
+    if (episode !== currentEpisode) setCurrentEpisode(episode);
+    playbackRef.current = { currentTime: second, duration: playbackRef.current.duration };
+    wallBaseRef.current = second;
+    activeMsRef.current = 0;
+    lastTickRef.current = Date.now();
+    pmSeenRef.current = false;
+    rebuildEmbed(srv, season, episode, second);
+    setKey((p) => p + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomTarget?.key]);
+
   // Log the visit on a 5s heartbeat + on hide/close — so tapping History
   // always reopens the exact episode + second. Entries deduped per title.
   useEffect(() => {
     const beat = setInterval(() => {
       accumulateWallClock();
       saveNowRef.current();
+      reportRef.current();
     }, 5000);
     const onHide = () => {
       if (document.hidden) {
@@ -323,6 +365,7 @@ export default function Player({ media, details, onClose }) {
             wallBaseRef.current = Number(time);
             activeMsRef.current = 0;
             lastTickRef.current = Date.now();
+            reportRef.current();
             storage.saveProgress({
               mediaId,
               type: isTv ? 'tv' : 'movie',
@@ -367,13 +410,19 @@ export default function Player({ media, details, onClose }) {
   const title = details?.title || details?.name || media?.title || media?.name || 'Now Playing';
   const totalSeasons = details?.number_of_seasons || media?.number_of_seasons || 1;
 
+  // framed: embedded in the room screen layout (relative fill) instead
+  // of a fullscreen overlay. All chrome/positioning inside stays absolute.
+  const rootClass = framed
+    ? `relative w-full h-full min-h-0 bg-[var(--cine-bg-deep)] flex flex-col ${showChrome ? '' : 'cursor-none'}`
+    : `fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`;
+
   return (
     <div
       ref={containerRef}
       onMouseMove={poke}
       onTouchStart={poke}
       onClick={poke}
-      className={`fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`}
+      className={rootClass}
     >
       {/* Top Floating Chrome — all controls stacked top-left: Vidy opens
           its own quality/server menus top-right, so our bar stays clear.
@@ -403,7 +452,7 @@ export default function Player({ media, details, onClose }) {
 
         {/* Controls row: Episodes, Server Switcher, Resume adjust, Fullscreen */}
         <div className={`flex flex-wrap items-center gap-2.5 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          {isTv && (
+          {isTv && !roomLocked && (
             <button
               onClick={() => setIsEpisodeOpen(!isEpisodeOpen)}
               className="cine-control-btn"
@@ -436,7 +485,7 @@ export default function Player({ media, details, onClose }) {
             tracks its height on every screen), same as the server dropdown
             anchors under its button. Rendered only while the chrome is up
             so no invisible-but-clickable ghost remains after fade-out. */}
-        {isTv && (
+        {isTv && !roomLocked && (
           <EpisodeDrawer
             isOpen={isEpisodeOpen && showChrome}
             onClose={() => setIsEpisodeOpen(false)}
@@ -464,6 +513,13 @@ export default function Player({ media, details, onClose }) {
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
           allowFullScreen
         />
+        {/* Room overlay (host paused / waiting): blocks the frame so a
+            follower can't silently diverge from the room while paused. */}
+        {roomOverlay && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+            {roomOverlay}
+          </div>
+        )}
       </div>
 
       {/* Wake zone: the embed iframe swallows all pointer events, so once

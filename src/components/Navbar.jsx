@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark } from 'lucide-react';
+import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark, Users } from 'lucide-react';
 
 export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings }) {
   const tabs = [
@@ -7,6 +7,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
     { id: 'movie', label: 'Movies', icon: Clapperboard },
     { id: 'tv', label: 'Shows', icon: Tv },
     { id: 'watchlist', label: 'Watchlist', icon: Bookmark },
+    { id: 'rooms', label: 'Rooms', icon: Users },
   ];
 
   // Blur handoff: past ~48px the floating bars go solid-blur so content

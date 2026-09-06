@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, X } from 'lucide-react';
+import { Play, Plus, Check, Star, X, Users } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { storage } from '../services/storage';
@@ -44,7 +44,7 @@ function certificationOf(details, mediaType) {
   }
 }
 
-export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast }) {
+export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailsError, setDetailsError] = useState('');
@@ -235,6 +235,17 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             >
               {isWatchlist ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
             </button>
+
+            {onWatchTogether && (
+              <button
+                onClick={() => onWatchTogether(media, details)}
+                className="cine-btn-circle"
+                title="Watch together (create room)"
+                aria-label="Watch together in a room"
+              >
+                <Users className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-semibold text-white/90 pt-1">

@@ -7,6 +7,8 @@ import FilterBar from './components/FilterBar';
 import RowRail from './components/RowRail';
 import UpcomingRail from './components/UpcomingRail';
 import WatchlistView from './components/WatchlistView';
+import RoomsView from './components/RoomsView';
+import RoomView from './components/RoomView';
 import Card from './components/ui/Card';
 import Select from './components/ui/Select';
 import MediaDetailPage from './components/MediaDetailPage';
@@ -140,6 +142,33 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [activePlayer, setActivePlayer] = useState(null);
+  const [activeRoomCode, setActiveRoomCode] = useState(null);
+  const [roomDraft, setRoomDraft] = useState(null);
+
+  // Invite-link entry: ?room=ABC123 lands straight in the room (the
+  // nickname gate inside saves the name to that device on entry).
+  useEffect(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get('room');
+      if (code && /^[A-Z0-9]{6}$/i.test(code.trim())) {
+        setActiveTab('rooms');
+        setActiveRoomCode(code.trim().toUpperCase());
+      }
+    } catch {
+      // No usable link — normal start.
+    }
+  }, []);
+
+  const leaveRoom = () => {
+    setActiveRoomCode(null);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
 
   // Home rails
   const [popularMovies, setPopularMovies] = useState([]);
@@ -211,8 +240,8 @@ export default function App() {
       try {
         let res;
 
-        if (activeTab === 'watchlist') {
-          // WatchlistView owns its data (history + list + Letterboxd).
+        if (activeTab === 'watchlist' || activeTab === 'rooms') {
+          // WatchlistView / RoomsView own their data.
           return;
         } else if (activeTab === 'movie') {
           res = await tmdb.getMovies({
@@ -560,7 +589,13 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {selectedMedia ? (
+      {activeRoomCode ? (
+        <RoomView
+          code={activeRoomCode}
+          onLeave={leaveRoom}
+          onToast={showToast}
+        />
+      ) : selectedMedia ? (
         <MediaDetailPage
           media={selectedMedia}
           mediaType={selectedMediaType}
@@ -572,6 +607,11 @@ export default function App() {
             })
           }
           onSelectMedia={(item) => setSelectedMedia(item)}
+          onWatchTogether={(media) => {
+            setSelectedMedia(null);
+            setRoomDraft(media);
+            setActiveTab('rooms');
+          }}
         />
       ) : (
         <>
@@ -893,7 +933,7 @@ export default function App() {
             )}
 
             <section>
-              {catalogError && activeTab !== 'watchlist' && (
+              {catalogError && activeTab !== 'watchlist' && activeTab !== 'rooms' && (
                 <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
                   <span>{catalogError}</span>
                   <button
@@ -965,6 +1005,15 @@ export default function App() {
                   />
                   <RowRail title="Anime Spotlight" items={animeSpotlight} onSelect={setSelectedMedia} mediaType="tv" />
                 </div>
+              ) : activeTab === 'rooms' ? (
+                <RoomsView
+                  draftMedia={roomDraft}
+                  onEnter={(code) => {
+                    setRoomDraft(null);
+                    setActiveRoomCode(code);
+                  }}
+                  onToast={showToast}
+                />
               ) : activeTab === 'watchlist' ? (
                 <WatchlistView
                   onSelectMedia={(item) => setSelectedMedia(item)}
