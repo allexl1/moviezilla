@@ -6,12 +6,19 @@ import ServerSwitcher from './ServerSwitcher';
 
 // Only accept playback progress messages from our own embed servers.
 // Anything else (other tabs, ads, nested third-party frames) is ignored.
+// NOTE: Vidy emits from https://www.vidy.st (with www) — the bare
+// domain never appears as an event origin. Same guard for the rest.
 const TRUSTED_PLAYER_ORIGINS = [
   'https://vidy.st',
+  'https://www.vidy.st',
   'https://vidlink.pro',
+  'https://www.vidlink.pro',
   'https://vidsrc.to',
+  'https://www.vidsrc.to',
   'https://vidsrc.cc',
+  'https://www.vidsrc.cc',
   'https://embed.su',
+  'https://www.embed.su',
   'https://player.smashystream.com',
   'https://player.autoembed.cc',
   'https://vidfast.pro',
@@ -288,9 +295,25 @@ export default function Player({ media, details, onClose }) {
           type === 'ended' ||
           type === 'complete' ||
           payload.currentTime != null ||
-          inner.currentTime != null
+          inner.currentTime != null ||
+          payload.timestamp != null ||
+          inner.timestamp != null
         ) {
-          const time = payload.currentTime ?? inner.currentTime ?? payload.time ?? inner.time ?? 0;
+          // Ignore events for a different title (stale iframe after a
+          // quick episode/server switch). IDs are TMDB ids, unique here.
+          const evtId = inner.id ?? inner.mtmdbId ?? inner.tmdbId ?? payload.id;
+          if (evtId != null && String(evtId) !== String(mediaId)) return;
+          // Vidy sends position as `timestamp` in half its timeupdates
+          // (the other half uses `currentTime`); VidLink/vidsrc.cc use
+          // currentTime. `progress` is a percent — never seconds.
+          const time =
+            payload.currentTime ??
+            inner.currentTime ??
+            payload.timestamp ??
+            inner.timestamp ??
+            payload.time ??
+            inner.time ??
+            0;
           const dur = payload.duration ?? inner.duration ?? playbackRef.current.duration ?? 0;
           if (Number(time) > 0) {
             pmSeenRef.current = true;

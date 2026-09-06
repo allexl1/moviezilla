@@ -64,7 +64,6 @@ export default function FilterBar({
           value={selectedGenre}
           onChange={onSelectGenre}
           label="Genre"
-          className="cine-select--wide"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,

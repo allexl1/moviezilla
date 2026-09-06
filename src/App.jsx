@@ -90,6 +90,13 @@ function pickAiring(results) {
     .slice(0, 10);
 }
 
+// Unrated titles (vote_average 0) are hidden from Released grids and
+// home rails — nobody watches them. NOT applied to Coming Soon / On The
+// Air, which are unreleased by definition and have no votes yet.
+function hasRating(item) {
+  return (item?.vote_average || 0) > 0;
+}
+
 // Released grids must never contain future-dated titles — those belong
 // in Coming Soon / On The Air. Missing dates are kept (can't judge).
 function isReleased(item, tab) {
@@ -120,14 +127,15 @@ export default function App() {
   // Filters
   const [selectedGenre, setSelectedGenre] = useState('');
   const [selectedYear, setSelectedYear] = useState('All Years');
-  const [selectedSort, setSelectedSort] = useState('primary_release_date.desc');
+  const [selectedSort, setSelectedSort] = useState('new.popular');
   const [selectedProvider, setSelectedProvider] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [toast, setToast] = useState('');
 
-  const defaultSortFor = (tab) =>
-    tab === 'tv' ? 'first_air_date.desc' : 'primary_release_date.desc';
+  // Default shelf: recent (last year) + popular + voted — "newest most
+  // popular". Pure newest-first is 20/20 zero-vote day-0 releases.
+  const defaultSortFor = () => 'new.popular';
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -309,7 +317,7 @@ export default function App() {
         if (!isMounted) return;
 
         const clean = (res) =>
-          (res?.results || []).filter((x) => x.poster_path).slice(0, 14);
+          (res?.results || []).filter((x) => x.poster_path && hasRating(x)).slice(0, 14);
 
         setPopularMovies(clean(movies));
         setPopularTV(clean(series));
@@ -380,7 +388,7 @@ export default function App() {
       .then((res) => {
         if (!isMounted) return;
         setProviderMovies(
-          (res?.results || []).filter((x) => x.poster_path).slice(0, 14)
+          (res?.results || []).filter((x) => x.poster_path && hasRating(x)).slice(0, 14)
         );
       })
       .catch((err) => console.error('Failed to load provider rail:', err));
@@ -468,11 +476,12 @@ export default function App() {
   // Discovery pages (Movies / Shows) are poster-only rails like cinejoy.
   const posterOnly = activeTab === 'movie' || activeTab === 'tv';
 
-  // Released grids exclude future-dated titles (those live in Coming Soon
-  // / On The Air). Raw `items` stay untouched for hero + random + paging.
+  // Released grids exclude future-dated and unrated titles (those live
+  // in Coming Soon / On The Air, or are unwatched junk). Raw `items` stay
+  // untouched for hero + random + paging.
   const releasedItems =
     activeTab === 'movie' || activeTab === 'tv'
-      ? items.filter((x) => isReleased(x, activeTab))
+      ? items.filter((x) => isReleased(x, activeTab) && hasRating(x))
       : items;
 
   // The detail page must follow the selected item's own type, not the nav tab
@@ -894,7 +903,7 @@ export default function App() {
               )}
               {activeTab === 'home' ? (
                 <div className="flex flex-col gap-10">
-                  <RowRail title="Trending Now" items={items} onSelect={setSelectedMedia} />
+                  <RowRail title="Trending Now" items={items.filter(hasRating)} onSelect={setSelectedMedia} />
                   <RowRail
                     title="Now Playing in Theaters"
                     items={nowPlaying}

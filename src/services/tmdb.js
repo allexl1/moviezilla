@@ -87,6 +87,7 @@ export const COUNTRIES = [
 ];
 
 export const SORTS = [
+  { id: 'new.popular', name: 'New & Popular' },
   { id: 'primary_release_date.desc', name: 'Newest' },
   { id: 'primary_release_date.asc', name: 'Oldest' },
   { id: 'vote_average.desc', name: 'Top Rated' },
@@ -113,6 +114,7 @@ export const LANGUAGES = [
 ];
 
 export const TV_SORTS = [
+  { id: 'new.popular', name: 'New & Popular' },
   { id: 'first_air_date.desc', name: 'Newest' },
   { id: 'first_air_date.asc', name: 'Oldest' },
   { id: 'vote_average.desc', name: 'Top Rated' },
@@ -191,13 +193,26 @@ export const tmdb = {
     country = '',
     language = '',
   } = {}) {
+    const today = new Date().toISOString().slice(0, 10);
     const params = {
       page,
       sort_by: sort,
       // Released grids only: newest-first discover otherwise fills page 1
       // with future (unreleased) titles that belong in Coming Soon.
-      'primary_release_date.lte': new Date().toISOString().slice(0, 10),
+      'primary_release_date.lte': today,
     };
+
+    // "New & Popular" default: popular titles from the last year — recent
+    // AND worth watching. Plain newest-first pages are 20/20 zero-vote
+    // day-0 releases; plain popularity drifts into old classics.
+    if (sort === 'new.popular') {
+      params.sort_by = 'popularity.desc';
+      const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      params['primary_release_date.gte'] = yearAgo;
+      params['vote_count.gte'] = 10;
+    }
 
     if (genre) {
       params.with_genres = genre;
@@ -230,6 +245,11 @@ export const tmdb = {
     if (String(sort).startsWith('vote_average')) {
       params['vote_count.gte'] = 50;
     }
+    // Date sorts need a small vote floor too: pure newest-first pages are
+    // 20/20 zero-vote day-0 releases, which the UI hides as unrated.
+    if (/release_date|first_air_date/.test(String(sort))) {
+      params['vote_count.gte'] = 5;
+    }
 
     return proxyFetch('discover/movie', params);
   },
@@ -243,12 +263,22 @@ export const tmdb = {
     country = '',
     language = '',
   } = {}) {
+    const today = new Date().toISOString().slice(0, 10);
     const params = {
       page,
       sort_by: sort,
       // Same as movies: keep unreleased pilots out of Released Series.
-      'first_air_date.lte': new Date().toISOString().slice(0, 10),
+      'first_air_date.lte': today,
     };
+
+    if (sort === 'new.popular') {
+      params.sort_by = 'popularity.desc';
+      const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      params['first_air_date.gte'] = yearAgo;
+      params['vote_count.gte'] = 10;
+    }
 
     if (genre) {
       params.with_genres = genre;
@@ -279,6 +309,9 @@ export const tmdb = {
 
     if (String(sort).startsWith('vote_average')) {
       params['vote_count.gte'] = 50;
+    }
+    if (/release_date|first_air_date/.test(String(sort))) {
+      params['vote_count.gte'] = 5;
     }
 
     return proxyFetch('discover/tv', params);
