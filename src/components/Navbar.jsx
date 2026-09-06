@@ -32,8 +32,10 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           </div>
         </div>
 
-        {/* Top Right: Cinejoy Floating Pill Navigation */}
-        <div className="hidden md:flex cine-nav-pill-box pointer-events-auto">
+        {/* Top Right: Cinejoy Floating Pill Navigation (desktop only —
+            visibility lives in CSS: unlayered .cine-nav-pill-box display
+            would beat a Tailwind `hidden` utility) */}
+        <div className="cine-nav-pill-box pointer-events-auto">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;
             const Icon = tab.icon;
@@ -73,14 +75,14 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
 
       {/* Mobile Bottom Dock */}
       <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none" aria-label="Primary">
-        <div className="pointer-events-auto flex items-center gap-1 p-1.5 rounded-full cine-nav-pill-box shadow-2xl">
+        <div className="pointer-events-auto flex items-center gap-0.5 p-1.5 rounded-full cine-nav-pill-box shadow-2xl">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id && !isDetailView;
             return (
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`cine-nav-btn px-3 py-2 text-xs ${isActive ? 'is-active' : ''}`}
+                className={`cine-nav-btn ${isActive ? 'is-active' : ''}`}
               >
                 {tab.label}
               </button>
@@ -88,14 +90,14 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           })}
           <button
             onClick={() => onTabChange('search')}
-            className="cine-nav-btn px-3 py-2 text-xs"
+            className="cine-nav-btn"
             aria-label="Search"
           >
             <Search className="w-4 h-4" strokeWidth={2.2} />
           </button>
           <button
             onClick={onOpenSettings}
-            className="cine-nav-btn px-3 py-2 text-xs"
+            className="cine-nav-btn"
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" strokeWidth={2} />

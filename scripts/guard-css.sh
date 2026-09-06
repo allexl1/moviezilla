@@ -38,6 +38,14 @@ if [ -n "$hit" ]; then
   fail "raw accent hex found — use var(--cine-accent) so theming stays centralized." "$hit"
 fi
 
+# 4. Display utilities on cine-* classes that set display in index.css
+#    (unlayered display beats Tailwind `hidden` — this exact bug leaked the
+#    desktop nav pill onto mobile viewports).
+hit=$(grep -rEn 'cine-(nav-pill-box|rail|cine-grid|cine-card|mat-row|cine-chip|control-btn|cine-icon-btn|provider-pill|duo-btn|select|input)[^"]*\b(hidden|(sm|md|lg|xl):(hidden|flex|block|inline|grid))\b' src --include='*.jsx' || true)
+if [ -n "$hit" ]; then
+  fail "display utility on a cine-* class that sets display will lose to index.css — control visibility in the stylesheet instead." "$hit"
+fi
+
 if [ "$violations" -ne 0 ]; then
   echo "CSS guard failed."
   exit 1

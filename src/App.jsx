@@ -35,7 +35,7 @@ const PROVIDERS = [
   { id: '9', name: 'Prime Video', color: '#00A8E1' },
   { id: '337', name: 'Disney+', color: '#113CCF' },
   { id: '350', name: 'Apple TV+', color: '#FFFFFF' },
-  { id: '384', name: 'HBO Max', color: '#9933FF' },
+  { id: '1899', name: 'HBO Max', color: '#9933FF' },
   { id: '15', name: 'Hulu', color: '#1CE783' },
   { id: '531', name: 'Paramount+', color: '#0064FF' },
 ];
