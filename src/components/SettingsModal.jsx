@@ -8,11 +8,6 @@ import Select from './ui/Select';
 const SERVERS = [
   { value: 'vidy', label: 'Vidy (Recommended)' },
   { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
-  { value: 'vidsrc', label: 'VidSrc Provider' },
-  { value: 'vidsrccc', label: 'VidSrc.cc' },
-  { value: 'embedsu', label: 'Embed.su' },
-  { value: 'smashy', label: 'SmashyStream' },
-  { value: 'autoembed', label: 'AutoEmbed' },
 ];
 
 function SettingRow({ icon, title, desc, control, danger = false }) {

@@ -89,12 +89,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // then "restored" S1E1 — every series reopened at Season 1 Episode 1.
   // There is no restore effect anymore by design: state starts correct, so
   // no save can ever clobber it.
+  // Preferred server first: resume reads THIS server's slot (Vidy and
+  // VidLink keep separate clocks — one shared timestamp corrupts both).
+  const preferredServer = storage.getPreferredServer('vidy');
   const getInitialPlayback = () => {
     const saved = mediaId ? storage.getProgress(isTv ? 'tv' : 'movie', mediaId) : null;
+    const slot = mediaId ? storage.getServerProgress(isTv ? 'tv' : 'movie', mediaId, preferredServer) : null;
     return {
       season: saved?.season || 1,
       episode: saved?.episode || 1,
-      time: saved?.currentTime || 0,
+      time: slot?.currentTime ?? saved?.currentTime ?? 0,
     };
   };
 
@@ -102,7 +106,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const [currentSeason, setCurrentSeason] = useState(initialPlayback.season);
   const [currentEpisode, setCurrentEpisode] = useState(initialPlayback.episode);
   const [isEpisodeOpen, setIsEpisodeOpen] = useState(false);
-  const [server, setServer] = useState(() => storage.getPreferredServer('vidy'));
+  const [server, setServer] = useState(preferredServer);
   const [key, setKey] = useState(0);
   const [showChrome, setShowChrome] = useState(true);
   // Bumped to force the server dropdown shut (only one popover at a time).
@@ -184,6 +188,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       episode: currentEpisode,
       currentTime: pos.time,
       duration: pos.duration,
+      server,
       ...buildMeta(),
     });
   };
@@ -194,7 +199,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // iframe reloaded constantly, resetting playback and wall-clock.
   const [embedUrl, setEmbedUrl] = useState(() =>
     buildEmbedUrl({
-      server: storage.getPreferredServer('vidy'),
+      server,
       mediaId,
       isTv,
       season: initialPlayback.season,
@@ -421,6 +426,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
                 episode: currentEpisode,
                 currentTime: t,
                 duration: Number(dur) || 0,
+                server,
                 ...buildMeta(),
               });
             }
@@ -439,8 +445,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
     // Resume the target episode where IT stopped (per-episode memory) —
-    // a fresh episode starts at 0, a visited one picks up its own time.
-    const epSaved = storage.getEpisodeProgress('tv', mediaId, seasonNum, episodeNum);
+    // a fresh episode starts at 0, a visited one picks up its own time
+    // on THIS server.
+    const epSaved = storage.getEpisodeProgress('tv', mediaId, seasonNum, episodeNum, server);
     const epStart = epSaved?.currentTime || 0;
     playbackRef.current = { currentTime: epStart, duration: epSaved?.duration || 0 };
     if (epStart > 0) pmSeenRef.current = true;

@@ -59,9 +59,13 @@ export function progressLabel(h) {
 }
 
 export const storage = {
-  // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode, currentTime, duration
+  // Save position: e.g. tmdbId, type ('movie'|'tv'), season, episode,
+  // currentTime, duration, server. Positions are tracked PER SERVER —
+  // Vidy and VidLink keep their own clocks (different cuts/offsets), so
+  // one shared timestamp corrupts both. Top-level fields stay "latest
+  // wins" for display; resume always prefers the current server's slot.
   // Never let a 0s write clobber a real timestamp (mount/unmount races).
-  saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '', genres = [] }) {
+  saveProgress({ mediaId, type, season = 1, episode = 1, currentTime = 0, duration = 0, title = '', poster = '', genres = [], server = '' }) {
     if (!mediaId) return;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const key = `${type}_${mediaId}`;
@@ -77,6 +81,18 @@ export const storage = {
     }
 
     const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+    const stamp = {
+      currentTime: Math.floor(currentTime),
+      duration: Math.floor(duration),
+      updatedAt: Date.now(),
+    };
+
+    // Per-server slot (top-level mirrors the latest write for display).
+    let servers = prev?.servers;
+    if (server) {
+      servers = { ...(prev?.servers || {}) };
+      servers[server] = { ...stamp };
+    }
 
     // Per-episode memory inside the series entry: bouncing between
     // episodes (or rooms on different episodes) no longer resets the
@@ -84,11 +100,13 @@ export const storage = {
     let episodes = prev?.episodes;
     if (type === 'tv') {
       episodes = { ...(prev?.episodes || {}) };
-      episodes[`${season}x${episode}`] = {
-        currentTime: Math.floor(currentTime),
-        duration: Math.floor(duration),
-        updatedAt: Date.now(),
-      };
+      const epPrev = episodes[`${season}x${episode}`] || {};
+      let epServers = epPrev.servers;
+      if (server) {
+        epServers = { ...(epPrev.servers || {}) };
+        epServers[server] = { ...stamp };
+      }
+      episodes[`${season}x${episode}`] = { ...stamp, servers: epServers };
       const keys = Object.keys(episodes).sort(
         (a, b) => (episodes[a].updatedAt || 0) - (episodes[b].updatedAt || 0)
       );
@@ -107,17 +125,32 @@ export const storage = {
       poster,
       genres,
       episodes,
+      servers,
       updatedAt: Date.now(),
     };
 
     safeSet(STORAGE_KEYS.PROGRESS, allProgress);
   },
 
-  // Saved position of one specific episode (for episode switching).
-  getEpisodeProgress(type, mediaId, season, episode) {
+  // This server's slot, falling back to the latest overall position.
+  getServerProgress(type, mediaId, server) {
     if (!mediaId) return null;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
-    return allProgress[`${type}_${mediaId}`]?.episodes?.[`${season}x${episode}`] || null;
+    const entry = allProgress[`${type}_${mediaId}`];
+    if (!entry) return null;
+    if (server && entry.servers?.[server]) return entry.servers[server];
+    return { currentTime: entry.currentTime, duration: entry.duration, updatedAt: entry.updatedAt };
+  },
+
+  // Saved position of one specific episode (for episode switching),
+  // preferring this server's slot for it.
+  getEpisodeProgress(type, mediaId, season, episode, server = '') {
+    if (!mediaId) return null;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const ep = allProgress[`${type}_${mediaId}`]?.episodes?.[`${season}x${episode}`];
+    if (!ep) return null;
+    if (server && ep.servers?.[server]) return ep.servers[server];
+    return ep;
   },
 
   // Retrieve position to resume
@@ -166,10 +199,12 @@ export const storage = {
     }
   },
 
-  // Preferred Server memory
+  // Preferred Server memory. Only Vidy/VidLink are offered now — a stale
+  // stored id from the old lineup falls back instead of mismatching the UI.
   getPreferredServer(defaultServer = 'vidy') {
     try {
-      return localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
+      const v = localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
+      return v === 'vidy' || v === 'vidlink' ? v : defaultServer;
     } catch {
       return defaultServer;
     }

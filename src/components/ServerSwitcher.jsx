@@ -6,16 +6,13 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // resume: provider reports real position + honors resume param, so
-  // History reopens at the exact second. Others only get wall-clock.
+  // Vidy + VidLink only, by decision: both report real position and honor
+  // resume params, and history is tracked per server. Other providers come
+  // back only after they prove the same. (Legacy rows/URLs for the rest
+  // still play — they just fall back to wall-clock tracking.)
   const servers = [
     { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal', resume: true },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal', resume: true },
-    { id: 'vidsrccc', name: 'VidSrc.cc', quality: '1080p', ping: 'good', resume: true },
-    { id: 'vidsrc', name: 'VidSrc Provider', quality: '1080p', ping: 'good', resume: false },
-    { id: 'embedsu', name: 'Embed.su', quality: 'HD', ping: 'good', resume: false },
-    { id: 'smashy', name: 'SmashyStream', quality: 'HD', ping: 'good', resume: false },
-    { id: 'autoembed', name: 'AutoEmbed', quality: 'HD', ping: 'good', resume: false },
   ];
 
   useEffect(() => {
