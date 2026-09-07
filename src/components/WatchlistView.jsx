@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ListVideo, X, Check, Pencil } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
-import { storage, progressLabel } from '../services/storage';
+import { storage, progressLabel, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
 import Select from './ui/Select';
@@ -248,7 +248,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   })();
 
   const watchedItems = history.filter(
-    (h) => h.percent >= 95 && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter)
+    (h) => h.percent >= WATCHED_PCT && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter)
   );
 
   const historyGroups = (() => {
@@ -278,9 +278,8 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     return [...local, ...remote];
   })();
 
-  // One honest progress string for every entry shape (percent, mm:ss,
-  // Opened, Watched) — shared with storage so rows agree everywhere.
-  const watchedLabel = (h) => progressLabel(h);
+  // Progress strings come straight from storage.progressLabel so every
+  // row in the app agrees.
 
   const resumePayload = (h) => ({
     media: {
@@ -418,7 +417,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
               const prog = progressByKey.get(`${mediaType}_${item.id}`);
               const badge = prog
-                ? prog.percent >= 95 ? 'Watched' : `${prog.percent}% watched`
+                ? prog.percent >= WATCHED_PCT ? 'Watched' : `${prog.percent}% watched`
                 : item.source === 'letterboxd' ? 'Letterboxd' : 'To Watch';
               const isLocal = item.source !== 'letterboxd';
               const lbPending = !isLocal && !lbPosters[item.id];
@@ -527,13 +526,13 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
             <div className="space-y-2">
               {items.map((h) => {
                 const { media, fallback } = resumePayload(h);
-                const watched = h.percent >= 95;
+                const watched = h.percent >= WATCHED_PCT;
                 return (
                   <Row
                     key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
                     poster={tmdb.getImageUrl(h.poster, 'w185')}
                     title={h.title}
-                    meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${watchedLabel(h)}`}
+                    meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${progressLabel(h)}`}
                     onClick={() => onResume(media, fallback)}
                     right={
                       <div className="flex items-center gap-2">

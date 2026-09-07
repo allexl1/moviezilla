@@ -120,9 +120,29 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const activeMsRef = useRef(0);
   const lastTickRef = useRef(Date.now());
   const pmSeenRef = useRef(false);
+  // Provider-declared pause: freeze the wall clock (it otherwise accrues
+  // minutes while the video sits paused, corrupting History).
+  const pausedProvRef = useRef(false);
+  // Resume-convergence guard: providers emit ~0s ticks right after load,
+  // before applying the resume second. While unconverged, a reading far
+  // below the restored base is the player booting — not a rewind. Trust
+  // resumes (explicit seeked), readings near/ahead of base, or anything
+  // still low after 10s (failed resume: the provider IS at zero, adopt it).
+  const convergedRef = useRef(false);
+  const convergeUntilRef = useRef(Date.now() + 10000);
+  const rearmConvergence = () => {
+    convergedRef.current = false;
+    convergeUntilRef.current = Date.now() + 10000;
+  };
+  // The message handler used to stringify all of localStorage every ~1s.
+  const saveThrottleRef = useRef({ sec: -1, at: 0 });
 
   const accumulateWallClock = () => {
     const now = Date.now();
+    if (pausedProvRef.current) {
+      lastTickRef.current = now;
+      return;
+    }
     const dt = Math.min(now - lastTickRef.current, 15000);
     lastTickRef.current = now;
     if (!document.hidden) activeMsRef.current += dt;
@@ -225,6 +245,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
     pmSeenRef.current = false;
+    pausedProvRef.current = false;
+    rearmConvergence();
     rebuildEmbed(srv, season, episode, second);
     setKey((p) => p + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -360,24 +382,48 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             inner.time ??
             0;
           const dur = payload.duration ?? inner.duration ?? playbackRef.current.duration ?? 0;
-          if (Number(time) > 0) {
+          // Track provider pause/play for the wall clock. (No-ops for
+          // providers that never emit them — the clock just keeps running.)
+          if (type === 'pause') pausedProvRef.current = true;
+          if (type === 'play') {
+            pausedProvRef.current = false;
+            lastTickRef.current = Date.now();
+            activeMsRef.current = 0;
+          }
+          const t = Number(time);
+          if (t > 0) {
+            const est = estimatedPosition().time;
+            if (!convergedRef.current) {
+              if (type === 'seeked' || t >= est - 30 || Date.now() > convergeUntilRef.current) {
+                convergedRef.current = true;
+              } else {
+                return;
+              }
+            }
             pmSeenRef.current = true;
-            playbackRef.current = { currentTime: Number(time), duration: Number(dur) || 0 };
+            playbackRef.current = { currentTime: t, duration: Number(dur) || 0 };
             // Keep the wall estimate in sync so a later fallback save
             // doesn't jump backwards.
-            wallBaseRef.current = Number(time);
+            wallBaseRef.current = t;
             activeMsRef.current = 0;
             lastTickRef.current = Date.now();
             reportRef.current();
-            storage.saveProgress({
-              mediaId,
-              type: isTv ? 'tv' : 'movie',
-              season: currentSeason,
-              episode: currentEpisode,
-              currentTime: Number(time),
-              duration: Number(dur) || 0,
-              ...buildMeta(),
-            });
+            // Throttled persist: same second or <8s since last write skips
+            // the full-map stringify (was: every provider tick, ~1/sec).
+            const now = Date.now();
+            const ls = saveThrottleRef.current;
+            if (Math.abs(t - ls.sec) >= 3 || now - ls.at >= 8000) {
+              saveThrottleRef.current = { sec: t, at: now };
+              storage.saveProgress({
+                mediaId,
+                type: isTv ? 'tv' : 'movie',
+                season: currentSeason,
+                episode: currentEpisode,
+                currentTime: t,
+                duration: Number(dur) || 0,
+                ...buildMeta(),
+              });
+            }
           }
         }
       } catch {}
@@ -392,13 +438,19 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     saveNowRef.current();
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
-    // New episode starts at 0 — reset every clock, not just the ref.
-    playbackRef.current = { currentTime: 0, duration: 0 };
-    wallBaseRef.current = 0;
+    // Resume the target episode where IT stopped (per-episode memory) —
+    // a fresh episode starts at 0, a visited one picks up its own time.
+    const epSaved = storage.getEpisodeProgress('tv', mediaId, seasonNum, episodeNum);
+    const epStart = epSaved?.currentTime || 0;
+    playbackRef.current = { currentTime: epStart, duration: epSaved?.duration || 0 };
+    if (epStart > 0) pmSeenRef.current = true;
+    else pmSeenRef.current = false;
+    wallBaseRef.current = epStart;
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
-    pmSeenRef.current = false;
-    rebuildEmbed(server, seasonNum, episodeNum, 0);
+    pausedProvRef.current = false;
+    rearmConvergence();
+    rebuildEmbed(server, seasonNum, episodeNum, epStart);
     setKey((prev) => prev + 1);
   };
 
@@ -406,6 +458,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     saveNowRef.current();
     const pos = estimatedPosition().time;
     setServer(newServer);
+    pausedProvRef.current = false;
+    rearmConvergence();
     rebuildEmbed(newServer, currentSeason, currentEpisode, pos);
     setKey((prev) => prev + 1);
   };

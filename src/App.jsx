@@ -9,6 +9,7 @@ import UpcomingRail from './components/UpcomingRail';
 import WatchlistView from './components/WatchlistView';
 import RoomsView from './components/RoomsView';
 import RoomView from './components/RoomView';
+import FootballView from './components/FootballView';
 import Card from './components/ui/Card';
 import Select from './components/ui/Select';
 import MediaDetailPage from './components/MediaDetailPage';
@@ -240,8 +241,8 @@ export default function App() {
       try {
         let res;
 
-        if (activeTab === 'watchlist' || activeTab === 'rooms') {
-          // WatchlistView / RoomsView own their data.
+        if (activeTab === 'watchlist' || activeTab === 'rooms' || activeTab === 'football') {
+          // WatchlistView / RoomsView / FootballView own their data.
           return;
         } else if (activeTab === 'movie') {
           res = await tmdb.getMovies({
@@ -887,7 +888,7 @@ export default function App() {
                       <div className="cine-cw-progress">
                         <div
                           className="cine-cw-progress-fill"
-                          style={{ width: `${item.percent}%` }}
+                          style={{ width: `${item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0}%` }}
                         />
                       </div>
                     </div>
@@ -1014,6 +1015,8 @@ export default function App() {
                   }}
                   onToast={showToast}
                 />
+              ) : activeTab === 'football' ? (
+                <FootballView onToast={showToast} />
               ) : activeTab === 'watchlist' ? (
                 <WatchlistView
                   onSelectMedia={(item) => setSelectedMedia(item)}

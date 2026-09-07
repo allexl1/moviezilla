@@ -6,6 +6,13 @@ const STORAGE_KEYS = {
   HIDDEN_LETTERBOXD: 'moviezilla_hidden_letterboxd',
 };
 
+// Single source of truth for every progress gate in the app (was: magic
+// 2/95/30 scattered across storage + WatchlistView).
+export const WATCHED_PCT = 95;
+export const MIN_CONTINUE_PCT = 2;
+export const MIN_CONTINUE_SEC = 30;
+export const MAX_EPISODES_KEPT = 10;
+
 function safeGet(key, fallback = {}) {
   try {
     const raw = localStorage.getItem(key);
@@ -45,7 +52,7 @@ export function formatClock(totalSeconds) {
 // One honest progress string for every history entry shape.
 export function progressLabel(h) {
   if (!h) return '';
-  if (h.percent >= 95) return 'Watched';
+  if (h.percent >= WATCHED_PCT) return 'Watched';
   if (h.duration > 0 && h.percent > 0) return `${h.percent}%`;
   if (h.currentTime > 0) return formatClock(h.currentTime);
   return 'Opened';
@@ -71,6 +78,23 @@ export const storage = {
 
     const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+    // Per-episode memory inside the series entry: bouncing between
+    // episodes (or rooms on different episodes) no longer resets the
+    // others to zero. Top-level season/episode/time stay "latest wins".
+    let episodes = prev?.episodes;
+    if (type === 'tv') {
+      episodes = { ...(prev?.episodes || {}) };
+      episodes[`${season}x${episode}`] = {
+        currentTime: Math.floor(currentTime),
+        duration: Math.floor(duration),
+        updatedAt: Date.now(),
+      };
+      const keys = Object.keys(episodes).sort(
+        (a, b) => (episodes[a].updatedAt || 0) - (episodes[b].updatedAt || 0)
+      );
+      while (keys.length > MAX_EPISODES_KEPT) delete episodes[keys.shift()];
+    }
+
     allProgress[key] = {
       mediaId,
       type,
@@ -82,10 +106,18 @@ export const storage = {
       title,
       poster,
       genres,
+      episodes,
       updatedAt: Date.now(),
     };
 
     safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+  },
+
+  // Saved position of one specific episode (for episode switching).
+  getEpisodeProgress(type, mediaId, season, episode) {
+    if (!mediaId) return null;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    return allProgress[`${type}_${mediaId}`]?.episodes?.[`${season}x${episode}`] || null;
   },
 
   // Retrieve position to resume
@@ -95,16 +127,16 @@ export const storage = {
     return allProgress[`${type}_${mediaId}`] || null;
   },
 
-  // Get all partially watched items sorted by most recent.
-  // Percent-based entries (real provider time) plus wall-clock entries
-  // (30s+ watched, duration unknown) both count as "in progress".
+  // Get all partially watched items sorted by most recent. Anything with
+  // 30s+ on the clock counts — percent-gating alone hid short watches of
+  // long titles once providers started reporting real durations.
   getAllContinueWatching() {
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     return Object.values(allProgress)
       .filter(
         (item) =>
-          (item.percent > 2 && item.percent < 95) ||
-          (!item.duration && item.currentTime >= 30)
+          (item.percent > MIN_CONTINUE_PCT && item.percent < WATCHED_PCT) ||
+          (item.percent < WATCHED_PCT && (item.currentTime || 0) >= MIN_CONTINUE_SEC)
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
   },

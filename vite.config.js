@@ -5,6 +5,7 @@ import tmdbHandler from './api/tmdb.js'
 import tmdbImageHandler from './api/tmdb-image.js'
 import letterboxdHandler from './api/letterboxd/[username].js'
 import rtHandler from './api/rt.js'
+import footballHandler from './api/football.js'
 
 // Serves the Vercel-style api/ handlers under `npm run dev` so the app
 // behaves the same locally as in production (catalog, images, Letterboxd).
@@ -30,6 +31,7 @@ function devApi() {
         if (pathname === '/tmdb') handler = tmdbHandler
         else if (pathname === '/tmdb-image') handler = tmdbImageHandler
         else if (pathname === '/rt') handler = rtHandler
+        else if (pathname === '/football') handler = footballHandler
         else if (pathname.startsWith('/letterboxd/')) {
           handler = letterboxdHandler
           query.username = decodeURIComponent(pathname.slice('/letterboxd/'.length))
