@@ -53,6 +53,16 @@ export default function RoomView({ code, onLeave, onToast }) {
   const roomRef = useRef(null);
   // Just applied someone else's target — don't echo it back as my own seek.
   const followGraceRef = useRef(0);
+  // Last follow applied (any source) — followers skip re-following inside
+  // the convergence window so a reload can't chase its own tail.
+  const followAppliedRef = useRef(0);
+  // Pending pause re-sends — cancelled the moment a newer action (play /
+  // seek) goes out, so a stale retry can never re-pause after a resume.
+  const pauseRetryRef = useRef([]);
+  const clearPauseRetries = () => {
+    for (const t of pauseRetryRef.current) clearTimeout(t);
+    pauseRetryRef.current = [];
+  };
   // Mirrors pausedBy for channel callbacks (their closures go stale).
   const pausedByRef = useRef(null);
   // When the paused overlay was last (re)asserted — guards the heal path
@@ -141,13 +151,15 @@ export default function RoomView({ code, onLeave, onToast }) {
           // follower trails by seconds, not by poll intervals. Paused or
           // waiting followers ignore ticks — lock rules win.
           if (payload.device === device || pausedByRef.current || !roomRef.current) return;
+          if (Date.now() - followAppliedRef.current < 6000) return;
           if (!canControlRef.current) {
             const travel = Math.max(0, (Date.now() - (payload.at || Date.now())) / 1000);
             const expected = (payload.second || 0) + Math.min(travel, 10);
             const mine = myPos.current.second || 0;
-            if (Math.abs(mine - expected) > 5 && expected > 3) {
+            if (Math.abs(mine - expected) > 3 && expected > 2) {
               setSyncNote('Catching up…');
               followGraceRef.current = Date.now();
+              followAppliedRef.current = Date.now();
               setRoomTarget({
                 key: `tick:${payload.at || Date.now()}`,
                 second: Math.floor(expected),
@@ -164,6 +176,7 @@ export default function RoomView({ code, onLeave, onToast }) {
           frozenPosRef.current = null;
           setSyncNote('Catching up…');
           followGraceRef.current = Date.now();
+          followAppliedRef.current = Date.now();
           setRoomTarget({
             key: `evt:${payload.at || Date.now()}`,
             action: type,
@@ -235,6 +248,7 @@ export default function RoomView({ code, onLeave, onToast }) {
     lastSeekSent.current = { at: Date.now(), second: pos.second, season: pos.season, episode: pos.episode };
     // I just followed someone — sync silently, never echo.
     if (Date.now() - followGraceRef.current < 4000) return;
+    clearPauseRetries();
     channelRef.current?.send('seek', {
       device,
       name: nickname,
@@ -248,7 +262,7 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   // Host heartbeat: stamp position + episode + server so rejoiners land
   // on the exact S/E/second even with no recent seek event. Frozen while
-  // the room is paused (see above). Plus a 5s realtime tick so followers
+  // the room is paused (see above). Plus a 2.5s realtime tick so followers
   // trail by seconds instead of poll intervals.
   useEffect(() => {
     if (!room || !isHost) return;
@@ -273,7 +287,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         server: p.server,
         at: Date.now(),
       });
-    }, 5000);
+    }, 2500);
     return () => {
       clearInterval(beat);
       clearInterval(tick);
@@ -303,6 +317,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         }
         if (pausedBy && rowTs > pausedAtRef.current) {
           setPausedBy(null);
+          followAppliedRef.current = Date.now();
           setRoomTarget({
             key: `heal:${Date.now()}`,
             second: r.position || 0,
@@ -313,18 +328,20 @@ export default function RoomView({ code, onLeave, onToast }) {
           return;
         }
         if (pausedBy) return;
+        if (Date.now() - followAppliedRef.current < 6000) return;
         const elapsed = r.updatedAt ? Math.max(0, (Date.now() - new Date(r.updatedAt).getTime()) / 1000) : 0;
         const expected = (r.position || 0) + Math.min(elapsed, 30);
         const mine = myPos.current.second || 0;
-        if (Math.abs(mine - expected) > 10 && expected > 5) {
+        if (Math.abs(mine - expected) > 8 && expected > 5) {
           setSyncNote('Catching up…');
+          followAppliedRef.current = Date.now();
           setRoomTarget({ key: `drift:${Date.now()}`, second: Math.floor(expected) });
           setTimeout(() => setSyncNote('In sync'), 4000);
         }
       } catch {
         // Offline blip — next check retries.
       }
-    }, 15000);
+    }, 10000);
     return () => clearInterval(check);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, room?.code, canControl, pausedBy]);
@@ -384,11 +401,17 @@ export default function RoomView({ code, onLeave, onToast }) {
     const second = Math.floor(myPos.current.second || 0);
     // Pause is the one event that must not be lost: a follower who misses
     // it plays on. Triple-send (idempotent) + presence resend for late
-    // joiners + row-state poll healing on the follower side.
+    // joiners + row-state poll healing on the follower side. Retries die
+    // the moment play/seek goes out — a stale retry must never re-pause
+    // after a resume.
+    clearPauseRetries();
     const payload = { device, name: nickname, second, at: Date.now() };
     channelRef.current?.send('pause', payload);
-    setTimeout(() => channelRef.current?.send('pause', { ...payload, at: Date.now() }), 700);
-    setTimeout(() => channelRef.current?.send('pause', { ...payload, at: Date.now() }), 1400);
+    for (const delay of [700, 1400]) {
+      pauseRetryRef.current.push(
+        setTimeout(() => channelRef.current?.send('pause', { ...payload, at: Date.now() }), delay)
+      );
+    }
     frozenPosRef.current = { ...myPos.current, second };
     if (room?.media?.kind === 'youtube') {
       setRoomTarget({ key: `me:${Date.now()}`, action: 'pause', second });
@@ -419,6 +442,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       }
       setSyncNote('Catching up…');
       followGraceRef.current = Date.now();
+      followAppliedRef.current = Date.now();
       setRoomTarget({
         key: `manual:${Date.now()}`,
         second: r.position || 0,
@@ -439,12 +463,15 @@ export default function RoomView({ code, onLeave, onToast }) {
       device, name: nickname, second, at: Date.now(),
     });
     setPausedBy(null);
+    // Resume remounts my own frame at the frozen second too (I was
+    // suspended like everyone else) — and resets my clock so no phantom
+    // "seek" fires on the way back up.
+    const isYt = room?.media?.kind === 'youtube';
+    setRoomTarget({ key: `me:${Date.now()}`, action: isYt ? 'play' : undefined, second });
+    followGraceRef.current = Date.now();
+    followAppliedRef.current = Date.now();
     frozenPosRef.current = null;
-    // Own broadcasts don't echo (self:false) — apply YouTube locally too
-    // (embed owners just press play in their own frame).
-    if (room?.media?.kind === 'youtube') {
-      setRoomTarget({ key: `me:${Date.now()}`, action: 'play', second });
-    }
+    clearPauseRetries();
     try {
       await patchRoom(code, { state: 'live', position: second });
     } catch {
@@ -513,11 +540,11 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
 
   const waitingForHost = !hostPresent && !canControl;
-  // Hard lock (embed rooms): locked-out followers get NO iframe while
-  // paused or waiting — unmount kills video+audio, so nothing can drift.
-  // Resume remounts at the room's second. Drivers (host + granted) are
-  // never locked: they keep the controls that move the room.
-  const suspended = !isYouTube && !canControl && (!!pausedBy || waitingForHost);
+  // Hard lock (embed rooms): while paused EVERYONE loses the iframe —
+  // host included. A paused room shows paused cards, not video; resume
+  // remounts all frames at the frozen second. Unmounting is the only true
+  // pause these providers allow (they take no remote orders).
+  const suspended = !isYouTube && (!!pausedBy || waitingForHost);
   // YouTube pauses for real via the command API — no overlay needed.
   const overlay = !isYouTube && pausedBy && !canControl ? (
     <div className="text-center space-y-3 max-w-xs">
