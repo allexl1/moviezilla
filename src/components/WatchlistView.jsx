@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ListVideo, X, Check, Pencil } from 'lucide-react';
+import { ListVideo, X, Check, Pencil, History } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage, progressLabel, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
@@ -485,6 +485,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                 title={h.title}
                 meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${groupLabel(h.updatedAt)}`}
                 onClick={() => onResume(media, fallback)}
+                wash={h.poster ? tmdb.getImageUrl(h.poster, 'w185') : null}
                 right={
                   <div className="flex items-center gap-2">
                     <span className="cine-chip cine-chip--accent">
@@ -518,11 +519,15 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
           <h2 className="cine-section-title">History</h2>
         </div>
         {historyGroups.length === 0 && (
-          <p className="text-xs text-white/60">Nothing watched yet — press play on anything.</p>
+          <EmptyState
+            icon={<History className="w-5 h-5" />}
+            title="No history yet"
+            description="Press play on anything and it will show up here with your position."
+          />
         )}
         {historyGroups.map(([label, items]) => (
           <div key={label} className="space-y-2 cine-history-group">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">{label}</h4>
+            <h4 className="cine-group-head">{label}</h4>
             <div className="space-y-2">
               {items.map((h) => {
                 const { media, fallback } = resumePayload(h);
@@ -534,6 +539,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                     title={h.title}
                     meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${progressLabel(h)}`}
                     onClick={() => onResume(media, fallback)}
+                    wash={h.poster ? tmdb.getImageUrl(h.poster, 'w185') : null}
                     right={
                       <div className="flex items-center gap-2">
                         <span className="cine-chip cine-chip--neutral">

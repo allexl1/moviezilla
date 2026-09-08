@@ -3,6 +3,9 @@ import { FALLBACK_POSTER } from '../../services/tmdb';
 /**
  * Row — glass list row (search results, history, menus).
  * Thumb + title + meta + right slot. One recipe everywhere.
+ * Optional `wash` (image URL): a blurred poster wash behind the content.
+ * Plain opacity layer only — never backdrop-filter (nested blurs glitch
+ * white on Intel iGPUs, see .mat-row).
  */
 export default function Row({
   poster,
@@ -11,12 +14,26 @@ export default function Row({
   right,
   onClick,
   thumbClassName = 'w-12 h-16',
+  wash = null,
 }) {
   return (
     <div
       onClick={onClick}
-      className="mat-row flex items-center gap-4 p-2.5 transition cursor-pointer group"
+      className="mat-row relative flex items-center gap-4 p-2.5 transition cursor-pointer group overflow-hidden"
     >
+      {wash && (
+        <img
+          src={wash}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          className="cine-row-wash"
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+        />
+      )}
       <div className={`${thumbClassName} rounded-xl overflow-hidden bg-black/50 flex-shrink-0`}>
         <img
           src={poster}

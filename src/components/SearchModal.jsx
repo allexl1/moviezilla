@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Clapperboard } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Row from './ui/Row';
 import Card from './ui/Card';
+import EmptyState from './ui/EmptyState';
 import { SkelRow } from './ui';
 
 export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPerson }) {
@@ -59,7 +60,11 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           tmdb.searchMulti(query),
           tmdb.searchPerson(query).catch(() => null),
         ]);
-        setResults((multi?.results || []).filter((x) => x.poster_path));
+        setResults(
+          (multi?.results || []).filter(
+            (x) => x.poster_path && (x.media_type === 'person' || (x.vote_average || 0) > 0)
+          )
+        );
         setPeople(
           (persons?.results || [])
             .filter((x) => x.profile_path && x.name)
@@ -230,8 +235,17 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           </div>
         )}
 
-        {!loading && query && results.length === 0 && !searchError && (
-          <p className="text-center py-8 text-xs text-white/60">No titles found for "{query}".</p>
+        {!loading && query && results.length === 0 && people.length === 0 && !searchError && (
+          <EmptyState
+            icon={<Clapperboard className="w-5 h-5" />}
+            title={`No titles found for "${query}"`}
+            description="Try a different spelling or browse what's hot right now."
+            action={
+              <button onClick={() => setQuery('')} className="cine-control-btn">
+                Browse trending
+              </button>
+            }
+          />
         )}
 
         {!loading && searchError && (

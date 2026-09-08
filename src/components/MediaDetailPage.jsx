@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, X, Users, Trophy } from 'lucide-react';
+import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
-import { storage } from '../services/storage';
+import { storage, formatClock } from '../services/storage';
 import RowRail from './RowRail';
 
 function formatMoney(value) {
@@ -214,6 +214,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     (v) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube'
   ).slice(0, 6);
   const overview = details?.overview || media?.overview || 'No storyline available.';
+  // Solo episode entry for shows: jump straight back to the saved
+  // episode + second. Player restores S/E from storage at mount, so a
+  // plain onPlay lands exactly where history left off.
+  const resume = mediaType === 'tv' ? storage.getProgress('tv', mediaId) : null;
+  const resumeReady = resume && (resume.currentTime || 0) >= 30;
 
   return (
     <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
@@ -238,7 +243,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         ) : (
           <img src={backdrop} alt={title} className="w-full h-full object-cover object-center" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/45 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/90 via-[#050505]/30 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-transparent to-transparent pointer-events-none" />
 
         {/* Back to the still backdrop */}
@@ -305,6 +310,17 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <Users className="w-5 h-5" />
               </button>
             )}
+
+            {resumeReady && (
+              <button
+                onClick={() => onPlay(media, details)}
+                className="cine-control-btn"
+                title={`Continue Season ${resume.season} Episode ${resume.episode}`}
+              >
+                <Play className="w-4 h-4" fill="currentColor" />
+                <span>{`S${resume.season} E${resume.episode} • ${formatClock(resume.currentTime)}`}</span>
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-semibold text-white/90 pt-1">
@@ -345,10 +361,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   {i > 0 && ', '}
                   <button
                     onClick={() => onSelectPerson?.(d.id)}
-                    className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
+                    className="inline-flex items-center gap-0.5 text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
                     title={`Open ${d.name}'s profile`}
                   >
                     {d.name}
+                    <ChevronRight className="w-3.5 h-3.5 text-white/40" />
                   </button>
                 </span>
               ))}
@@ -363,10 +380,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   {i > 0 && ', '}
                   <button
                     onClick={() => onSelectPerson?.(c.id)}
-                    className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
+                    className="inline-flex items-center gap-0.5 text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
                     title={`Open ${c.name}'s profile`}
                   >
                     {c.name}
+                    <ChevronRight className="w-3.5 h-3.5 text-white/40" />
                   </button>
                 </span>
               ))}
@@ -583,7 +601,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     src={`https://i.ytimg.com/vi/${t.key}/hqdefault.jpg`}
                     alt={t.name}
                     loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.04]"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   <div className="absolute bottom-2.5 left-3 right-3">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard, Radio } from 'lucide-react';
+import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
 import { storage, progressLabel, formatClock } from './services/storage';
 import Navbar from './components/Navbar';
@@ -183,6 +183,11 @@ export default function App() {
   const [nowPlaying, setNowPlaying] = useState([]);
   const [upcomingMovies, setUpcomingMovies] = useState([]);
   const [onAirToday, setOnAirToday] = useState([]);
+  // Day-fresh trending pool for the hero (trending/week moves too slowly
+  // for "new movies" — day endpoints catch a Moana-level surge same-day).
+  const [trendingDay, setTrendingDay] = useState([]);
+  // Coming Soon fetch failed (vs merely empty) — Movies shows a retry.
+  const [upcomingError, setUpcomingError] = useState(false);
   const [homeProvider, setHomeProvider] = useState('8');
   const [providerMovies, setProviderMovies] = useState([]);
 
@@ -343,7 +348,7 @@ export default function App() {
 
     async function loadRails() {
       try {
-        const [movies, series, rated, anime, now, soon, airing] = await Promise.all([
+        const [movies, series, rated, anime, now, soon, airing, dayM, dayT] = await Promise.all([
           tmdb.getPopularMovies(),
           tmdb.getPopularTV(),
           tmdb.getTopRatedMovies(),
@@ -351,6 +356,8 @@ export default function App() {
           tmdb.getNowPlaying(),
           tmdb.getUpcoming(),
           tmdb.getAiringToday(),
+          tmdb.getTrendingToday('movie'),
+          tmdb.getTrendingToday('tv'),
         ]);
 
         if (!isMounted) return;
@@ -363,6 +370,14 @@ export default function App() {
         setTopRated(clean(rated));
         setAnimeSpotlight(clean(anime));
         setNowPlaying(clean(now));
+        // Day pool: both endpoints merged, deduped — this is what puts a
+        // same-day surge (Moana) on hero slide 1 instead of last week's order.
+        setTrendingDay(
+          [...(dayM?.results || []), ...(dayT?.results || [])]
+            .filter((x) => x.poster_path && hasRating(x))
+            .filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)
+            .slice(0, 14)
+        );
         // Coming Soon: single line, reputable + future-dated, soonest
         // first, with a relaxed fallback so the shelf never goes empty.
         setUpcomingMovies(pickUpcoming(soon?.results));
@@ -384,25 +399,30 @@ export default function App() {
   }, [activeTab]);
 
   // Movies/Shows pages keep their own Upcoming/On-The-Air shelf fresh.
+  // A failed Coming Soon fetch surfaces a retry instead of silently
+  // vanishing (UpcomingRail returns null on empty — without this the
+  // user just sees nothing and assumes the feature is broken).
   useEffect(() => {
     if (activeTab !== 'movie' && activeTab !== 'tv') return;
     let isMounted = true;
+    if (activeTab === 'movie') setUpcomingError(false);
     (activeTab === 'movie' ? tmdb.getUpcoming() : tmdb.getOnTheAir())
       .then((res) => {
         if (!isMounted) return;
         if (activeTab === 'movie') setUpcomingMovies(pickUpcoming(res?.results));
         else setOnAirToday(pickAiring(res?.results));
       })
-      .catch((err) => console.error('Failed to load upcoming rail:', err));
+      .catch((err) => {
+        console.error('Failed to load upcoming rail:', err);
+        if (isMounted && activeTab === 'movie') setUpcomingError(true);
+      });
     return () => {
       isMounted = false;
     };
-  }, [activeTab]);
+  }, [activeTab, catalogRetry]);
 
   // Full provider catalog for the icon wall (sorted by TMDB priority).
   const [providers, setProviders] = useState([]);
-  // Shows-page shelf toggle: Released grid vs On-The-Air grid.
-  const [showAiring, setShowAiring] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'home') return;
@@ -437,13 +457,14 @@ export default function App() {
     };
   }, [activeTab, homeProvider]);
 
-  // Home hero carousel (cinejoy spotlight parity). Fresh theatrical
-  // releases lead so a 3-days-old title like Mayday surfaces even when
-  // the weekly trending list hasn't picked it up yet; trending fills out
-  // the rotation. Deduplicated, 6 max.
+  // Home hero carousel (cinejoy spotlight parity). Day-fresh trending
+  // leads so a same-day surge (Moana) is slide 1; weekly trending fills,
+  // theatrical now_playing rounds out the rotation. Deduplicated, 6 max.
+  // NOTE: [...nowPlaying, ...items] buried trending past the slice —
+  // order matters, freshest first.
   const heroItems =
     activeTab === 'home'
-      ? [...nowPlaying, ...items]
+      ? [...trendingDay, ...items, ...nowPlaying]
           .filter((x, i, a) => x && a.findIndex((y) => y.id === x.id) === i)
           .slice(0, 6)
       : [];
@@ -614,7 +635,6 @@ export default function App() {
               setSelectedProvider('');
               setSelectedCountry('');
               setSelectedLanguage('');
-              setShowAiring(false);
             }
           }}
         isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
@@ -845,18 +865,9 @@ export default function App() {
                   </p>
                 </div>
 
-                {/* Right column mirrors Movies: toggle on top, filters below. */}
+                {/* Right column mirrors Movies: filters only — On The Air
+                    is an inline shelf below, same as Coming Soon on Movies. */}
                 <div className="flex flex-col items-start lg:items-end gap-3">
-                  <button
-                    onClick={() => setShowAiring((v) => !v)}
-                    aria-pressed={showAiring}
-                    className={`cine-control-btn ${showAiring ? 'border-[var(--cine-accent)]/60' : ''}`}
-                    title="Show series currently on the air"
-                  >
-                    <Radio className={`w-3.5 h-3.5 ${showAiring ? 'text-[var(--cine-accent)]' : ''}`} />
-                    <span>On The Air</span>
-                  </button>
-
                   <FilterBar
                     genres={TV_GENRES}
                     sorts={TV_SORTS}
@@ -1092,32 +1103,29 @@ export default function App() {
                       dateKey="release_date"
                     />
                   )}
-                  {activeTab === 'tv' && showAiring ? (
-                    <>
-                      <div className="cine-section-head">
-                        <h2 className="cine-section-title">On The Air</h2>
-                        <span className="text-xs text-white/60">
-                          {onAirToday.length} titles • airing now
-                        </span>
-                      </div>
-                      <div className="cine-grid">
-                        {onAirToday.map((media) => (
-                          <Card
-                            key={`${media.id}_${media.title || media.name}`}
-                            media={{ ...media, media_type: media.media_type || 'tv' }}
-                            onClick={setSelectedMedia}
-                            size="fluid"
-                            posterOnly={posterOnly}
-                          />
-                        ))}
-                      </div>
-                      {onAirToday.length === 0 && (
-                        <p className="text-center py-16 text-xs text-white/60">
-                          Nothing on the air right now. Check back later.
-                        </p>
-                      )}
-                    </>
-                  ) : (
+                  {activeTab === 'movie' && upcomingMovies.length === 0 && upcomingError && (
+                    <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
+                      <span>Couldn't load Coming Soon. Check your connection or API key.</span>
+                      <button
+                        onClick={() => setCatalogRetry((c) => c + 1)}
+                        className="cine-control-btn"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  {activeTab === 'tv' && (
+                    <UpcomingRail
+                      title="On The Air"
+                      items={onAirToday}
+                      onSelect={setSelectedMedia}
+                      mediaType="tv"
+                      badge="On Air"
+                      verb="airing"
+                      dateKey="first_air_date"
+                    />
+                  )}
+                  {(
                     <>
                       <div className="cine-section-head">
                         <h2 className="cine-section-title">

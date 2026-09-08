@@ -13,6 +13,7 @@ export default function UpcomingRail({
   onSelect,
   mediaType = 'movie',
   badge = 'Coming Soon',
+  verb = 'coming',
   dateKey = 'release_date',
 }) {
   if (!items || items.length === 0) return null;
@@ -46,8 +47,8 @@ export default function UpcomingRail({
               key={`${title}_${media.id}`}
               onClick={() => onSelect?.({ ...media, media_type: media.media_type || mediaType })}
               className="cine-soon-card group flex-shrink-0"
-              title={year ? `${name} — coming ${year}` : name}
-              aria-label={year ? `View ${name}, coming ${year}` : `View ${name}`}
+              title={year ? `${name} — ${verb} ${year}` : name}
+              aria-label={year ? `View ${name}, ${verb} ${year}` : `View ${name}`}
             >
               <img
                 src={tmdb.getImageUrl(media.backdrop_path, 'w780')}
@@ -61,9 +62,6 @@ export default function UpcomingRail({
               />
               <span className="cine-soon-scrim" aria-hidden="true" />
               <span className="cine-soon-badge">{year ? `${badge} • ${year}` : badge}</span>
-              {year && (
-                <span className="cine-soon-year">{year}</span>
-              )}
               <span className="cine-soon-hover" aria-hidden="true">
                 <span className="cine-soon-play">
                   <Play className="w-4 h-4 ml-0.5" fill="currentColor" />

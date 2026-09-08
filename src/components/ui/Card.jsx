@@ -25,7 +25,16 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
   return (
     <div
       onClick={() => onClick?.(media)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick?.(media);
+        }
+      }}
+      role="button"
+      tabIndex={0}
       title={title}
+      aria-label={`View ${title}`}
       className={`cine-card cine-card-in flex-shrink-0 ${sizeClasses[size] || sizeClasses.default}`}
     >
       <div className="cine-card-poster">
