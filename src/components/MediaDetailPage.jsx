@@ -122,7 +122,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     const imdbId = imdbIdOf(details, mediaType);
     if (!imdbId) return;
     getAwardsByImdb(imdbId).then((list) => {
-      if (isMounted) setAwards(list.slice(0, 8));
+      if (isMounted) setAwards(list);
     });
     return () => {
       isMounted = false;
@@ -159,9 +159,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const budget = formatMoney(details?.budget);
   const genres = details?.genres || [];
   const cast = details?.credits?.cast?.slice(0, 12) || [];
-  const director = (details?.credits?.crew || []).find((c) => c.job === 'Director') || null;
+  const directors = (details?.credits?.crew || []).filter((c) => c.job === 'Director');
   const creators = (details?.created_by || []).slice(0, 3);
-  const studios = (details?.production_companies || []).slice(0, 2).map((c) => c.name);
+  const studios = (details?.production_companies || []).slice(0, 3);
   const language = (details?.original_language || '').toUpperCase() || null;
   const status = details?.status || null;
   const seasonsCount = details?.number_of_seasons || null;
@@ -186,7 +186,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         );
     const base = clean(details?.similar?.results);
     if (base.length >= 8 || genreIds.size === 0) {
-      setSimilar(base.slice(0, 12));
+      setSimilar(base);
       return () => {
         alive = false;
       };
@@ -201,10 +201,10 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       .then((res) => {
         if (!alive) return;
         const extra = clean(res?.results).filter((x) => !have.has(x.id));
-        setSimilar([...base, ...extra].slice(0, 12));
+        setSimilar([...base, ...extra]);
       })
       .catch(() => {
-        if (alive) setSimilar(base.slice(0, 12));
+        if (alive) setSimilar(base);
       });
     return () => {
       alive = false;
@@ -337,16 +337,21 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             )}
           </div>
 
-          {director && (
+          {directors.length > 0 && (
             <p className="text-sm text-white/50">
-              Director:{' '}
-              <button
-                onClick={() => onSelectPerson?.(director.id)}
-                className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
-                title={`Open ${director.name}'s profile`}
-              >
-                {director.name}
-              </button>
+              Director{directors.length > 1 ? 's' : ''}:{' '}
+              {directors.map((d, i) => (
+                <span key={d.id || d.name}>
+                  {i > 0 && ', '}
+                  <button
+                    onClick={() => onSelectPerson?.(d.id)}
+                    className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
+                    title={`Open ${d.name}'s profile`}
+                  >
+                    {d.name}
+                  </button>
+                </span>
+              ))}
             </p>
           )}
 
@@ -384,7 +389,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </div>
 
         {/* Facts panel (xl screens only — avoids overlapping the overlay below that) */}
-        {(runtime || language || releaseDate || status || seasonsCount) && (
+        {(runtime || language || releaseDate || status || seasonsCount || revenue || budget) && (
           <div className="hidden xl:block absolute right-14 bottom-10 z-10 w-72 rounded-2xl cine-glass-panel overflow-hidden">
             {seasonsCount && (
               <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-[var(--cine-glass-border)]">
@@ -419,9 +424,21 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               </div>
             )}
             {releaseDate && (
-              <div className="flex items-center justify-between px-4 py-3 text-xs">
+              <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-white/[0.07]">
                 <span className="text-white/45 font-medium">Release Date</span>
                 <span className="text-white/90 font-semibold">{releaseDate}</span>
+              </div>
+            )}
+            {revenue && (
+              <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-white/[0.07]">
+                <span className="text-white/45 font-medium">Box Office</span>
+                <span className="text-white/90 font-semibold">{revenue}</span>
+              </div>
+            )}
+            {budget && (
+              <div className="flex items-center justify-between px-4 py-3 text-xs">
+                <span className="text-white/45 font-medium">Budget</span>
+                <span className="text-white/90 font-semibold">{budget}</span>
               </div>
             )}
           </div>
@@ -449,13 +466,31 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </section>
 
         {studios.length > 0 && (
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
-            {studios.join(' · ')}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {studios.map((s) => (
+              s.logo_path ? (
+                <img
+                  key={s.id || s.name}
+                  src={tmdb.getImageUrl(s.logo_path, 'w300')}
+                  alt={s.name}
+                  title={s.name}
+                  loading="lazy"
+                  className="h-6 w-auto max-w-32 object-contain opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition"
+                />
+              ) : (
+                <span
+                  key={s.id || s.name}
+                  className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50"
+                >
+                  {s.name}
+                </span>
+              )
+            ))}
+          </div>
         )}
 
         {(revenue || budget) && (
-          <section className="flex flex-wrap items-center gap-2 text-xs">
+          <section className="xl:hidden flex flex-wrap items-center gap-2 text-xs">
             {revenue && <span className="cine-chip cine-chip--neutral">Box Office: {revenue}</span>}
             {budget && <span className="cine-chip cine-chip--neutral">Budget: {budget}</span>}
           </section>
@@ -470,13 +505,13 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 Honours
               </h3>
             </div>
-            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-2">
+            <div className="flex flex-wrap gap-2.5">
               {awards.map((a, i) => (
-                <div key={`${a.label}_${a.year}_${i}`} className="cine-award flex-shrink-0" title={a.work || a.label}>
+                <div key={`${a.label}_${a.year}_${i}`} className="cine-award" title={a.work || a.label}>
                   <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="min-w-0">
-                    <span className="block text-xs font-bold text-white truncate max-w-44">{a.label}</span>
-                    <span className="block text-[10px] text-white/60 truncate max-w-44">
+                    <span className="block text-xs font-bold text-white">{a.label}</span>
+                    <span className="block text-[10px] text-white/60">
                       {[a.year, a.work].filter(Boolean).join(' • ')}
                     </span>
                   </span>
@@ -498,7 +533,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   title={actor.name}
                   className="flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
                 >
-                  <div className="w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">
+                  <div className="cine-cast-avatar w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">
                     <img
                       src={tmdb.getImageUrl(actor.profile_path, 'w185', FALLBACK_PROFILE)}
                       alt={actor.name}
@@ -562,8 +597,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         {similar.length > 0 && (
           <RowRail
             title="You Might Also Like"
-            items={similar.slice(0, 14)}
+            items={similar}
             showRating
+            expandable
             onSelect={(item) => {
               onSelectMedia(item);
               window.scrollTo({ top: 0, behavior: 'smooth' });

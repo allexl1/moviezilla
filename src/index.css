@@ -1673,14 +1673,49 @@ button:hover .cine-provider-icon,
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.875rem;
-  border-radius: var(--cine-radius-full);
+  border-radius: var(--cine-radius-xl);
   color: #f5c518;
   background:
     linear-gradient(rgba(245, 197, 24, 0.10), rgba(245, 197, 24, 0.04)),
     rgba(10, 10, 14, 0.85);
   border: 1px solid rgba(245, 197, 24, 0.28);
   box-shadow: var(--cine-shadow-1), inset 0 1px rgba(245, 197, 24, 0.12);
-  white-space: nowrap;
+  max-width: 20rem;
+  transition: transform var(--cine-duration-base) var(--cine-ease-out),
+    border-color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-award:hover {
+  transform: translateY(-2px);
+  border-color: rgba(245, 197, 24, 0.55);
+}
+
+/* ─── Cast hover (detail person circles) ────────────────────────────────── */
+.cine-cast-avatar {
+  transition: transform var(--cine-duration-base) var(--cine-ease-out),
+    border-color var(--cine-duration-base) var(--cine-ease-out),
+    box-shadow var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-cast-avatar img {
+  transition: transform 0.35s var(--cine-ease-out);
+}
+
+.group:hover .cine-cast-avatar {
+  transform: translateY(-4px) scale(1.03);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: var(--cine-shadow-2), 0 0 0 3px rgba(149, 255, 80, 0.22);
+}
+
+.group:hover .cine-cast-avatar img {
+  transform: scale(1.08);
+}
+
+/* Opt out of the global keyboard focus ring where the container already
+   glows (big search fields) — the harsh box reads as a rendering bug. */
+.cine-focus-none:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* ─── IMDb Tag ──────────────────────────────────────────────────────────── */

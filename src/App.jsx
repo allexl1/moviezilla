@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard, Radio } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES, SORTS, TV_SORTS } from './services/tmdb';
-import { storage, progressLabel } from './services/storage';
+import { storage, progressLabel, formatClock } from './services/storage';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
 import RowRail from './components/RowRail';
@@ -540,6 +540,19 @@ export default function App() {
       (fallbackDetails?.type === 'tv' || fallbackDetails?.type === 'movie') ? fallbackDetails.type :
       (media?.first_air_date || fallbackDetails?.first_air_date || fallbackDetails?.number_of_seasons) ? 'tv' : 'movie';
 
+    // "Resuming from 17:41" — makes the history system feel true. Only
+    // when there's a real position worth announcing (30s+).
+    const announceResume = () => {
+      try {
+        const saved = storage.getProgress(mediaType, media.id);
+        if (saved && saved.currentTime >= 30) {
+          showToast(`Resuming from ${formatClock(saved.currentTime)}`);
+        }
+      } catch {
+        // never block playback for a toast
+      }
+    };
+
     try {
       const details = await tmdb.getMediaDetails(mediaType, media.id);
 
@@ -550,6 +563,7 @@ export default function App() {
         },
         details: details || fallbackDetails || media,
       });
+      announceResume();
     } catch (err) {
       console.error('Failed to load media details for playback:', err);
 
@@ -565,6 +579,7 @@ export default function App() {
         },
         details: fallbackDetails || media,
       });
+      announceResume();
     }
   };
 

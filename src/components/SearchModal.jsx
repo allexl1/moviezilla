@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
-import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
+import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Row from './ui/Row';
@@ -139,7 +139,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           placeholder="Search movies, shows, people…"
           aria-label="Search movies, shows, people"
           autoFocus
-          className="w-full bg-transparent text-lg md:text-xl font-medium text-white placeholder-white/30 focus:outline-none"
+          className="cine-focus-none w-full bg-transparent text-lg md:text-xl font-medium text-white placeholder-white/30 focus:outline-none"
         />
         <button
           onClick={onClose}
@@ -211,18 +211,18 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                 <p className="text-[11px] font-bold uppercase tracking-wider text-white/50 mb-2">
                   Trending now
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
                   {trending.map((item) => (
-                    <button
+                    <Card
                       key={item.id}
-                      onClick={() => {
-                        onSelectMedia(item);
+                      media={item}
+                      size="fluid"
+                      posterOnly
+                      onClick={(m) => {
+                        onSelectMedia(m);
                         onClose();
                       }}
-                      className="cine-chip cine-chip--neutral hover:text-white transition cursor-pointer"
-                    >
-                      {item.title || item.name}
-                    </button>
+                    />
                   ))}
                 </div>
               </div>
@@ -258,9 +258,9 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                 className={`rounded-2xl transition ${activeIdx === pi ? 'ring-2 ring-white/70' : ''}`}
               >
                 <Row
-                  poster={tmdb.getImageUrl(p.profile_path, 'w185', FALLBACK_PROFILE)}
-                  title={p.name}
-                  meta={p.known_for_department || 'Person'}
+                poster={tmdb.getImageUrl(p.profile_path, 'w185', FALLBACK_PROFILE)}
+                title={p.name}
+                meta={deptName(p.known_for_department)}
                   onClick={() => choosePerson(p.id)}
                 />
               </div>
@@ -271,7 +271,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
         {results.length > 0 && (
           <div className="space-y-2">
             <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
-              Titles
+              Titles • {results.length}
             </p>
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
               {results.map((item, ri) => {

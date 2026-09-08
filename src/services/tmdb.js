@@ -7,6 +7,28 @@ export const FALLBACK_BACKDROP = 'https://images.unsplash.com/photo-153644013662
 export const FALLBACK_POSTER = 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=500&q=80';
 export const FALLBACK_PROFILE = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
 
+// Human job titles: TMDB returns department enums ("Acting"), people read
+// roles ("Actor"). One mapper so no raw enum ever reaches the screen.
+const DEPT_NAMES = {
+  Acting: 'Actor',
+  Directing: 'Director',
+  Production: 'Producer',
+  Writing: 'Writer',
+  Crew: 'Crew',
+  'Costume & Make-Up': 'Costumes',
+  'Visual Effects': 'VFX',
+  Sound: 'Sound',
+  Lighting: 'Lighting',
+  'Camera Department': 'Camera',
+  'Art Department': 'Art',
+  Editing: 'Editor',
+};
+
+export function deptName(dept) {
+  if (!dept) return 'Person';
+  return DEPT_NAMES[dept] || dept;
+}
+
 export const MOVIE_GENRES = [
   { id: '', name: 'All Genres' },
   { id: '28', name: 'Action' },

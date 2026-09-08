@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cake, MapPin, Sparkles, Trophy, ExternalLink } from 'lucide-react';
-import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
+import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { getAwardsByImdb, zodiacSign, ageOf } from '../services/wikidata';
 import RowRail from './RowRail';
 import { SkelRail } from './ui';
@@ -88,11 +88,11 @@ export default function PersonView({ personId, onSelectMedia }) {
 
   const age = ageOf(person.birthday, person.deathday);
   const sign = zodiacSign(person.birthday);
+  // Full lists — the rail caps them visually with Show-all expansion.
   const rank = (list) =>
     (list || [])
       .filter((x) => x.poster_path)
-      .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
-      .slice(0, 14);
+      .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
   const movies = rank(person.movie_credits?.cast);
   const shows = rank(person.tv_credits?.cast);
   const directed = rank([
@@ -100,6 +100,7 @@ export default function PersonView({ personId, onSelectMedia }) {
     ...(person.tv_credits?.crew || []).filter((x) => x.job === 'Director'),
   ]);
   const bio = person.biography || '';
+  const photos = (person.images?.profiles || []).filter((p) => p.file_path).slice(0, 10);
 
   return (
     <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
@@ -119,7 +120,7 @@ export default function PersonView({ personId, onSelectMedia }) {
 
           <div className="min-w-0 space-y-3 pt-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
-              {person.known_for_department || 'Acting'}
+              {deptName(person.known_for_department)}
             </p>
             <h1 className="text-4xl md:text-6xl font-black tracking-tight">
               {person.name}
@@ -189,6 +190,29 @@ export default function PersonView({ personId, onSelectMedia }) {
           </div>
         </header>
 
+        {/* Photo gallery — every profile TMDB has, sideways scroll. */}
+        {photos.length > 1 && (
+          <section className="space-y-3">
+            <h3 className="cine-section-title">Photos</h3>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+              {photos.map((p, i) => (
+                <div
+                  key={p.file_path}
+                  className="w-28 md:w-36 flex-shrink-0 aspect-[2/3] rounded-2xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)]"
+                >
+                  <img
+                    src={tmdb.getImageUrl(p.file_path, 'w300')}
+                    alt={`${person.name} photo ${i + 1}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Awards — gold honours strip (Wikidata, silent when empty). */}
         {awards.length > 0 && (
           <section className="space-y-3">
@@ -199,13 +223,13 @@ export default function PersonView({ personId, onSelectMedia }) {
               </h2>
               <span className="text-xs text-white/60">{awards.length}</span>
             </div>
-            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-2">
+            <div className="flex flex-wrap gap-2.5">
               {awards.map((a, i) => (
-                <div key={`${a.label}_${a.year}_${i}`} className="cine-award flex-shrink-0" title={a.work || a.label}>
+                <div key={`${a.label}_${a.year}_${i}`} className="cine-award" title={a.work || a.label}>
                   <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="min-w-0">
-                    <span className="block text-xs font-bold text-white truncate max-w-44">{a.label}</span>
-                    <span className="block text-[10px] text-white/60 truncate max-w-44">
+                    <span className="block text-xs font-bold text-white">{a.label}</span>
+                    <span className="block text-[10px] text-white/60">
                       {[a.year, a.work].filter(Boolean).join(' • ')}
                     </span>
                   </span>
@@ -222,6 +246,7 @@ export default function PersonView({ personId, onSelectMedia }) {
             onSelect={onSelectMedia}
             mediaType="movie"
             showRating
+            expandable
           />
         )}
 
@@ -232,6 +257,7 @@ export default function PersonView({ personId, onSelectMedia }) {
             onSelect={onSelectMedia}
             mediaType="tv"
             showRating
+            expandable
           />
         )}
 
@@ -242,6 +268,8 @@ export default function PersonView({ personId, onSelectMedia }) {
             onSelect={(item) =>
               onSelectMedia({ ...item, media_type: item.first_air_date ? 'tv' : 'movie' })
             }
+            showRating
+            expandable
           />
         )}
       </div>
