@@ -8,9 +8,9 @@ import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
  */
 export default function Card({ media, onClick, showRating = true, size = 'default', posterOnly = false }) {
   const title = media?.title || media?.name || 'Untitled';
-  // Posters render ≤250px wide — w342 is plenty (retina-covered) and far
-  // lighter than w500/w780. Only lg keeps a larger size.
-  const posterSize = size === 'lg' ? 'w780' : 'w342';
+  // Fluid grid cards render up to ~210px wide — w500 keeps them crisp on
+  // retina; rails stay on lighter w342, lg keeps w780.
+  const posterSize = size === 'lg' ? 'w780' : size === 'fluid' ? 'w500' : 'w342';
   const poster = tmdb.getImageUrl(media?.poster_path, posterSize);
   const rating = media?.vote_average ? media.vote_average.toFixed(1) : null;
   const year = (media?.release_date || media?.first_air_date || '').split('-')[0];

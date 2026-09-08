@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Server } from 'lucide-react';
 import { storage } from '../services/storage';
 
-export default function ServerSwitcher({ currentServer, onSelectServer, closeSignal = 0, onOpenChange = null }) {
+export default function ServerSwitcher({ currentServer, onSelectServer, closeSignal = 0, onOpenChange = null, unavailable = [] }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -13,6 +13,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
   const servers = [
     { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal', resume: true },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal', resume: true },
+    { id: 'russian', name: 'Russian (RU dubs)', quality: 'HD', ping: 'good', resume: false },
   ];
 
   useEffect(() => {
@@ -71,11 +72,18 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
           <div className="space-y-1.5">
             {servers.map((s) => {
               const isSelected = s.id === activeServer.id;
+              const off = unavailable.includes(s.id);
               return (
                 <button
                   key={s.id}
-                  onClick={() => handleSelect(s.id)}
-                  className={`mat-row w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left text-sm transition cursor-pointer ${
+                  onClick={() => {
+                    if (!off) handleSelect(s.id);
+                  }}
+                  disabled={off}
+                  title={off ? 'No Russian source for this title' : s.name}
+                  className={`mat-row w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left text-sm transition ${
+                    off ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                  } ${
                     isSelected ? 'border-[var(--cine-accent)]/50' : ''
                   }`}
                 >

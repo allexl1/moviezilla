@@ -10,7 +10,9 @@ import WatchlistView from './components/WatchlistView';
 import RoomsView from './components/RoomsView';
 import RoomView from './components/RoomView';
 import FootballView from './components/FootballView';
+import PersonView from './components/PersonView';
 import Card from './components/ui/Card';
+import { SkelGrid, SkelRail } from './components/ui';
 import Select from './components/ui/Select';
 import MediaDetailPage from './components/MediaDetailPage';
 import SearchModal from './components/SearchModal';
@@ -119,6 +121,7 @@ export default function App() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(true);
   const prevFilterKey = useRef('');
   const [continueWatching, setContinueWatching] = useState([]);
 
@@ -142,6 +145,7 @@ export default function App() {
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
+  const [selectedPerson, setSelectedPerson] = useState(null);
   const [activePlayer, setActivePlayer] = useState(null);
   const [activeRoomCode, setActiveRoomCode] = useState(null);
   const [roomDraft, setRoomDraft] = useState(null);
@@ -238,11 +242,13 @@ export default function App() {
 
     async function load() {
       if (page > 1) setLoadingMore(true);
+      else setCatalogLoading(true);
       try {
         let res;
 
         if (activeTab === 'watchlist' || activeTab === 'rooms' || activeTab === 'football') {
           // WatchlistView / RoomsView / FootballView own their data.
+          setCatalogLoading(false);
           return;
         } else if (activeTab === 'movie') {
           res = await tmdb.getMovies({
@@ -287,7 +293,10 @@ export default function App() {
         console.error('Failed to load catalog:', err);
         if (isMounted) setCatalogError("Couldn't load titles. Check your connection.");
       } finally {
-        if (isMounted) setLoadingMore(false);
+        if (isMounted) {
+          setLoadingMore(false);
+          setCatalogLoading(false);
+        }
       }
     }
 
@@ -585,8 +594,11 @@ export default function App() {
               setShowAiring(false);
             }
           }}
-        isDetailView={Boolean(selectedMedia)}
-        onBack={() => setSelectedMedia(null)}
+        isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
+        onBack={() => {
+          setSelectedMedia(null);
+          setSelectedPerson(null);
+        }}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
@@ -595,6 +607,14 @@ export default function App() {
           code={activeRoomCode}
           onLeave={leaveRoom}
           onToast={showToast}
+        />
+      ) : selectedPerson ? (
+        <PersonView
+          personId={selectedPerson}
+          onSelectMedia={(item) => {
+            setSelectedPerson(null);
+            setSelectedMedia(item);
+          }}
         />
       ) : selectedMedia ? (
         <MediaDetailPage
@@ -608,6 +628,10 @@ export default function App() {
             })
           }
           onSelectMedia={(item) => setSelectedMedia(item)}
+          onSelectPerson={(id) => {
+            setSelectedMedia(null);
+            setSelectedPerson(id);
+          }}
           onWatchTogether={(media) => {
             setSelectedMedia(null);
             setRoomDraft(media);
@@ -947,7 +971,14 @@ export default function App() {
               )}
               {activeTab === 'home' ? (
                 <div className="flex flex-col gap-10">
-                  <RowRail title="Trending Now" items={items.filter(hasRating)} onSelect={setSelectedMedia} />
+                  {items.length === 0 && popularMovies.length === 0 && !catalogError ? (
+                    <>
+                      <SkelRail title />
+                      <SkelRail title />
+                    </>
+                  ) : (
+                    <RowRail title="Trending Now" items={items.filter(hasRating)} onSelect={setSelectedMedia} />
+                  )}
                   <RowRail
                     title="Now Playing in Theaters"
                     items={nowPlaying}
@@ -1073,6 +1104,10 @@ export default function App() {
                           {releasedItems.length} titles • available now
                         </span>
                       </div>
+                      {catalogLoading && releasedItems.length === 0 ? (
+                    <SkelGrid count={12} />
+                  ) : (
+                    <>
                       <div className="cine-grid">
                         {releasedItems.map((media) => (
                           <Card
@@ -1089,6 +1124,8 @@ export default function App() {
                           No titles found. Try clearing filters.
                         </p>
                       )}
+                    </>
+                  )}
                     </>
                   )}
                   {(activeTab === 'movie' || activeTab === 'tv') &&
@@ -1122,6 +1159,7 @@ export default function App() {
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onSelectMedia={(item) => setSelectedMedia(item)}
+        onSelectPerson={(id) => setSelectedPerson(id)}
       />
 
       {activePlayer && (

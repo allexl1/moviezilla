@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, X, Users } from 'lucide-react';
+import { Play, Plus, Check, Star, X, Users, Trophy } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
+import { getAwardsByImdb } from '../services/wikidata';
 import { storage } from '../services/storage';
 import RowRail from './RowRail';
 
@@ -44,7 +45,7 @@ function certificationOf(details, mediaType) {
   }
 }
 
-export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether }) {
+export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether, onSelectPerson }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailsError, setDetailsError] = useState('');
@@ -57,6 +58,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [expanded, setExpanded] = useState(false);
   const [imdb, setImdb] = useState(null);
   const [rt, setRt] = useState(null);
+  const [awards, setAwards] = useState([]);
 
   const mediaId = media?.id;
 
@@ -113,6 +115,20 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     };
   }, [details, mediaType]);
 
+  // Awards via Wikidata on the IMDb id (cached, silent on miss).
+  useEffect(() => {
+    let isMounted = true;
+    setAwards([]);
+    const imdbId = imdbIdOf(details, mediaType);
+    if (!imdbId) return;
+    getAwardsByImdb(imdbId).then((list) => {
+      if (isMounted) setAwards(list.slice(0, 8));
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [details, mediaType]);
+
   // Rotten Tomatoes via our /api/rt proxy (free keyless backend by
   // default; RapidAPI backend if RAPIDAPI_KEY is set server-side).
   useEffect(() => {
@@ -143,14 +159,57 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const budget = formatMoney(details?.budget);
   const genres = details?.genres || [];
   const cast = details?.credits?.cast?.slice(0, 12) || [];
-  const director = (details?.credits?.crew || []).find((c) => c.job === 'Director')?.name || null;
+  const director = (details?.credits?.crew || []).find((c) => c.job === 'Director') || null;
+  const creators = (details?.created_by || []).slice(0, 3);
   const studios = (details?.production_companies || []).slice(0, 2).map((c) => c.name);
   const language = (details?.original_language || '').toUpperCase() || null;
   const status = details?.status || null;
   const seasonsCount = details?.number_of_seasons || null;
   const episodesCount = details?.number_of_episodes || null;
   const releaseDate = formatDate(details?.release_date || details?.first_air_date);
-  const similar = details?.similar?.results?.filter((x) => x.poster_path) || [];
+  // Sensible "You Might Also Like": TMDB similar as candidates, but scored
+  // by shared genres with THIS title and stripped of unrated junk. Topped
+  // up from same-genre top-rated when TMDB returns thin air.
+  const [similar, setSimilar] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const genreIds = new Set((details?.genres || []).map((g) => g.id));
+    const score = (x) => (x.genre_ids || []).filter((g) => genreIds.has(g)).length;
+    const clean = (list) =>
+      (list || [])
+        .filter((x) => x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 10)
+        .sort(
+          (a, b) =>
+            score(b) - score(a) ||
+            (b.vote_average || 0) - (a.vote_average || 0) ||
+            (b.popularity || 0) - (a.popularity || 0)
+        );
+    const base = clean(details?.similar?.results);
+    if (base.length >= 8 || genreIds.size === 0) {
+      setSimilar(base.slice(0, 12));
+      return () => {
+        alive = false;
+      };
+    }
+    const have = new Set(base.map((x) => x.id));
+    const genre = [...genreIds][0];
+    const fetcher =
+      mediaType === 'tv'
+        ? tmdb.getSeries({ genre, sort: 'vote_average.desc' })
+        : tmdb.getMovies({ genre, sort: 'vote_average.desc' });
+    fetcher
+      .then((res) => {
+        if (!alive) return;
+        const extra = clean(res?.results).filter((x) => !have.has(x.id));
+        setSimilar([...base, ...extra].slice(0, 12));
+      })
+      .catch(() => {
+        if (alive) setSimilar(base.slice(0, 12));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [details, mediaType]);
   const trailers = (details?.videos?.results || []).filter(
     (v) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube'
   ).slice(0, 6);
@@ -280,7 +339,32 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
           {director && (
             <p className="text-sm text-white/50">
-              Director: <span className="text-white/85 font-medium">{director}</span>
+              Director:{' '}
+              <button
+                onClick={() => onSelectPerson?.(director.id)}
+                className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
+                title={`Open ${director.name}'s profile`}
+              >
+                {director.name}
+              </button>
+            </p>
+          )}
+
+          {creators.length > 0 && (
+            <p className="text-sm text-white/50">
+              Created by:{' '}
+              {creators.map((c, i) => (
+                <span key={c.id || c.name}>
+                  {i > 0 && ', '}
+                  <button
+                    onClick={() => onSelectPerson?.(c.id)}
+                    className="text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
+                    title={`Open ${c.name}'s profile`}
+                  >
+                    {c.name}
+                  </button>
+                </span>
+              ))}
             </p>
           )}
 
@@ -377,13 +461,43 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           </section>
         )}
 
+        {/* Honours — gold strip, silent when the title has none indexed. */}
+        {awards.length > 0 && (
+          <section className="space-y-3">
+            <div className="cine-section-head">
+              <h3 className="cine-section-title inline-flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-[#f5c518]" />
+                Honours
+              </h3>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-2">
+              {awards.map((a, i) => (
+                <div key={`${a.label}_${a.year}_${i}`} className="cine-award flex-shrink-0" title={a.work || a.label}>
+                  <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-bold text-white truncate max-w-44">{a.label}</span>
+                    <span className="block text-[10px] text-white/60 truncate max-w-44">
+                      {[a.year, a.work].filter(Boolean).join(' • ')}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Cast */}
         {cast.length > 0 && (
           <section className="space-y-4">
             <h3 className="cine-section-title">Cast</h3>
             <div className="flex gap-5 overflow-x-auto no-scrollbar pb-2">
               {cast.map((actor) => (
-                <div key={actor.id} className="flex-shrink-0 w-32 text-center space-y-2">
+                <div
+                  key={actor.id}
+                  onClick={() => onSelectPerson?.(actor.id)}
+                  title={actor.name}
+                  className="flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
+                >
                   <div className="w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">
                     <img
                       src={tmdb.getImageUrl(actor.profile_path, 'w185', FALLBACK_PROFILE)}
@@ -449,6 +563,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <RowRail
             title="You Might Also Like"
             items={similar.slice(0, 14)}
+            showRating
             onSelect={(item) => {
               onSelectMedia(item);
               window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -1,18 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Search, X, Star } from 'lucide-react';
-import { tmdb } from '../services/tmdb';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, X } from 'lucide-react';
+import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Row from './ui/Row';
+import Card from './ui/Card';
+import { SkelRow } from './ui';
 
-export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
+export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPerson }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchRetry, setSearchRetry] = useState(0);
   const [history, setHistory] = useState([]);
   const [trending, setTrending] = useState([]);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const activeRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -42,6 +47,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
+      setPeople([]);
       return;
     }
 
@@ -49,8 +55,16 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       setLoading(true);
       setSearchError('');
       try {
-        const res = await tmdb.searchMulti(query);
-        setResults((res?.results || []).filter((x) => x.poster_path));
+        const [multi, persons] = await Promise.all([
+          tmdb.searchMulti(query),
+          tmdb.searchPerson(query).catch(() => null),
+        ]);
+        setResults((multi?.results || []).filter((x) => x.poster_path));
+        setPeople(
+          (persons?.results || [])
+            .filter((x) => x.profile_path && x.name)
+            .slice(0, 4)
+        );
       } catch (err) {
         console.error('Search failed:', err);
         setSearchError("Search failed. Check your connection.");
@@ -62,27 +76,70 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
     return () => clearTimeout(timer);
   }, [query, searchRetry]);
 
+  // Flat keyboard order: people first, then titles.
+  const navItems = [
+    ...people.map((p) => ({ kind: 'person', id: p.id, data: p })),
+    ...results.map((item) => ({ kind: 'media', id: `${item.media_type}_${item.id}`, data: item })),
+  ];
+
+  useEffect(() => {
+    setActiveIdx(-1);
+  }, [query, results.length, people.length]);
+
+  // Keep the highlighted row/card in view while arrowing through results.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx]);
+
+  const chooseMedia = (item) => {
+    if (query.trim()) storage.addSearchHistory(query.trim());
+    onSelectMedia(item);
+    onClose();
+  };
+
+  const choosePerson = (id) => {
+    onSelectPerson?.(id);
+    onClose();
+  };
+
+  const onInputKey = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (navItems.length === 0) return;
+      setActiveIdx((i) => {
+        const d = e.key === 'ArrowDown' ? 1 : -1;
+        return ((i < 0 ? (d > 0 ? -1 : 0) : i) + d + navItems.length) % navItems.length;
+      });
+    } else if (e.key === 'Enter' && activeIdx >= 0 && navItems[activeIdx]) {
+      e.preventDefault();
+      const target = navItems[activeIdx];
+      if (target.kind === 'person') choosePerson(target.id);
+      else chooseMedia(target.data);
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-2xl"
+      maxWidth="max-w-3xl"
       align="top"
       showCloseButton={false}
-      panelClassName="p-6 space-y-6"
+      panelClassName="p-6 md:p-8 space-y-6"
       label="Search movies and shows"
     >
       {/* Search Input Bar */}
-      <div className="flex items-center gap-3 border-b border-[var(--cine-glass-border)] pb-4">
-        <Search className="w-5 h-5 text-white/60 flex-shrink-0" />
+      <div className="flex items-center gap-4 rounded-2xl bg-white/[0.04] border border-white/10 px-5 py-4 focus-within:border-white/25 transition">
+        <Search className="w-6 h-6 text-white/60 flex-shrink-0" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search movies, shows, or anime..."
-          aria-label="Search movies, shows, or anime"
+          onKeyDown={onInputKey}
+          placeholder="Search movies, shows, people…"
+          aria-label="Search movies, shows, people"
           autoFocus
-          className="w-full bg-transparent text-sm md:text-base text-white placeholder-white/30 focus:outline-none"
+          className="w-full bg-transparent text-lg md:text-xl font-medium text-white placeholder-white/30 focus:outline-none"
         />
         <button
           onClick={onClose}
@@ -93,8 +150,15 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
       </div>
 
       {/* Results Container */}
-      <div className="max-h-[60vh] overflow-y-auto no-scrollbar space-y-2">
-        {loading && <p className="text-center py-8 text-xs text-white/60">Searching catalog...</p>}
+      <div className="max-h-[60vh] overflow-y-auto no-scrollbar space-y-4">
+        {loading && (
+          <div className="space-y-2" aria-hidden="true">
+            <SkelRow />
+            <SkelRow />
+            <SkelRow />
+            <SkelRow />
+          </div>
+        )}
 
         {!loading && !query.trim() && (
           <div className="space-y-5 py-2">
@@ -182,34 +246,53 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia }) {
           </div>
         )}
 
-        {results.map((item) => {
-          const title = item.title || item.name;
-          const poster = tmdb.getImageUrl(item.poster_path, 'w185');
-          const year = (item.release_date || item.first_air_date || '').split('-')[0];
-          const rating = item.vote_average ? item.vote_average.toFixed(1) : null;
+        {people.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+              People
+            </p>
+            {people.map((p, pi) => (
+              <div
+                key={`person_${p.id}`}
+                ref={activeIdx === pi ? activeRef : null}
+                className={`rounded-2xl transition ${activeIdx === pi ? 'ring-2 ring-white/70' : ''}`}
+              >
+                <Row
+                  poster={tmdb.getImageUrl(p.profile_path, 'w185', FALLBACK_PROFILE)}
+                  title={p.name}
+                  meta={p.known_for_department || 'Person'}
+                  onClick={() => choosePerson(p.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
-          return (
-            <Row
-              key={`${item.id}_${title}`}
-              poster={poster}
-              title={title}
-              meta={`${item.media_type ? item.media_type.toUpperCase() : 'MEDIA'}${year ? ` • ${year}` : ''}`}
-              onClick={() => {
-                if (query.trim()) storage.addSearchHistory(query.trim());
-                onSelectMedia(item);
-                onClose();
-              }}
-              right={
-                rating && (
-                  <span className="cine-chip cine-chip--rating">
-                    <Star className="w-3 h-3" fill="currentColor" strokeWidth={0} />
-                    {rating}
-                  </span>
-                )
-              }
-            />
-          );
-        })}
+        {results.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+              Titles
+            </p>
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+              {results.map((item, ri) => {
+                const gi = people.length + ri;
+                return (
+                  <div
+                    key={`${item.media_type}_${item.id}`}
+                    ref={activeIdx === gi ? activeRef : null}
+                    className={`rounded-2xl transition ${activeIdx === gi ? 'ring-2 ring-white/70' : ''}`}
+                  >
+                    <Card
+                      media={item}
+                      onClick={chooseMedia}
+                      size="fluid"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

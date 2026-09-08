@@ -8,6 +8,7 @@ import Select from './ui/Select';
 const SERVERS = [
   { value: 'vidy', label: 'Vidy (Recommended)' },
   { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
+  { value: 'russian', label: 'Russian (RU dubs)' },
 ];
 
 function SettingRow({ icon, title, desc, control, danger = false }) {

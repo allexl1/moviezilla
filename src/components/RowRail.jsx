@@ -7,7 +7,7 @@ import Card from './ui/Card';
  * Cinejoy-style: section title, edge-to-edge scroll, poster-only cards.
  * `action`: { label, onClick } rendered right (e.g. View All).
  */
-export default function RowRail({ title, titleNode, items = [], onSelect, mediaType, action }) {
+export default function RowRail({ title, titleNode, items = [], onSelect, mediaType, action, showRating = false }) {
   if (!items || items.length === 0) return null;
 
   return (
@@ -33,7 +33,7 @@ export default function RowRail({ title, titleNode, items = [], onSelect, mediaT
             key={`${title}_${media.id}`}
             media={media}
             onClick={(m) => onSelect?.({ ...m, media_type: m.media_type || mediaType || 'movie' })}
-            showRating={false}
+            showRating={showRating}
             posterOnly
           />
         ))}

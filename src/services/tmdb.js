@@ -464,6 +464,34 @@ export const tmdb = {
     });
   },
 
+  async searchPerson(queryText) {
+    return proxyFetch('search/person', {
+      query: queryText,
+    });
+  },
+
+  // Person profile with credits + images + ids in one call.
+  async getPersonDetails(id) {
+    const cacheKey = `person:${id}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
+
+    const query = new URLSearchParams({
+      path: `person/${id}`,
+      append_to_response: 'movie_credits,tv_credits,images,external_ids',
+    });
+
+    const res = await fetch(`/api/tmdb?${query.toString()}`);
+
+    if (!res.ok) {
+      throw new Error(`TMDB person failed: ${res.status}`);
+    }
+
+    const data = await res.json();
+    cacheSet(cacheKey, data);
+    return data;
+  },
+
   // Resolve a Letterboxd-style title/year to a real TMDB item (lazy, on
   // selection — not at list-fetch time). Scores candidates on normalized
   // title (diacritics/punctuation/articles stripped, original_title

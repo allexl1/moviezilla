@@ -132,24 +132,30 @@ export const storage = {
     safeSet(STORAGE_KEYS.PROGRESS, allProgress);
   },
 
-  // This server's slot, falling back to the latest overall position.
+  // This server's slot — STRICT. Once an entry tracks per-server clocks,
+  // a missing slot means "never watched here": start at 0, never borrow
+  // another provider's seconds (that cross-contamination restarted
+  // players at 0:00 and looped reloads on shorter cuts). Entries written
+  // before slots existed (no servers map) still fall back to top-level.
   getServerProgress(type, mediaId, server) {
     if (!mediaId) return null;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const entry = allProgress[`${type}_${mediaId}`];
     if (!entry) return null;
-    if (server && entry.servers?.[server]) return entry.servers[server];
+    const tracked = entry.servers && Object.keys(entry.servers).length > 0;
+    if (tracked) return (server && entry.servers[server]) || null;
     return { currentTime: entry.currentTime, duration: entry.duration, updatedAt: entry.updatedAt };
   },
 
   // Saved position of one specific episode (for episode switching),
-  // preferring this server's slot for it.
+  // same strict per-server rule as above.
   getEpisodeProgress(type, mediaId, season, episode, server = '') {
     if (!mediaId) return null;
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const ep = allProgress[`${type}_${mediaId}`]?.episodes?.[`${season}x${episode}`];
     if (!ep) return null;
-    if (server && ep.servers?.[server]) return ep.servers[server];
+    const tracked = ep.servers && Object.keys(ep.servers).length > 0;
+    if (tracked) return (server && ep.servers[server]) || null;
     return ep;
   },
 
@@ -199,12 +205,12 @@ export const storage = {
     }
   },
 
-  // Preferred Server memory. Only Vidy/VidLink are offered now — a stale
-  // stored id from the old lineup falls back instead of mismatching the UI.
+  // Preferred Server memory. Only offered ids survive — a stale stored
+  // id from a retired lineup falls back instead of mismatching the UI.
   getPreferredServer(defaultServer = 'vidy') {
     try {
       const v = localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
-      return v === 'vidy' || v === 'vidlink' ? v : defaultServer;
+      return ['vidy', 'vidlink', 'russian'].includes(v) ? v : defaultServer;
     } catch {
       return defaultServer;
     }

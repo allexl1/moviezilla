@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
 import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
+import { imdbIdOf } from '../services/ratings';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 
@@ -24,10 +25,20 @@ const TRUSTED_PLAYER_ORIGINS = [
   'https://player.autoembed.cc',
   'https://vidfast.pro',
   'https://vidfast.net',
+  'https://voidboost.tv',
+  'https://www.voidboost.tv',
 ];
 
-function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
+function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime, imdb }) {
   const t = Math.max(0, Math.floor(resumeTime || 0));
+  // Russian RU-dub source (Voidboost, keyless, IMDb-addressed). No resume
+  // param or time events documented — wall-clock tracking applies.
+  if (server === 'russian') {
+    if (imdb) return `https://voidboost.tv/embed/tt${String(imdb).replace(/^tt/, '')}`;
+    return isTv
+      ? `https://vidy.st/tv/${mediaId}/${season}/${episode}`
+      : `https://vidy.st/movie/${mediaId}`;
+  }
   // NOTE: VidLink's resume param is `startAt` — `start` does nothing.
   if (server === 'vidlink') {
     const base = isTv
@@ -98,7 +109,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     return {
       season: saved?.season || 1,
       episode: saved?.episode || 1,
-      time: slot?.currentTime ?? saved?.currentTime ?? 0,
+      // Strict slot only: another server's seconds (or legacy top-level
+      // once slots exist) must never leak in here.
+      time: slot?.currentTime ?? 0,
     };
   };
 
@@ -127,6 +140,11 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // Provider-declared pause: freeze the wall clock (it otherwise accrues
   // minutes while the video sits paused, corrupting History).
   const pausedProvRef = useRef(false);
+  // Last real provider report: if the provider goes silent afterwards
+  // (paused without an event, buffered, tab throttled), the wall clock
+  // must not invent minutes on top of it — freeze after 20s of silence.
+  // (This was the 14:xx → 16:xx inflation.)
+  const lastPmRef = useRef({ time: 0, at: 0 });
   // Resume-convergence guard: providers emit ~0s ticks right after load,
   // before applying the resume second. While unconverged, a reading far
   // below the restored base is the player booting — not a rewind. Trust
@@ -144,6 +162,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const accumulateWallClock = () => {
     const now = Date.now();
     if (pausedProvRef.current) {
+      lastTickRef.current = now;
+      return;
+    }
+    // Provider went quiet after reporting real time: accrue at most ~20s
+    // past its last word, then hold. A silent player is a stuck player.
+    if (pmSeenRef.current && now - lastPmRef.current.at > 20000) {
       lastTickRef.current = now;
       return;
     }
@@ -181,6 +205,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     // Don't spam History with 0s opens: first meaningful save happens
     // after ~5s of actual watching (see heartbeat below).
     if (pos.time <= 0 && !pmSeenRef.current && activeMsRef.current < 4000) return;
+    // Peek rule: a brand-new title needs 5 real seconds (or provider
+    // playback evidence) before it earns a history row at all.
+    if (!prev && pos.time < 5 && !pmSeenRef.current) return;
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
@@ -191,6 +218,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       server,
       ...buildMeta(),
     });
+  };
+
+  // Never resume past the known end: a stale second beyond a shorter
+  // cut makes some providers error-loop instead of playing. 20s margin
+  // keeps us out of the credits wall.
+  const clampResume = (t) => {
+    const mins = details?.runtime || details?.episode_run_time?.[0] || null;
+    if (!mins) return Math.max(0, t);
+    return Math.min(Math.max(0, t), Math.max(0, mins * 60 - 20));
   };
 
   // The embed URL is built ONCE per server/episode change — never per
@@ -204,13 +240,22 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       isTv,
       season: initialPlayback.season,
       episode: initialPlayback.episode,
-      resumeTime: initialPlayback.time,
+      resumeTime: clampResume(initialPlayback.time),
+      imdb: imdbIdOf(details, isTv ? 'tv' : 'movie'),
     })
   );
 
   const rebuildEmbed = (srv, season, episode, resumeTime) => {
     setEmbedUrl(
-      buildEmbedUrl({ server: srv, mediaId, isTv, season, episode, resumeTime })
+      buildEmbedUrl({
+        server: srv,
+        mediaId,
+        isTv,
+        season,
+        episode,
+        resumeTime: clampResume(resumeTime),
+        imdb: imdbIdOf(details, isTv ? 'tv' : 'movie'),
+      })
     );
   };
 
@@ -406,10 +451,20 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               }
             }
             pmSeenRef.current = true;
-            playbackRef.current = { currentTime: t, duration: Number(dur) || 0 };
-            // Keep the wall estimate in sync so a later fallback save
-            // doesn't jump backwards.
-            wallBaseRef.current = t;
+            lastPmRef.current = { time: t, at: Date.now() };
+            // Ended: snap to the end (marks Watched via percent) and hold —
+            // there is no more video to accrue.
+            if (type === 'ended' || type === 'complete') {
+              const end = Number(dur) > 0 ? Number(dur) : t;
+              playbackRef.current = { currentTime: end, duration: Number(dur) || 0 };
+              wallBaseRef.current = end;
+              pausedProvRef.current = true;
+            } else {
+              playbackRef.current = { currentTime: t, duration: Number(dur) || 0 };
+              // Keep the wall estimate in sync so a later fallback save
+              // doesn't jump backwards.
+              wallBaseRef.current = t;
+            }
             activeMsRef.current = 0;
             lastTickRef.current = Date.now();
             reportRef.current();
@@ -539,6 +594,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             onOpenChange={(open) => {
               if (open) setIsEpisodeOpen(false);
             }}
+            unavailable={imdbIdOf(details, isTv ? 'tv' : 'movie') ? [] : ['russian']}
           />
 
           <button
