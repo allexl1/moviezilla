@@ -591,6 +591,13 @@ export default function App() {
           activeTab === 'movie' ? 'opacity-90' : ''
         }`}
       />
+      {/* Per-tab tint wash (green Movies / indigo Shows parity) */}
+      {(activeTab === 'movie' || activeTab === 'tv') && !selectedMedia && (
+        <div
+          className={`cine-tab-tint ${activeTab === 'movie' ? 'cine-tab-tint--movie' : 'cine-tab-tint--tv'}`}
+          aria-hidden="true"
+        />
+      )}
 
       <Navbar
         activeTab={activeTab}

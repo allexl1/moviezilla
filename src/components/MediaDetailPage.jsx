@@ -544,8 +544,8 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     />
                   </div>
                   <div>
-                    <h4 className="text-xs font-semibold text-white truncate">{actor.name}</h4>
-                    <p className="text-[10px] text-white/60 truncate">{actor.character}</p>
+                    <h4 className="text-[13px] font-bold text-white truncate">{actor.name}</h4>
+                    <p className="text-[11px] text-white/70 truncate">{actor.character}</p>
                   </div>
                 </div>
               ))}
@@ -565,7 +565,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     setHeroVideo(t.key);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                   className={`group relative flex-shrink-0 w-72 aspect-video rounded-2xl overflow-hidden cursor-pointer border transition ${
+                   className={`group relative flex-shrink-0 w-72 md:w-80 aspect-video rounded-2xl overflow-hidden cursor-pointer border transition ${
                      heroVideo === t.key
                        ? 'border-[var(--cine-accent)]/60'
                        : 'border-[var(--cine-glass-border)] hover:border-white/25'

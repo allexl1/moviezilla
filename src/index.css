@@ -726,13 +726,35 @@ select:focus-visible,
 
 .cine-hero-content {
   position: absolute;
-  bottom: 4rem;
+  bottom: 5.5rem;
   left: 3.5rem;
   max-width: 600px;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  gap: 1.125rem;
+  gap: 1.25rem;
+}
+
+/* Per-tab ambient wash (reference parity: Movies breathes green, Shows
+   indigo — Home stays neutral). One fixed layer, zero per-frame cost. */
+.cine-tab-tint {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.cine-tab-tint--movie {
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgba(149, 255, 80, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 88% 90%, rgba(74, 140, 40, 0.05) 0%, transparent 55%);
+}
+
+.cine-tab-tint--tv {
+  background-image:
+    radial-gradient(ellipse at 12% 8%, rgba(99, 102, 241, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse at 88% 90%, rgba(139, 92, 246, 0.05) 0%, transparent 55%);
 }
 
 .cine-hero-title {
@@ -897,7 +919,7 @@ select:focus-visible,
   .cine-hero-content {
     left: 1.25rem;
     right: 1.25rem;
-    bottom: 2.5rem;
+    bottom: 3.25rem;
     max-width: none;
   }
 

@@ -658,8 +658,17 @@ export default function RoomView({ code, onLeave, onToast }) {
         </div>
       </div>
 
-      {/* Side rail */}
-      <aside className="flex-1 min-h-0 md:flex-none md:w-[380px] border-t md:border-t-0 md:border-l border-[var(--cine-glass-border)] bg-[var(--cine-panel-dark)] backdrop-blur-2xl flex flex-col">
+      {/* Side rail — washed with the movie's own backdrop so it stops
+          reading as an admin panel. Translucent panel dims it to a hint. */}
+      <aside className="relative overflow-hidden flex-1 min-h-0 md:flex-none md:w-[380px] border-t md:border-t-0 md:border-l border-[var(--cine-glass-border)] bg-[var(--cine-panel-dark)] backdrop-blur-2xl flex flex-col">
+        {details?.backdrop_path && (
+          <img
+            src={tmdb.getImageUrl(details.backdrop_path, 'w780')}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 -z-10 w-full h-full object-cover opacity-20 pointer-events-none"
+          />
+        )}
         <div className="flex items-center gap-2 p-3 border-b border-[var(--cine-glass-border)] flex-shrink-0">
           <button
             onClick={() => setTab('chat')}

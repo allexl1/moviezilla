@@ -33,18 +33,18 @@ export default function RowRail({ title, titleNode, items = [], onSelect, mediaT
           <button
             onClick={() => setExpanded((e) => !e)}
             aria-expanded={expanded}
-            className="flex items-center gap-1 text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
+            className="group flex items-center gap-1 text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
           >
             {expanded ? 'Show less' : `Show all ${items.length}`}
-            <ArrowRight className={`w-3.5 h-3.5 transition-transform ${expanded ? '-rotate-90' : ''}`} />
+            <ArrowRight className={`w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 ${expanded ? '-rotate-90' : ''}`} />
           </button>
         ) : action ? (
           <button
             onClick={action.onClick}
-            className="flex items-center gap-1 text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
+            className="group flex items-center gap-1 text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
           >
             {action.label}
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
           </button>
         ) : (
           <span className="text-xs text-white/60">{items.length} titles</span>
