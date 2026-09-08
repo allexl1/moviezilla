@@ -606,6 +606,7 @@ export default function App() {
               setIsSearchOpen(true);
             } else {
               setSelectedMedia(null);
+              setSelectedPerson(null);
               setActiveTab(tab);
               setSelectedGenre('');
               setSelectedYear('All Years');

@@ -388,9 +388,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           </div>
         </div>
 
-        {/* Facts panel (xl screens only — avoids overlapping the overlay below that) */}
+        {/* Facts column (xl screens only): table up a touch, studios ride
+            directly beneath it on the right like the reference. */}
         {(runtime || language || releaseDate || status || seasonsCount || revenue || budget) && (
-          <div className="hidden xl:block absolute right-14 bottom-10 z-10 w-72 rounded-2xl cine-glass-panel overflow-hidden">
+          <div className="hidden xl:block absolute right-14 bottom-14 z-10 w-72 space-y-4">
+          <div className="rounded-2xl cine-glass-panel overflow-hidden">
             {seasonsCount && (
               <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-[var(--cine-glass-border)]">
                 <span className="text-white/60 font-medium">Seasons</span>
@@ -442,6 +444,30 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               </div>
             )}
           </div>
+          {studios.length > 0 && (
+            <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 px-1">
+              {studios.map((s) => (
+                s.logo_path ? (
+                  <img
+                    key={s.id || s.name}
+                    src={tmdb.getImageUrl(s.logo_path, 'w300')}
+                    alt={s.name}
+                    title={s.name}
+                    loading="lazy"
+                    className="h-7 w-auto max-w-32 object-contain opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition"
+                  />
+                ) : (
+                  <span
+                    key={s.id || s.name}
+                    className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50"
+                  >
+                    {s.name}
+                  </span>
+                )
+              ))}
+            </div>
+          )}
+          </div>
         )}
       </div>
 
@@ -466,27 +492,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </section>
 
         {studios.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {studios.map((s) => (
-              s.logo_path ? (
-                <img
-                  key={s.id || s.name}
-                  src={tmdb.getImageUrl(s.logo_path, 'w300')}
-                  alt={s.name}
-                  title={s.name}
-                  loading="lazy"
-                  className="h-6 w-auto max-w-32 object-contain opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition"
-                />
-              ) : (
-                <span
-                  key={s.id || s.name}
-                  className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50"
-                >
-                  {s.name}
-                </span>
-              )
-            ))}
-          </div>
+          <p className="xl:hidden text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
+            {studios.map((s) => s.name).join(' · ')}
+          </p>
         )}
 
         {(revenue || budget) && (

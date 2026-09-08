@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cake, MapPin, Sparkles, Trophy, ExternalLink } from 'lucide-react';
+import { Cake, MapPin, Sparkles, Trophy, ExternalLink, X } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { getAwardsByImdb, zodiacSign, ageOf } from '../services/wikidata';
 import RowRail from './RowRail';
@@ -19,6 +19,7 @@ export default function PersonView({ personId, onSelectMedia }) {
   const [retry, setRetry] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [awards, setAwards] = useState([]);
+  const [zoom, setZoom] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -43,6 +44,16 @@ export default function PersonView({ personId, onSelectMedia }) {
       alive = false;
     };
   }, [personId, retry]);
+
+  // Zoomed photo lightbox — Esc or tap anywhere to close.
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setZoom(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoom]);
 
   const imdbId = person?.imdb_id || person?.external_ids?.imdb_id || null;
 
@@ -107,16 +118,21 @@ export default function PersonView({ personId, onSelectMedia }) {
       <div className="relative z-10 max-w-[1560px] mx-auto px-6 md:px-14 pt-28 md:pt-32 space-y-10">
         {/* Header: portrait + identity */}
         <header className="flex flex-col sm:flex-row gap-6 sm:items-start">
-          <div className="w-40 md:w-52 flex-shrink-0 aspect-[2/3] rounded-3xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)] shadow-2xl">
+          <button
+            onClick={() => person.profile_path && setZoom(tmdb.getImageUrl(person.profile_path, 'original'))}
+            className="group w-40 md:w-52 flex-shrink-0 aspect-[2/3] rounded-3xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)] shadow-2xl cursor-zoom-in"
+            title="View full photo"
+            aria-label={`Enlarge photo of ${person.name}`}
+          >
             <img
               src={tmdb.getImageUrl(person.profile_path, 'w500', FALLBACK_PROFILE)}
               alt={person.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
               onError={(e) => {
                 e.target.src = FALLBACK_PROFILE;
               }}
             />
-          </div>
+          </button>
 
           <div className="min-w-0 space-y-3 pt-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
@@ -196,18 +212,21 @@ export default function PersonView({ personId, onSelectMedia }) {
             <h3 className="cine-section-title">Photos</h3>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
               {photos.map((p, i) => (
-                <div
+                <button
                   key={p.file_path}
-                  className="w-28 md:w-36 flex-shrink-0 aspect-[2/3] rounded-2xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)]"
+                  onClick={() => setZoom(tmdb.getImageUrl(p.file_path, 'original'))}
+                  className="group w-28 md:w-36 flex-shrink-0 aspect-[2/3] rounded-2xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)] cursor-zoom-in"
+                  title="View full photo"
+                  aria-label={`Enlarge photo ${i + 1} of ${person.name}`}
                 >
                   <img
                     src={tmdb.getImageUrl(p.file_path, 'w300')}
                     alt={`${person.name} photo ${i + 1}`}
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                   />
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -273,6 +292,32 @@ export default function PersonView({ personId, onSelectMedia }) {
           />
         )}
       </div>
+
+      {/* Full-photo lightbox */}
+      {zoom && (
+        <div
+          onClick={() => setZoom(null)}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-md p-6 animate-in fade-in duration-200 cursor-zoom-out"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+        >
+          <button
+            onClick={() => setZoom(null)}
+            className="cine-icon-btn absolute top-5 right-5"
+            title="Close"
+            aria-label="Close photo viewer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <img
+            src={zoom}
+            alt={person.name}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] max-w-full w-auto rounded-3xl border border-[var(--cine-glass-border)] shadow-2xl object-contain cursor-default"
+          />
+        </div>
+      )}
     </div>
   );
 }

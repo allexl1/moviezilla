@@ -689,7 +689,7 @@ select:focus-visible,
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.6) 32%, rgba(5, 5, 5, 0.25) 55%, transparent 75%),
+    linear-gradient(0deg, var(--cine-bg) 0%, var(--cine-bg) 12%, rgba(5, 5, 5, 0.72) 34%, rgba(5, 5, 5, 0.30) 58%, transparent 85%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 
@@ -720,7 +720,7 @@ select:focus-visible,
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(0deg, var(--cine-bg) 8%, rgba(5, 5, 5, 0.85) 38%, rgba(5, 5, 5, 0.5) 60%, rgba(5, 5, 5, 0.32) 100%),
+    linear-gradient(0deg, var(--cine-bg) 0%, var(--cine-bg) 18%, rgba(5, 5, 5, 0.88) 42%, rgba(5, 5, 5, 0.55) 65%, rgba(5, 5, 5, 0.35) 100%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.45) 0%, transparent 45%);
 }
 
@@ -1686,7 +1686,7 @@ button:hover .cine-provider-icon,
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(0deg, var(--cine-bg) 30%, rgba(5, 5, 5, 0.88) 55%, rgba(5, 5, 5, 0.45) 78%, rgba(5, 5, 5, 0.25) 100%);
+    linear-gradient(0deg, var(--cine-bg) 0%, var(--cine-bg) 38%, rgba(5, 5, 5, 0.90) 58%, rgba(5, 5, 5, 0.50) 80%, rgba(5, 5, 5, 0.28) 100%);
 }
 
 /* ─── Award chip (gold honours — Wikidata) ──────────────────────────────── */
@@ -1724,13 +1724,9 @@ button:hover .cine-provider-icon,
 }
 
 .group:hover .cine-cast-avatar {
-  transform: translateY(-4px) scale(1.03);
+  transform: translateY(-4px);
   border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: var(--cine-shadow-2), 0 0 0 3px rgba(149, 255, 80, 0.22);
-}
-
-.group:hover .cine-cast-avatar img {
-  transform: scale(1.08);
+  box-shadow: var(--cine-shadow-2);
 }
 
 /* Opt out of the global keyboard focus ring where the container already
