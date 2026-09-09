@@ -231,6 +231,13 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       {/* Hero: still backdrop. Trailers play here only when the user picks
           one below — never autoplayed, so no player chrome or mute dance. */}
       <div className="relative w-full h-[86vh] min-h-[600px] overflow-hidden bg-black">
+        {/* Melt base: the SAME backdrop, blurred, living under the sharp
+            image. The sharp layer dissolves into it (mask), and the page
+            ghost below is the same blur — so there is no boundary line,
+            only a continuous melt like the reference. */}
+        {!heroVideo && (
+          <img src={backdrop} alt="" aria-hidden="true" className="cine-detail-melt-base" />
+        )}
         {heroVideo ? (
           <iframe
             key={heroVideo}
@@ -241,9 +248,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             allowFullScreen
           />
         ) : (
-          <img src={backdrop} alt={title} className="w-full h-full object-cover object-center" />
+          <img src={backdrop} alt={title} className="w-full h-full object-cover object-center cine-detail-melt-img" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050505]/90 via-[#050505]/30 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 cine-detail-hero-scrim pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-transparent to-transparent pointer-events-none" />
 
         {/* Back to the still backdrop */}

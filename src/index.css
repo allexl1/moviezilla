@@ -1691,7 +1691,37 @@ button:hover .cine-provider-icon,
 /* ─── Detail Blurred Continuation ─────────────────────────────────────────
    The hero backdrop lives on below the fold as a dim frozen ghost, so the
    page melts instead of hard-cutting (reference parity). Static — one
-   composite, zero per-frame cost. */
+   composite, zero per-frame cost.
+   Melt architecture (no-line guarantee): the hero stacks sharp image OVER
+   the same image blurred (.cine-detail-melt-base); the sharp layer carries
+   a mask that dissolves its bottom 42% into the blur; the fixed page ghost
+   below is pixel-identical blur. Sharp → blur → blur: no tone step
+   anywhere, so no seam can form regardless of backdrop brightness. */
+.cine-detail-melt-base {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: blur(40px) brightness(0.7) saturate(1.25);
+  transform: scale(1.08);
+  pointer-events: none;
+}
+
+.cine-detail-melt-img {
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 42%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 42%);
+}
+
+/* Bottom scrim that feeds the melt: it ENDS at the ghost's own darkness
+   (~88% black) instead of transparent — the edge pixel above the boundary
+   then equals the ghost pixel below it, so no step can form. The dissolve
+   happens higher up (mask 42% + scrim peak 28%), text keeps its contrast. */
+.cine-detail-hero-scrim {
+  background:
+    linear-gradient(0deg, rgba(5, 5, 5, 0.88) 0%, rgba(5, 5, 5, 0.85) 12%, rgba(5, 5, 5, 0.6) 28%, rgba(5, 5, 5, 0.3) 55%, transparent 85%);
+}
 .cine-detail-bg {
   position: fixed;
   inset: 0;
