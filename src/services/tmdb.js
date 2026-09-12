@@ -407,6 +407,18 @@ export const tmdb = {
     return proxyFetch('movie/upcoming', { page, region: 'US' });
   },
 
+  // Upcoming series: future premieres via discover (there is no
+  // tv/upcoming endpoint). No vote floor — unreleased titles are
+  // unrated by definition, soonest first.
+  async getUpcomingSeries({ page = 1 } = {}) {
+    const today = new Date().toISOString().slice(0, 10);
+    return proxyFetch('discover/tv', {
+      page,
+      'first_air_date.gte': today,
+      sort_by: 'first_air_date.asc',
+    });
+  },
+
   async getAiringToday({ page = 1 } = {}) {
     return proxyFetch('tv/airing_today', { page, timezone: 'America/New_York' });
   },

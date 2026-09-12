@@ -14,6 +14,7 @@ export default function Row({
   right,
   onClick,
   thumbClassName = 'w-12 h-16',
+  titleClassName = 'text-xs md:text-sm font-semibold text-white/90 truncate',
   wash = null,
 }) {
   return (
@@ -47,7 +48,7 @@ export default function Row({
         />
       </div>
       <div className="flex-1 min-w-0">
-        <h4 className="text-xs md:text-sm font-semibold text-white/90 truncate">{title}</h4>
+        <h4 className={titleClassName}>{title}</h4>
         {meta && <p className="text-[11px] text-white/60 mt-0.5 truncate">{meta}</p>}
       </div>
       {right && <div className="flex-shrink-0">{right}</div>}

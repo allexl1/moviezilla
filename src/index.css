@@ -152,6 +152,11 @@ h1, h2, h3 {
 html {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  /* Reserve the gutter always: opening a modal locks body scroll, and
+     without this the page jumps sideways where scrollbars take layout
+     space (Windows/Linux). Same family as the old navbar font jump —
+     no visual state change should move layout. */
+  scrollbar-gutter: stable;
 }
 
 ::-webkit-scrollbar {
@@ -331,11 +336,11 @@ select:focus-visible,
   border-color: var(--cine-glass-border-hover);
 }
 
-/* History / watched groups: skip rendering off-screen groups until
-   scrolled near (thermal — dozens of blurred rows otherwise all paint). */
+/* History / watched groups: plain stacked rows. Deliberately no
+   content-visibility: skipping rendering here reads as lost history
+   when the browser misjudges visibility (same class of bug as the empty
+   Coming Soon rail). Rows are cheap since the wash/poster work moved out. */
 .cine-history-group {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
 }
 
 /* History row wash: blurred poster behind the content. Plain opacity
@@ -642,6 +647,7 @@ select:focus-visible,
   font-weight: var(--cine-font-semibold);
   color: rgba(255, 255, 255, 0.92);
   letter-spacing: 0.01em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
 /* ─── Main Layout Container ───────────────────────────────────────────────
@@ -716,8 +722,11 @@ select:focus-visible,
 .cine-hero-scrim {
   position: absolute;
   inset: 0;
+  /* Ends at the ghost's own darkness (0.55) instead of solid bg: the edge
+     pixel above the hero boundary equals the ghost pixel below it, at any
+     scroll offset. The dissolve above does the melting, not this edge. */
   background:
-    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.85) 18%, rgba(5, 5, 5, 0.45) 45%, transparent 80%),
+    linear-gradient(0deg, rgba(5, 5, 5, 0.55) 0%, rgba(5, 5, 5, 0.85) 18%, rgba(5, 5, 5, 0.45) 45%, transparent 80%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 
@@ -737,19 +746,20 @@ select:focus-visible,
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  /* Ambient wash (cinejoy parity): fully blurred so no hard detail edge
-     shows where the bright hero ends — scale hides the blur bleed. */
-  opacity: 0.85;
-  filter: blur(40px) brightness(0.75) saturate(1.3);
+  /* Uniform dim blur — deliberately NO viewport gradient here. A shaded
+     ghost is viewport-fixed while the hero edge scrolls, so any tone
+     "match" holds at exactly one scroll offset and reads as a hard
+     screen edge everywhere else. Uniform 0.45 meets the hero scrim end
+     at EVERY scroll offset; section text-shadow keeps titles readable. */
+  opacity: 1;
+  filter: blur(40px) brightness(0.45) saturate(1.25);
   transform: scale(1.08);
 }
 
 .cine-home-bg-shade {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.55) 30%, rgba(5, 5, 5, 0.25) 60%, transparent 100%),
-    linear-gradient(90deg, rgba(5, 5, 5, 0.45) 0%, transparent 45%);
+  background: transparent;
 }
 
 .cine-hero-content {
@@ -1031,9 +1041,10 @@ select:focus-visible,
   gap: 1rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
-  /* Skip rendering off-screen rails until scrolled near. */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
+  /* NOTE: no content-visibility here on purpose. It lets the browser skip
+     rendering rail contents, and when it misfires the header renders with
+     zero cards (the infamous empty Coming Soon). Rails are one short row
+     each — cheap to paint, correctness wins. */
 }
 
 /* ─── Continue Watching Card ────────────────────────────────────────────── */
@@ -1247,7 +1258,8 @@ nav .cine-nav-btn {
 .cine-nav-btn.is-active {
   background: var(--cine-white);
   color: var(--cine-bg);
-  font-weight: var(--cine-font-black);
+  /* No font change on active on purpose: the medium→black jump resized
+     the pill on every tab switch. Pill + icon carry the active state. */
   box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
 }
 
@@ -1294,6 +1306,14 @@ nav .cine-nav-btn {
   border-color: var(--cine-glass-border);
 }
 
+/* Solid chip for badges floating over bright artwork (Watch Later
+   Letterboxd/To Watch tags): translucent glass washes out on posters. */
+.cine-chip--solid {
+  background: rgba(8, 8, 12, 0.82);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
 /* High-contrast rating chip for list rows (search/history):
    solid dark pill, lime figure — readable over glass, no cheap tint. */
 .cine-chip--rating {
@@ -1306,9 +1326,13 @@ nav .cine-nav-btn {
 .cine-select {
   appearance: none;
   -webkit-appearance: none;
-  width: 100%;
-  max-width: 100%;
-  min-width: 7rem;
+  /* One fixed width for every filter pill — native selects size to their
+     longest option, which made Genre (and Shows filters) wider than the
+     rest. Uniform width + ellipsis: no pill ever shouts over the content. */
+  width: 10rem;
+  min-width: 10rem;
+  max-width: 10rem;
+  text-overflow: ellipsis;
   height: 2.35rem;
   padding: 0 2.25rem 0 1.1rem;
   border-radius: var(--cine-radius-full);
@@ -1332,6 +1356,8 @@ nav .cine-nav-btn {
   background-position: right 0.9rem center, 0 0;
   background-size: 12px, auto;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cine-select:hover {
@@ -1347,20 +1373,13 @@ nav .cine-nav-btn {
   color: var(--cine-white);
 }
 
-/* Genre carries the longest labels ("Action & Adventure") — fixed wide
-   so Movies/Shows filter rails never shift width between tabs. */
+/* Retired width overrides: every filter pill shares the base 10rem width
+   above, so no select ever outgrows its siblings. Kept as no-op aliases
+   so existing classNames don't need a flag day. */
 .cine-select--wide {
-  min-width: 13rem;
 }
 
-/* Genre dropdowns are one fixed compact width on BOTH tabs: native
-   selects auto-size to their longest option, which made Shows wider
-   than Movies. Long TV labels are shortened in code to match. */
 .cine-select--genre {
-  width: 11.5rem;
-  min-width: 11.5rem;
-  max-width: 11.5rem;
-  text-overflow: ellipsis;
 }
 
 /* Minimal toast (watchlist add/remove). One recipe, auto-dismissed. */
@@ -1506,6 +1525,10 @@ button:hover .cine-provider-icon,
   position: relative;
   flex-shrink: 0;
   width: clamp(200px, 26vw, 320px);
+  /* Explicit height mirroring the 16:9 ratio: aspect-ratio alone collapses
+     to zero in flex rows on engines that ignore it there (Safari), which
+     rendered whole shelves invisible. Belt and suspenders. */
+  height: clamp(112px, 14.6vw, 180px);
   aspect-ratio: 16/9;
   border-radius: var(--cine-radius-2xl);
   overflow: hidden;
@@ -1704,7 +1727,7 @@ button:hover .cine-provider-icon,
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: blur(40px) brightness(0.7) saturate(1.25);
+  filter: blur(40px) brightness(0.45) saturate(1.25);
   transform: scale(1.08);
   pointer-events: none;
 }
@@ -1715,12 +1738,12 @@ button:hover .cine-provider-icon,
 }
 
 /* Bottom scrim that feeds the melt: it ENDS at the ghost's own darkness
-   (~88% black) instead of transparent — the edge pixel above the boundary
-   then equals the ghost pixel below it, so no step can form. The dissolve
+   (0.55) instead of transparent — the edge pixel above the boundary
+   equals the ghost pixel below it, so no step can form. The dissolve
    happens higher up (mask 42% + scrim peak 28%), text keeps its contrast. */
 .cine-detail-hero-scrim {
   background:
-    linear-gradient(0deg, rgba(5, 5, 5, 0.88) 0%, rgba(5, 5, 5, 0.85) 12%, rgba(5, 5, 5, 0.6) 28%, rgba(5, 5, 5, 0.3) 55%, transparent 85%);
+    linear-gradient(0deg, rgba(5, 5, 5, 0.55) 0%, rgba(5, 5, 5, 0.85) 12%, rgba(5, 5, 5, 0.6) 28%, rgba(5, 5, 5, 0.3) 55%, transparent 85%);
 }
 .cine-detail-bg {
   position: fixed;
@@ -1736,16 +1759,17 @@ button:hover .cine-provider-icon,
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  opacity: 0.8;
-  filter: blur(40px) brightness(0.7) saturate(1.25);
+  /* Same uniform-ghost rule as home: no viewport gradient, so the match
+     holds at every scroll offset instead of exactly one. */
+  opacity: 1;
+  filter: blur(40px) brightness(0.45) saturate(1.25);
   transform: scale(1.08);
 }
 
 .cine-detail-bg-shade {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(0deg, var(--cine-bg) 0%, rgba(5, 5, 5, 0.6) 35%, rgba(5, 5, 5, 0.3) 65%, transparent 100%);
+  background: transparent;
 }
 
 /* ─── Award chip (gold honours — Wikidata) ──────────────────────────────── */

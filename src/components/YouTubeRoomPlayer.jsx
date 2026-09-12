@@ -33,7 +33,7 @@ function loadYouTubeApi() {
 // Room player for YouTube videos. Unlike third-party embeds, YouTube
 // exposes a real command API: exact seekTo + pause/play with no reload,
 // so room sync here is frame-accurate instead of rebuild-based.
-export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPosition = null }) {
+export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPosition = null, onPause = null, onPlay = null }) {
   const mountRef = useRef(null);
   const playerRef = useRef(null);
   const pendingSeek = useRef(null);
@@ -41,6 +41,13 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
   const lastSentRef = useRef({ at: 0, second: -1 });
   const onPositionRef = useRef(onPosition);
   onPositionRef.current = onPosition;
+  // Room auto-pause callbacks (stable mirrors — props change identity).
+  // PAUSED here is always an explicit user pause (buffering reports as
+  // BUFFERING, ended as ENDED), so no debounce needed — unlike embeds.
+  const onPauseRef = useRef(onPause);
+  const onPlayRef = useRef(onPlay);
+  onPauseRef.current = onPause;
+  onPlayRef.current = onPlay;
 
   const report = () => {
     const cb = onPositionRef.current;
@@ -92,6 +99,14 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
                 if (pollRef.current) clearInterval(pollRef.current);
                 report();
                 pollRef.current = setInterval(report, 2000);
+                onPlayRef.current?.();
+              } else if (e.data === window.YT.PlayerState.PAUSED) {
+                if (pollRef.current) {
+                  clearInterval(pollRef.current);
+                  pollRef.current = null;
+                }
+                report();
+                onPauseRef.current?.();
               } else {
                 if (pollRef.current) {
                   clearInterval(pollRef.current);

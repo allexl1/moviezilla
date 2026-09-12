@@ -25,7 +25,9 @@ import {
   roomLink,
 } from '../services/rooms';
 import { tmdb } from '../services/tmdb';
+import { formatClock } from '../services/storage';
 import Player from './Player';
+import { ChatList, ChatInput } from './chat';
 import YouTubeRoomPlayer from './YouTubeRoomPlayer';
 import Input from './ui/Input';
 import EmptyState from './ui/EmptyState';
@@ -45,6 +47,24 @@ export default function RoomView({ code, onLeave, onToast }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [tab, setTab] = useState('chat');
+  // Reactions: { [msgId]: { [emoji]: { devices: [], names: [] } } }.
+  // Broadcast-only like chat itself (no table): same lifetime as messages,
+  // late joiners miss both equally. Capped so long sessions can't grow it.
+  const [reactions, setReactions] = useState({});
+  // Floating chat (fullscreen overlay): open state + unread count. Unread
+  // ticks only while neither surface shows the conversation.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const chatOpenRef = useRef(false);
+  const tabRef = useRef('chat');
+  useEffect(() => {
+    tabRef.current = tab;
+    if (tab === 'chat') setUnread(0);
+  }, [tab]);
+  useEffect(() => {
+    chatOpenRef.current = chatOpen;
+    if (chatOpen) setUnread(0);
+  }, [chatOpen]);
   const [pausedBy, setPausedBy] = useState(null);
   const [syncNote, setSyncNote] = useState('In sync');
   const [roomTarget, setRoomTarget] = useState(null);
@@ -65,6 +85,12 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
   // Mirrors pausedBy for channel callbacks (their closures go stale).
   const pausedByRef = useRef(null);
+  // Which device froze the room (me vs someone else) — only the pauser's
+  // own in-player resume re-opens it. Last pause sys-message key so the
+  // triple-send retries can't spam the chat.
+  const pausedByDeviceRef = useRef(null);
+  const [pausedByDevice, setPausedByDevice] = useState(null);
+  const pauseSysRef = useRef('');
   // When the paused overlay was last (re)asserted — guards the heal path
   // against clearing an overlay the host just set (patch lands async).
   const pausedAtRef = useRef(0);
@@ -90,6 +116,32 @@ export default function RoomView({ code, onLeave, onToast }) {
     setMessages((prev) => [...prev.slice(-119), m]);
 
   const pushSys = (text) => pushMsg({ id: msgId(), sys: true, text });
+
+  const applyReaction = (msgId, emoji, dev, nm, on) =>
+    setReactions((prev) => {
+      const entry = { ...(prev[msgId] || {}) };
+      const cur = entry[emoji] || { devices: [], names: [] };
+      let devices = (cur.devices || []).filter((d) => d !== dev);
+      let names = (cur.names || []).filter((n) => n !== nm);
+      if (on) {
+        devices = [...devices, dev];
+        if (nm && !names.includes(nm)) names = [...names, nm];
+      }
+      if (devices.length === 0) delete entry[emoji];
+      else entry[emoji] = { devices, names };
+      const next = { ...prev, [msgId]: entry };
+      const keys = Object.keys(next);
+      if (keys.length > 200) {
+        for (const k of keys.slice(0, keys.length - 200)) delete next[k];
+      }
+      return next;
+    });
+
+  const toggleReact = (msgId, emoji) => {
+    const mine = ((reactions[msgId]?.[emoji]?.devices) || []).includes(device);
+    channelRef.current?.send(mine ? 'unreact' : 'react', { msgId, emoji, device, name: nickname });
+    applyReaction(msgId, emoji, device, nickname, !mine);
+  };
 
   useEffect(() => {
     pausedByRef.current = pausedBy;
@@ -145,7 +197,26 @@ export default function RoomView({ code, onLeave, onToast }) {
         if (!payload || payload.device === device) return;
         const yt = roomRef.current?.media?.kind === 'youtube';
         if (type === 'chat') {
-          pushMsg({ id: payload.id, name: payload.name, text: payload.text, at: payload.at });
+          pushMsg({
+            id: payload.id,
+            name: payload.name,
+            text: payload.text,
+            kind: payload.kind,
+            url: payload.url,
+            preview: payload.preview,
+            title: payload.title,
+            at: payload.at,
+          });
+          // Unread ticks while neither surface shows the conversation. Note
+          // fullscreen hides the side rail entirely, so a message the rail
+          // "shows" is still unseen — the floating-panel badge must tick.
+          if (!chatOpenRef.current && (tabRef.current !== 'chat' || document.fullscreenElement)) {
+            setUnread((u) => u + 1);
+          }
+        } else if (type === 'react') {
+          applyReaction(payload.msgId, payload.emoji, payload.device, payload.name, true);
+        } else if (type === 'unreact') {
+          applyReaction(payload.msgId, payload.emoji, payload.device, payload.name, false);
         } else if (type === 'tick') {
           // Host heartbeat over realtime (5s): continuous catch-up so the
           // follower trails by seconds, not by poll intervals. Paused or
@@ -172,8 +243,15 @@ export default function RoomView({ code, onLeave, onToast }) {
           }
         } else if (type === 'seek' || type === 'play') {
           setPausedBy(null);
+          setPausedByDevice(null);
+          pausedByDeviceRef.current = null;
           pausedAtRef.current = 0;
           frozenPosRef.current = null;
+          // The blank-time complaint: a remounted frame shows 0:00 until
+          // the provider ticks, so announce where playback continues.
+          if (type === 'play' && (payload.second || 0) > 2) {
+            onToast?.(`Resuming from ${formatClock(payload.second)}`);
+          }
           setSyncNote('Catching up…');
           followGraceRef.current = Date.now();
           followAppliedRef.current = Date.now();
@@ -187,6 +265,13 @@ export default function RoomView({ code, onLeave, onToast }) {
           });
           setTimeout(() => setSyncNote('In sync'), 4000);
         } else if (type === 'pause') {
+          pausedByDeviceRef.current = payload.device;
+          setPausedByDevice(payload.device);
+          const sysKey = `${payload.device}:${payload.second || 0}`;
+          if (pauseSysRef.current !== sysKey) {
+            pauseSysRef.current = sysKey;
+            pushSys(`${payload.name || 'Host'} stopped the player`);
+          }
           if (yt) {
             // YouTube has a real command API — truly pause at the second.
             setRoomTarget({
@@ -223,6 +308,15 @@ export default function RoomView({ code, onLeave, onToast }) {
         if (newcomers.length > 0 && pausedByRef.current === nickname) {
           const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
           channelRef.current?.send('pause', { device, name: nickname, second, at: Date.now() });
+        }
+        // The pauser left without resuming: unstick the room instead of
+        // holding everyone on their paused card forever. (Host keeps the
+        // manual Resume as the ultimate fallback regardless.)
+        if (pausedByDeviceRef.current && !list.some((m) => m.device === pausedByDeviceRef.current)) {
+          pausedByDeviceRef.current = null;
+          setPausedByDevice(null);
+          setPausedBy(null);
+          pushSys('The room resumed — the pauser left');
         }
       },
     });
@@ -397,6 +491,13 @@ export default function RoomView({ code, onLeave, onToast }) {
     setInput('');
   };
 
+  const sendGif = (url, preview) => {
+    if (!url || chatMuted) return;
+    const msg = { id: msgId(), name: nickname, kind: 'gif', url, preview, at: Date.now() };
+    channelRef.current?.send('chat', { ...msg, device });
+    pushMsg({ ...msg, mine: true });
+  };
+
   const broadcastPause = async () => {
     const second = Math.floor(myPos.current.second || 0);
     // Pause is the one event that must not be lost: a follower who misses
@@ -405,6 +506,9 @@ export default function RoomView({ code, onLeave, onToast }) {
     // the moment play/seek goes out — a stale retry must never re-pause
     // after a resume.
     clearPauseRetries();
+    pausedByDeviceRef.current = device;
+    setPausedByDevice(device);
+    pushSys(`${nickname} stopped the player`);
     const payload = { device, name: nickname, second, at: Date.now() };
     channelRef.current?.send('pause', payload);
     for (const delay of [700, 1400]) {
@@ -463,9 +567,12 @@ export default function RoomView({ code, onLeave, onToast }) {
       device, name: nickname, second, at: Date.now(),
     });
     setPausedBy(null);
-    // Resume remounts my own frame at the frozen second too (I was
-    // suspended like everyone else) — and resets my clock so no phantom
-    // "seek" fires on the way back up.
+    setPausedByDevice(null);
+    pausedByDeviceRef.current = null;
+    // Resume remounts suspended followers at the frozen second — and resets
+    // my clock so no phantom "seek" fires on the way back up. (My own frame
+    // was never unmounted: the pauser keeps their player, so no reload and
+    // no blank time on my side.)
     const isYt = room?.media?.kind === 'youtube';
     setRoomTarget({ key: `me:${Date.now()}`, action: isYt ? 'play' : undefined, second });
     followGraceRef.current = Date.now();
@@ -479,8 +586,20 @@ export default function RoomView({ code, onLeave, onToast }) {
     }
   };
 
-  const grantToggle = async (memberDevice, key) => {
-    const grants = { ...(room.grants || {}) };
+  // Auto-pause from an unlocked local player: pausing inside the video
+  // (embed pause event or YouTube state) locks the whole room — this is
+  // what retires the manual Pause button on event-capable servers.
+  // Idempotent via pausedByRef: double events can't double-lock.
+  const handleProviderPause = () => {
+    if (!pausedByRef.current) broadcastPause();
+  };
+  // ...and only the pauser's own resume re-opens it (a load/seek 'play'
+  // blip from anyone else must never unlock the room).
+  const handleProviderPlay = () => {
+    if (pausedByRef.current && pausedByDeviceRef.current === device) broadcastPlay();
+  };
+
+  const grantToggle = async (memberDevice, key) => {    const grants = { ...(room.grants || {}) };
     const cur = grants[memberDevice] || {};
     grants[memberDevice] = { ...cur, [key]: !(cur[key] === true) };
     setRoom({ ...room, grants });
@@ -540,11 +659,16 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
 
   const waitingForHost = !hostPresent && !canControl;
-  // Hard lock (embed rooms): while paused EVERYONE loses the iframe —
-  // host included. A paused room shows paused cards, not video; resume
-  // remounts all frames at the frozen second. Unmounting is the only true
-  // pause these providers allow (they take no remote orders).
-  const suspended = !isYouTube && (!!pausedBy || waitingForHost);
+  // Hard lock (embed rooms): while paused, everyone EXCEPT the pauser loses
+  // the iframe — the pauser paused their own video, so their frame stays
+  // exactly where it stopped: no reload, no blank time on resume for them.
+  // Followers keep the old deal (unmount/remount — providers take no remote
+  // orders, so there is no other way to stop them). A paused room shows
+  // paused cards, not video; resume remounts follower frames at the frozen
+  // second. Unmounting is the only true pause these providers allow (they
+  // take no remote orders).
+  const suspended =
+    !isYouTube && (!!pausedBy || waitingForHost) && pausedByDevice !== device;
   // YouTube pauses for real via the command API — no overlay needed.
   const overlay = !isYouTube && pausedBy && !canControl ? (
     <div className="text-center space-y-3 max-w-xs">
@@ -588,29 +712,33 @@ export default function RoomView({ code, onLeave, onToast }) {
             <Copy className="w-3 h-3" />
             {room.code}
           </button>
-          {canControl ? (
-            <>
-              <button
-                onClick={() => {
-                  broadcastPlay();
-                  onToast?.('Room synced to your position');
-                }}
-                className="cine-control-btn h-9 px-4 text-xs"
-                title="Pull everyone to your second right now"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Sync all
-              </button>
-              {pausedBy ? (
-                <button onClick={broadcastPlay} className="cine-control-btn h-9 px-4 text-xs" title="Resume for everyone">
-                  <Play className="w-3.5 h-3.5" /> Resume
-                </button>
-              ) : (
-                <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
-                  <Pause className="w-3.5 h-3.5" /> Pause
-                </button>
-              )}
-            </>
-          ) : (
+          {canControl && (
+            <button
+              onClick={() => {
+                broadcastPlay();
+                onToast?.('Room synced to your position');
+              }}
+              className="cine-control-btn h-9 px-4 text-xs"
+              title="Pull everyone to your second right now"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Sync all
+            </button>
+          )}
+          {/* Manual pause lives on for the host only: pausing inside the
+              video auto-locks event-capable servers (Vidy/VidLink/YouTube),
+              but event-less servers need this button — and the host is the
+              ultimate fallback either way. */}
+          {isHost && !pausedBy && (
+            <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
+              <Pause className="w-3.5 h-3.5" /> Pause
+            </button>
+          )}
+          {isHost && pausedBy && (
+            <button onClick={broadcastPlay} className="cine-control-btn h-9 px-4 text-xs" title="Resume for everyone">
+              <Play className="w-3.5 h-3.5" /> Resume
+            </button>
+          )}
+          {!canControl && (
             <button
               onClick={syncToHost}
               className="cine-control-btn h-9 px-4 text-xs"
@@ -628,6 +756,8 @@ export default function RoomView({ code, onLeave, onToast }) {
               videoId={room.media.youtubeId}
               roomTarget={roomTarget}
               onPosition={handlePosition}
+              onPause={canControl ? handleProviderPause : null}
+              onPlay={canControl ? handleProviderPlay : null}
             />
           ) : media.id ? (
             <Player
@@ -641,6 +771,23 @@ export default function RoomView({ code, onLeave, onToast }) {
               roomLocked={!canControl}
               suspended={suspended}
               framed
+              onProviderPause={canControl ? handleProviderPause : null}
+              onProviderPlay={canControl ? handleProviderPlay : null}
+              chat={{
+                unread,
+                open: chatOpen,
+                onToggle: () => setChatOpen((o) => !o),
+                messages,
+                reactions,
+                myDevice: device,
+                nickname,
+                input,
+                setInput,
+                muted: chatMuted,
+                onSend: sendChat,
+                onSendGif: sendGif,
+                onToggleReact: toggleReact,
+              }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6">
@@ -672,11 +819,16 @@ export default function RoomView({ code, onLeave, onToast }) {
         <div className="flex items-center gap-2 p-3 border-b border-[var(--cine-glass-border)] flex-shrink-0">
           <button
             onClick={() => setTab('chat')}
-            className={`flex-1 h-9 rounded-full text-xs font-bold transition cursor-pointer ${tab === 'chat' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
+            className={`relative flex-1 h-9 rounded-full text-xs font-bold transition cursor-pointer ${tab === 'chat' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
           >
             <span className="inline-flex items-center gap-1.5">
               <MessageCircle className="w-3.5 h-3.5" /> Chat
             </span>
+            {unread > 0 && tab !== 'chat' && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-[var(--cine-accent)] text-black text-[10px] font-black flex items-center justify-center">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab('people')}
@@ -690,56 +842,21 @@ export default function RoomView({ code, onLeave, onToast }) {
 
         {tab === 'chat' ? (
           <>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
-              {messages.length === 0 && (
-                <p className="text-center text-[11px] text-white/40 pt-6">
-                  Say hi — chat lives only while the room is open.
-                </p>
-              )}
-              {messages.map((m) =>
-                m.sys ? (
-                  <p key={m.id} className="text-center text-[11px] text-white/40">
-                    {m.text}
-                  </p>
-                ) : (
-                  <div key={m.id} className={`flex flex-col gap-0.5 ${m.mine ? 'items-end' : 'items-start'}`}>
-                    <span className="text-[10px] font-bold" style={{ color: nameColor(m.name) }}>
-                      {m.name}
-                    </span>
-                    <span
-                      className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-[13px] leading-snug break-words ${
-                        m.mine ? 'bg-white text-black rounded-br-md' : 'bg-white/[0.08] text-white/90 border border-white/10 rounded-bl-md'
-                      }`}
-                    >
-                      {m.text}
-                    </span>
-                  </div>
-                )
-              )}
-              <div ref={chatEndRef} />
-            </div>
-            <div className="p-3 border-t border-[var(--cine-glass-border)] flex-shrink-0">
-              {chatMuted ? (
-                <p className="text-center text-[11px] text-white/40">The host muted your chat.</p>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Input
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder={`Message as ${nickname}…`}
-                      aria-label="Chat message"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') sendChat();
-                      }}
-                    />
-                  </div>
-                  <button onClick={sendChat} className="cine-icon-btn" title="Send" aria-label="Send message">
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+            <ChatList
+              messages={messages}
+              reactions={reactions}
+              myDevice={device}
+              onToggleReact={toggleReact}
+              endRef={chatEndRef}
+            />
+            <ChatInput
+              nickname={nickname}
+              muted={chatMuted}
+              input={input}
+              setInput={setInput}
+              onSend={sendChat}
+              onSendGif={sendGif}
+            />
           </>
         ) : (
           <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">

@@ -18,7 +18,7 @@ const YEARS = [
   '1900s',
 ];
 
-const PROVIDERS = [
+const FALLBACK_PROVIDERS = [
   { id: '', name: 'All Providers' },
   { id: '8', name: 'Netflix' },
   { id: '9', name: 'Prime Video' },
@@ -29,9 +29,13 @@ const PROVIDERS = [
   { id: '531', name: 'Paramount+' },
 ];
 
+// Provider options come from the same TMDB catalog as the home wall
+// (views fetch + pass them) so a service tapped on Home always exists
+// in the Movies/Shows filter. Falls back to the short list offline.
 export default function FilterBar({
   genres = [],
   sorts = [],
+  providers = FALLBACK_PROVIDERS,
   selectedGenre,
   onSelectGenre,
   selectedYear,
@@ -45,6 +49,7 @@ export default function FilterBar({
   selectedLanguage,
   onSelectLanguage,
   onRandom,
+  extra = null,
 }) {
   return (
     <div className="w-full flex flex-col gap-3 py-1">
@@ -59,6 +64,7 @@ export default function FilterBar({
             <Shuffle className="w-4 h-4" />
           </button>
         )}
+        {extra && <div className="flex-shrink-0">{extra}</div>}
 
         <Select
           value={selectedGenre}
@@ -92,10 +98,12 @@ export default function FilterBar({
           value={selectedProvider}
           onChange={onSelectProvider}
           label="Provider"
-          options={PROVIDERS.map((p) => ({
-            value: p.id,
-            label: p.id === '' ? 'Provider' : p.name,
-          }))}
+          options={[{ id: '', name: 'All Providers' }]
+            .concat(providers.filter((p) => p.id !== ''))
+            .map((p) => ({
+              value: p.id,
+              label: p.id === '' ? 'Provider' : p.name,
+            }))}
         />
 
         <Select

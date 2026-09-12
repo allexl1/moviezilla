@@ -172,65 +172,10 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
   }, [letterboxdUser]);
 
   // Letterboxd rows ship without posters (the watchlist HTML carries none),
-  // so resolve each title to TMDB in small batches and cache the poster in
-  // localStorage — first open fetches, every later open is instant.
-  const [lbPosters, setLbPosters] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('mz_lb_posters') || '{}');
-    } catch {
-      return {};
-    }
-  });
-
-  // Pending-poster count drives the loading shimmer (resolves take
-  // ~10-20s for a 40-title list — without feedback it reads as broken).
-  const [lbResolving, setLbResolving] = useState(0);
-
-  React.useEffect(() => {
-    if (!letterboxdList || letterboxdList.length === 0) return;
-    let cancelled = false;
-    const pending = letterboxdList.filter(
-      (r) => r.source === 'letterboxd' && !lbPosters[r.id]
-    );
-    if (pending.length === 0) return;
-    setLbResolving(pending.length);
-
-    (async () => {
-      const BATCH = 8;
-      for (let i = 0; i < pending.length && !cancelled; i += BATCH) {
-        const batch = pending.slice(i, i + BATCH);
-        const results = await Promise.all(
-          batch.map((r) =>
-            tmdb
-              .resolveTitle(r.title, r.release_date)
-              .then((m) => ({ id: r.id, poster: m?.poster_path || null }))
-              .catch(() => ({ id: r.id, poster: null }))
-          )
-        );
-        if (cancelled) return;
-        setLbPosters((prev) => {
-          const next = { ...prev };
-          let done = 0;
-          for (const { id, poster } of results) {
-            if (poster) next[id] = poster;
-            done += 1;
-          }
-          try {
-            localStorage.setItem('mz_lb_posters', JSON.stringify(next));
-          } catch {
-            // Storage full/blocked — memory cache still works this session.
-          }
-          setLbResolving((n) => Math.max(0, n - done));
-          return next;
-        });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [letterboxdList]);
+  // so they render on fallback art — instant, zero TMDB resolve storms.
+  // (A per-title TMDB backfill used to run here in batches; it cost dozens
+  // of requests per open and is gone for performance. Titles still resolve
+  // lazily on tap via handleLetterboxdSelect.)
 
   const matchType = (t) => typeFilter === 'all' || t === typeFilter;
   const matchGenre = (ids) =>
@@ -398,9 +343,6 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         {resolvingId && (
           <p className="text-xs text-white/60">Looking up title on TMDB…</p>
         )}
-        {lbResolving > 0 && (
-          <p className="text-xs text-white/60">Loading posters… {lbResolving} left</p>
-        )}
         {!resolvingId && resolveError && (
           <p className="text-xs text-red-400/90">{resolveError}</p>
         )}
@@ -420,22 +362,17 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                 ? prog.percent >= WATCHED_PCT ? 'Watched' : `${prog.percent}% watched`
                 : item.source === 'letterboxd' ? 'Letterboxd' : 'To Watch';
               const isLocal = item.source !== 'letterboxd';
-              const lbPending = !isLocal && !lbPosters[item.id];
               return (
-              <div key={key} className={`relative ${lbPending ? 'animate-pulse' : ''}`}>
+              <div key={key} className="relative">
                 <Card
-                  media={
-                    !isLocal && lbPosters[item.id]
-                      ? { ...item, poster_path: lbPosters[item.id] }
-                      : item
-                  }
+                  media={item}
                   size="fluid"
                   onClick={(m) =>
                     m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
                   }
                   showRating={false}
                 />
-                <span className="cine-chip cine-chip--neutral absolute left-2 top-2">
+                <span className="cine-chip cine-chip--solid absolute left-2 top-2">
                   {badge}
                 </span>
                 <button
@@ -485,7 +422,8 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                 title={h.title}
                 meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${groupLabel(h.updatedAt)}`}
                 onClick={() => onResume(media, fallback)}
-                wash={h.poster ? tmdb.getImageUrl(h.poster, 'w185') : null}
+                thumbClassName="w-16 h-24"
+                titleClassName="text-sm md:text-base font-semibold text-white truncate"
                 right={
                   <div className="flex items-center gap-2">
                     <span className="cine-chip cine-chip--accent">
@@ -539,7 +477,8 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                     title={h.title}
                     meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${progressLabel(h)}`}
                     onClick={() => onResume(media, fallback)}
-                    wash={h.poster ? tmdb.getImageUrl(h.poster, 'w185') : null}
+                    thumbClassName="w-16 h-24"
+                    titleClassName="text-sm md:text-base font-semibold text-white truncate"
                     right={
                       <div className="flex items-center gap-2">
                         <span className="cine-chip cine-chip--neutral">

@@ -45,14 +45,20 @@ export default function PersonView({ personId, onSelectMedia }) {
     };
   }, [personId, retry]);
 
-  // Zoomed photo lightbox — Esc or tap anywhere to close.
+  // Zoomed photo lightbox — Esc or tap anywhere to close. Locks body
+  // scroll like Modal does, otherwise the page slides behind the photo.
   useEffect(() => {
     if (!zoom) return;
     const onKey = (e) => {
       if (e.key === 'Escape') setZoom(null);
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
   }, [zoom]);
 
   const imdbId = person?.imdb_id || person?.external_ids?.imdb_id || null;

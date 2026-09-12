@@ -229,9 +229,10 @@ export function openRoomChannel({ code, name, onEvent, onPresence }) {
 
 // Shareable invite link: opening it lands straight in the room (the
 // nickname gate inside saves the name to that device on entry).
+// Canonical shape is /room/CODE (legacy ?room=CODE links still resolve).
 export function roomLink(code) {
   try {
-    return `${window.location.origin}${window.location.pathname}?room=${code}`;
+    return `${window.location.origin}/room/${code}`;
   } catch {
     return String(code || '');
   }

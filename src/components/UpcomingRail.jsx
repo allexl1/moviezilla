@@ -15,7 +15,27 @@ export default function UpcomingRail({
   badge = 'Coming Soon',
   verb = 'coming',
   dateKey = 'release_date',
+  loading = false,
 }) {
+  // Loading shimmer in exact card geometry: the shelf region must never
+  // read as silently broken (a blank gap under a populated header is
+  // indistinguishable from a bug — that confusion already happened once).
+  if (loading && (!items || items.length === 0)) {
+    return (
+      <section className="space-y-3" aria-hidden="true">
+        <div className="cine-section-head">
+          <h2 className="cine-section-title">{title}</h2>
+        </div>
+        <div className="cine-rail no-scrollbar -mx-1 px-1 flex flex-nowrap overflow-x-auto">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="cine-soon-card flex-shrink-0">
+              <div className="skel absolute inset-0" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
   if (!items || items.length === 0) return null;
 
   // "Sep 16" like the reference — falls back to the raw year.

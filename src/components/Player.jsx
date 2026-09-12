@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize } from 'lucide-react';
+import { ArrowLeft, ListVideo, Maximize, MessageCircle, X } from 'lucide-react';
 import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import { imdbIdOf } from '../services/ratings';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
+import { ChatList, ChatInput } from './chat';
 
 // Only accept playback progress messages from our own embed servers.
 // Anything else (other tabs, ads, nested third-party frames) is ignored.
@@ -90,7 +91,7 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime, imd
     : `https://vidy.st/movie/${mediaId}`;
 }
 
-export default function Player({ media, details, onClose, onPosition = null, roomTarget = null, roomOverlay = null, roomLocked = false, framed = false, suspended = false }) {
+export default function Player({ media, details, onClose, onPosition = null, roomTarget = null, roomOverlay = null, roomLocked = false, framed = false, suspended = false, chat = null, onProviderPause = null, onProviderPlay = null }) {
   const isTv = (media?.media_type || media?.type) === 'tv' || Boolean(details?.number_of_seasons);
   const mediaId = media?.id;
 
@@ -126,6 +127,20 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const [serverSignal, setServerSignal] = useState(0);
 
   const containerRef = useRef(null);
+  const floatEndRef = useRef(null);
+  // Room auto-pause callbacks (stable mirrors — props change identity).
+  const onProviderPauseRef = useRef(null);
+  const onProviderPlayRef = useRef(null);
+  onProviderPauseRef.current = onProviderPause;
+  onProviderPlayRef.current = onProviderPlay;
+  // Debounce for provider 'pause' → room lock: buffer/seek blips resolve
+  // with a 'play' inside ~1.5s and cancel; a held pause locks the room.
+  const pauseEventTimer = useRef(null);
+
+  // Floating chat follows new messages while open.
+  useEffect(() => {
+    if (chat?.open) floatEndRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [chat?.messages?.length, chat?.open]);
   const playbackRef = useRef({ currentTime: initialPlayback.time, duration: 0 });
   const hideTimer = useRef(null);
 
@@ -434,11 +449,27 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           const dur = payload.duration ?? inner.duration ?? playbackRef.current.duration ?? 0;
           // Track provider pause/play for the wall clock. (No-ops for
           // providers that never emit them — the clock just keeps running.)
-          if (type === 'pause') pausedProvRef.current = true;
+          // Room auto-pause rides the same events: a held provider pause
+          // (past the buffer-blip window) locks the room for everyone, so
+          // pausing inside the video retires the manual Pause button on
+          // event-capable servers. The matching 'play' only resumes when
+          // this device was the pauser (guarded room-side).
+          if (type === 'pause') {
+            pausedProvRef.current = true;
+            if (pauseEventTimer.current) clearTimeout(pauseEventTimer.current);
+            pauseEventTimer.current = setTimeout(() => {
+              if (pausedProvRef.current) onProviderPauseRef.current?.();
+            }, 1500);
+          }
           if (type === 'play') {
             pausedProvRef.current = false;
             lastTickRef.current = Date.now();
             activeMsRef.current = 0;
+            if (pauseEventTimer.current) {
+              clearTimeout(pauseEventTimer.current);
+              pauseEventTimer.current = null;
+            }
+            onProviderPlayRef.current?.();
           }
           const t = Number(time);
           if (t > 0) {
@@ -491,7 +522,14 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     }
 
     window.addEventListener('message', handlePlayerMessage);
-    return () => window.removeEventListener('message', handlePlayerMessage);
+    return () => {
+      window.removeEventListener('message', handlePlayerMessage);
+      // A pending auto-pause must never fire for a stale episode/server.
+      if (pauseEventTimer.current) {
+        clearTimeout(pauseEventTimer.current);
+        pauseEventTimer.current = null;
+      }
+    };
   }, [mediaId, isTv, currentSeason, currentEpisode, details, media]);
 
   const handleSelectEpisode = (seasonNum, episodeNum) => {
@@ -612,6 +650,25 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             <Maximize className="w-4 h-4" />
           </button>
 
+          {/* Room chat lives in the chrome row (next to fullscreen) and the
+              panel below lives inside this container — so both survive the
+              jump to fullscreen, where only this element is shown. */}
+          {chat && (
+            <button
+              onClick={chat.onToggle}
+              className="cine-icon-btn relative"
+              title="Room chat"
+              aria-label="Toggle room chat"
+            >
+              <MessageCircle className="w-4 h-4" />
+              {chat.unread > 0 && !chat.open && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-[var(--cine-accent)] text-black text-[10px] font-black flex items-center justify-center">
+                  {chat.unread > 9 ? '9+' : chat.unread}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Episodes popover — lives inside the row so top-full means
               "right under the buttons". Rendered only while the chrome is
               up so no invisible-but-clickable ghost remains after fade-out. */}
@@ -629,6 +686,41 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           )}
         </div>
       </div>
+
+      {/* Floating room chat: sibling of chrome/video (NOT gated on
+          showChrome), so it stays open and interactive while chrome fades
+          and inside fullscreen (this container is the fullscreen element).
+          Above iframe (auto), wake zone (z-20) and chrome (z-30). */}
+      {chat?.open && (
+        <div className="absolute right-3 top-24 bottom-24 z-40 w-[320px] max-w-[80vw] rounded-2xl cine-glass-panel flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--cine-glass-border)] flex-shrink-0">
+            <p className="text-xs font-bold text-white">Room chat</p>
+            <button
+              onClick={chat.onToggle}
+              className="w-7 h-7 rounded-full inline-flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              title="Close chat"
+              aria-label="Close room chat"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <ChatList
+            messages={chat.messages}
+            reactions={chat.reactions}
+            myDevice={chat.myDevice}
+            onToggleReact={chat.onToggleReact}
+            endRef={floatEndRef}
+          />
+          <ChatInput
+            nickname={chat.nickname}
+            muted={chat.muted}
+            input={chat.input}
+            setInput={chat.setInput}
+            onSend={chat.onSend}
+            onSendGif={chat.onSendGif}
+          />
+        </div>
+      )}
 
       {/* Video Viewport — src is memoised state: chrome pokes and clock
           ticks re-render without ever reloading the stream. */}
