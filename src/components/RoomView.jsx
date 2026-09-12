@@ -547,14 +547,19 @@ export default function RoomView({ code, onLeave, onToast }) {
       setSyncNote('Catching up…');
       followGraceRef.current = Date.now();
       followAppliedRef.current = Date.now();
+      const targetSecond = r.position || 0;
       setRoomTarget({
         key: `manual:${Date.now()}`,
-        second: r.position || 0,
+        second: targetSecond,
         season: r.season,
         episode: r.episode,
         server: r.server,
       });
-      onToast?.("Synced to host's position");
+      onToast?.(
+        targetSecond > 2
+          ? `Synced to ${formatClock(targetSecond)}`
+          : "Host is at the start — Synced to 0:00"
+      );
       setTimeout(() => setSyncNote('In sync'), 3000);
     } catch {
       onToast?.('Sync failed — retry.');

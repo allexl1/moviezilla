@@ -454,12 +454,24 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           // pausing inside the video retires the manual Pause button on
           // event-capable servers. The matching 'play' only resumes when
           // this device was the pauser (guarded room-side).
+          //
+          // Guard: some providers emit 'pause' on load/buffer with nothing
+          // actually playing. A pause only counts (for the clock AND the
+          // room) once playback was real: a reported time, a non-zero
+          // resume base, or accrued watch. Otherwise a load-time blip
+          // freezes history at 0:00 and syncs followers there too.
+          const hadPlayback =
+            pmSeenRef.current ||
+            Number(playbackRef.current.currentTime || 0) > 0 ||
+            Number(wallBaseRef.current || 0) > 0;
           if (type === 'pause') {
-            pausedProvRef.current = true;
-            if (pauseEventTimer.current) clearTimeout(pauseEventTimer.current);
-            pauseEventTimer.current = setTimeout(() => {
-              if (pausedProvRef.current) onProviderPauseRef.current?.();
-            }, 1500);
+            if (hadPlayback) {
+              pausedProvRef.current = true;
+              if (pauseEventTimer.current) clearTimeout(pauseEventTimer.current);
+              pauseEventTimer.current = setTimeout(() => {
+                if (pausedProvRef.current) onProviderPauseRef.current?.();
+              }, 1500);
+            }
           }
           if (type === 'play') {
             pausedProvRef.current = false;

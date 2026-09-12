@@ -1737,13 +1737,13 @@ button:hover .cine-provider-icon,
   mask-image: linear-gradient(0deg, transparent 0%, #000 42%);
 }
 
-/* Bottom scrim that feeds the melt: it ENDS at the ghost's own darkness
-   (0.55) instead of transparent — the edge pixel above the boundary
-   equals the ghost pixel below it, so no step can form. The dissolve
-   happens higher up (mask 42% + scrim peak 28%), text keeps its contrast. */
+/* Bottom scrim that feeds the melt: transparent AT the hero edge (the
+   melt-base beneath already carries the ghost's exact tone — any black
+   here would double-darken and redraw the edge line). Peaks behind the
+   text block, gone by the upper hero. */
 .cine-detail-hero-scrim {
   background:
-    linear-gradient(0deg, rgba(5, 5, 5, 0.55) 0%, rgba(5, 5, 5, 0.85) 12%, rgba(5, 5, 5, 0.6) 28%, rgba(5, 5, 5, 0.3) 55%, transparent 85%);
+    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.55) 10%, rgba(5, 5, 5, 0.85) 28%, rgba(5, 5, 5, 0.35) 55%, transparent 85%);
 }
 .cine-detail-bg {
   position: fixed;
