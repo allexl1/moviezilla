@@ -50,10 +50,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const r = await fetch(
-      `https://rt-api-jade.vercel.app/api/rotten-tomatoes?movie=${encodeURIComponent(title)}`,
-      { headers: { Accept: 'application/json' } }
-    );
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    let r;
+    try {
+      r = await fetch(
+        `https://rt-api-jade.vercel.app/api/rotten-tomatoes?movie=${encodeURIComponent(title)}`,
+        { headers: { Accept: 'application/json' }, signal: ctrl.signal }
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    // Free backend is flaky (402 = quota, 404 = no match): treat as a miss,
+    // not a 502. Cache misses briefly so detail pages don't hammer it.
+    if (r.status === 402 || r.status === 429) {
+      res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=600');
+      return res.status(404).json({ error: 'RT quota exceeded, try later' });
+    }
     if (!r.ok) throw new Error(`RT upstream ${r.status}`);
     const body = await r.json();
     const data = body?.data;
@@ -78,6 +91,8 @@ export default async function handler(req, res) {
       audience: num(data.audience_score),
     });
   } catch (err) {
-    return res.status(502).json({ error: 'RT lookup failed', message: err.message });
+    // Client hides missing RT silently — 404 keeps consoles clean.
+    res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=600');
+    return res.status(404).json({ error: 'RT lookup failed', message: err.message });
   }
 }

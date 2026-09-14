@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * EmptyState — centered glass empty state (lists, results, history).

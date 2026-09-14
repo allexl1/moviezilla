@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay } from 'lucide-react';
 import { football, FOOTBALL_MIRRORS, formatKickoff } from '../services/football';
 import EmptyState from './ui/EmptyState';

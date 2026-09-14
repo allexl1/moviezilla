@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect, useRef } from 'react';
 import { Play, CalendarDays } from 'lucide-react';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 
@@ -6,6 +6,8 @@ import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
  * UpcomingRail — 16:9 backdrop shelf for unreleased/airing titles.
  * Green "Coming Soon" badge, hover reveals play + title + date.
  * Items lack media_type, so the caller pins it (movie vs tv).
+ * Infinite scroll: a sentinel at the rail end fires onLoadMore as it
+ * nears the viewport (root = the rail itself for horizontal scrolling).
  */
 export default function UpcomingRail({
   title,
@@ -16,7 +18,27 @@ export default function UpcomingRail({
   verb = 'coming',
   dateKey = 'release_date',
   loading = false,
+  onLoadMore = null,
+  loadingMore = false,
+  hasMore = false,
 }) {
+  const railRef = useRef(null);
+  const sentinelRef = useRef(null);
+
+  useEffect(() => {
+    if (!onLoadMore || !hasMore) return;
+    const root = railRef.current;
+    const el = sentinelRef.current;
+    if (!root || !el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { root, rootMargin: '0px 500px 0px 0px', threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onLoadMore, hasMore, items.length]);
   // Loading shimmer in exact card geometry: the shelf region must never
   // read as silently broken (a blank gap under a populated header is
   // indistinguishable from a bug — that confusion already happened once).
@@ -57,7 +79,7 @@ export default function UpcomingRail({
       </div>
 
       {/* Single horizontal line only: no wrap, snap scroll, fixed 16:9 cards. */}
-      <div className="cine-rail no-scrollbar -mx-1 px-1 flex flex-nowrap overflow-x-auto">
+      <div ref={railRef} className="cine-rail no-scrollbar -mx-1 px-1 flex flex-nowrap overflow-x-auto">
         {items.map((media) => {
           const name = media.title || media.name || 'Untitled';
           const date = dateOf(media);
@@ -97,6 +119,22 @@ export default function UpcomingRail({
             </button>
           );
         })}
+        {/* Infinite-scroll sentinel: while more pages exist it sits at the
+            end and fires onLoadMore ~500px before arrival; while a page is
+            in flight it shows a card-geometry spinner instead of a gap. */}
+        {hasMore && (
+          <div
+            ref={sentinelRef}
+            aria-hidden="true"
+            className="flex-shrink-0 w-24 self-stretch flex items-center justify-center"
+          >
+            {loadingMore && (
+              <span className="relative block w-40 aspect-video rounded-2xl overflow-hidden border border-[var(--cine-glass-border)]">
+                <span className="skel absolute inset-0" />
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

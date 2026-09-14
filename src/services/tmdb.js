@@ -1,5 +1,3 @@
-const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';
-
 // Single source of truth for fallback imagery (missing TMDB paths / broken
 // loads). YouTube trailer thumbnails and Letterboxd posters stay direct
 // intentionally — see getImageUrl below.

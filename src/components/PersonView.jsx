@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Cake, MapPin, Sparkles, Trophy, ExternalLink, X } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { getAwardsByImdb, zodiacSign, ageOf } from '../services/wikidata';
@@ -219,7 +219,7 @@ export default function PersonView({ personId, onSelectMedia }) {
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
               {photos.map((p, i) => (
                 <button
-                  key={p.file_path}
+                  key={`${p.file_path}_${i}`}
                   onClick={() => setZoom(tmdb.getImageUrl(p.file_path, 'original'))}
                   className="group w-28 md:w-36 flex-shrink-0 aspect-[2/3] rounded-2xl overflow-hidden bg-[var(--cine-surface-strong)] border border-[var(--cine-glass-border)] cursor-zoom-in"
                   title="View full photo"

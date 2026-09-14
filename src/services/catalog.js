@@ -1,4 +1,4 @@
-import { Flame, Swords, Laugh, Skull, Rocket, Heart, Clapperboard } from 'lucide-react';
+import { Flame, Swords, Laugh, Skull, Rocket, Heart } from 'lucide-react';
 import { MOVIE_GENRES, TV_GENRES } from './tmdb';
 
 // Shared catalog helpers (single source of truth for every discovery view).

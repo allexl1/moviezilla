@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { TV_GENRES, TV_SORTS, tmdb } from '../services/tmdb';
-import { pickUpcoming, pickAiring, DATA_TTL } from '../services/catalog';
+import { pickUpcoming, pickAiring } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
+import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
 import Card from '../components/ui/Card';
 import { SkelGrid } from '../components/ui';
 
-// Non-empty payloads cache briefly so detail-close remounts hydrate
-// instantly. Module scope: survives unmounts.
-let seriesCache = { at: 0, items: [] };
-let airCache = { at: 0, items: [] };
+// Stable references for the paged rails (must not change identity across
+// renders or the rails refetch in a loop).
+const fetchUpcomingSeriesPage = (page) => tmdb.getUpcomingSeries({ page });
+const pickUpcomingSeries = (results) => pickUpcoming(results, 'first_air_date');
+const fetchOnAirPage = (page) => tmdb.getOnTheAir({ page });
 
 // Shows route view: Coming Soon shelf (upcoming premieres) + released
 // grid + paging. Owns its catalog (useDiscovery) and shelf; filters come
@@ -29,39 +31,26 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
     pickRandom,
   } = useDiscovery({ tab: 'tv', ...filters, letterboxdUser });
 
-  const [upcomingSeries, setUpcomingSeries] = useState([]);
-  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  // Coming Soon shelf: paged + infinite scroll (sentinel in the rail loads
+  // the next discover page). On Air grid: same paging behind Load more.
+  const {
+    items: upcomingSeries,
+    hasMore: upcomingHasMore,
+    loading: upcomingLoading,
+    loadingMore: upcomingLoadingMore,
+    loadMore: loadMoreUpcoming,
+  } = usePagedRail('shows-upcoming', fetchUpcomingSeriesPage, pickUpcomingSeries);
   // On Air mini-toggle: swaps the Released grid for what's airing right
   // now. Fetched lazily on first toggle, then cached like everything else.
   const [showAiring, setShowAiring] = useState(false);
-  const [onAirToday, setOnAirToday] = useState([]);
-  const [onAirLoading, setOnAirLoading] = useState(false);
-  useEffect(() => {
-    if (!showAiring) return;
-    let on = true;
-    if (Date.now() - airCache.at < DATA_TTL && airCache.items.length > 0) {
-      setOnAirToday(airCache.items);
-      return () => {
-        on = false;
-      };
-    }
-    setOnAirLoading(true);
-    tmdb
-      .getOnTheAir()
-      .then((res) => {
-        if (!on) return;
-        const picked = pickAiring(res?.results);
-        setOnAirToday(picked);
-        if (picked.length > 0) airCache = { at: Date.now(), items: picked };
-      })
-      .catch((err) => console.error('Failed to load on-air:', err))
-      .finally(() => {
-        if (on) setOnAirLoading(false);
-      });
-    return () => {
-      on = false;
-    };
-  }, [showAiring]);
+  const {
+    items: onAirToday,
+    hasMore: onAirHasMore,
+    loading: onAirLoading,
+    loadingMore: onAirLoadingMore,
+    loadMore: loadMoreOnAir,
+  } = usePagedRail('shows-onair', fetchOnAirPage, pickAiring, showAiring);
+
   const [providerOptions, setProviderOptions] = useState([]);
   useEffect(() => {
     let on = true;
@@ -73,35 +62,6 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
       .catch(() => {});
     return () => {
       on = false;
-    };
-  }, []);
-
-  // Coming Soon for shows: future premieres (discover/tv), soonest first —
-  // mirrors the Movies shelf instead of the old On The Air row.
-  useEffect(() => {
-    let isMounted = true;
-    setUpcomingLoading(true);
-    if (Date.now() - seriesCache.at < DATA_TTL && seriesCache.items.length > 0) {
-      setUpcomingSeries(seriesCache.items);
-      setUpcomingLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
-    tmdb
-      .getUpcomingSeries()
-      .then((res) => {
-        if (!isMounted) return;
-        const picked = pickUpcoming(res?.results, 'first_air_date');
-        setUpcomingSeries(picked);
-        if (picked.length > 0) seriesCache = { at: Date.now(), items: picked };
-      })
-      .catch((err) => console.error('Failed to load upcoming series:', err))
-      .finally(() => {
-        if (isMounted) setUpcomingLoading(false);
-      });
-    return () => {
-      isMounted = false;
     };
   }, []);
 
@@ -163,6 +123,9 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
         badge="Coming Soon"
         dateKey="first_air_date"
         loading={upcomingLoading}
+        onLoadMore={loadMoreUpcoming}
+        loadingMore={upcomingLoadingMore}
+        hasMore={upcomingHasMore}
       />
       <>
         <div className="cine-section-head">
@@ -196,14 +159,14 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
           </>
         )}
       </>
-      {!showAiring && page < totalPages && totalCount > 0 && (
+      {(showAiring ? onAirHasMore : !showAiring && page < totalPages) && (showAiring ? onAirToday.length > 0 : totalCount > 0) && (
         <div className="flex justify-center py-10">
           <button
-            onClick={nextPage}
-            disabled={loadingMore}
+            onClick={showAiring ? loadMoreOnAir : nextPage}
+            disabled={showAiring ? onAirLoadingMore : loadingMore}
             className="cine-control-btn disabled:opacity-50"
           >
-            {loadingMore ? 'Loading…' : 'Load more'}
+            {(showAiring ? onAirLoadingMore : loadingMore) ? 'Loading…' : 'Load more'}
           </button>
         </div>
       )}

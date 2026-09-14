@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, X, Clapperboard } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { storage } from '../services/storage';

@@ -10,14 +10,22 @@ async function fetchWatchlistPage(url) {
   let lastStatus = 0;
   let lastRes = null;
   for (const ua of UAS) {
-    const r = await fetch(url, {
-      headers: {
-        'User-Agent': ua,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Referer: 'https://letterboxd.com/',
-      },
-    });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    let r;
+    try {
+      r = await fetch(url, {
+        headers: {
+          'User-Agent': ua,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Referer: 'https://letterboxd.com/',
+        },
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     lastStatus = r.status;
     lastRes = r;
     if (r.ok) return r;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Server } from 'lucide-react';
 import { storage } from '../services/storage';
 
@@ -6,14 +6,18 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Vidy + VidLink only, by decision: both report real position and honor
-  // resume params, and history is tracked per server. Other providers come
-  // back only after they prove the same. (Legacy rows/URLs for the rest
-  // still play — they just fall back to wall-clock tracking.)
+  // Lineup 2026-09-14 (headless-verified): Vidy + VidLink report real
+  // position and honor resume params (Vidy is the only ad-free one:
+  // 0 ad calls vs VidLink's 22 + popup spawn). Both carry the Russian
+  // domestic library too (Brother 2, Slovo Patsana play verified). Some RU
+  // series stall on Vidy (0:00) / 404 on VidLink (Kukhnya, Interny) —
+  // Vaplayer covers part of that gap (found Slovo, 404s Kukhnya).
+  // Retired: VidFast (no seek, ads), Russian/Voidboost (dead), VidPhantom
+  // (broken), apiplayer.ru (extractor fails: "Streams Unavailable").
   const servers = [
     { id: 'vidy', name: 'Vidy (Recommended)', quality: 'Multi', ping: 'optimal', resume: true },
     { id: 'vidlink', name: 'VidLink (Ultra Fast)', quality: '1080p', ping: 'optimal', resume: true },
-    { id: 'russian', name: 'Russian (RU dubs)', quality: 'HD', ping: 'good', resume: false },
+    { id: 'vaplayer', name: 'Vaplayer (RU)', quality: 'HD', ping: 'good', resume: false },
   ];
 
   useEffect(() => {
@@ -80,7 +84,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
                     if (!off) handleSelect(s.id);
                   }}
                   disabled={off}
-                  title={off ? 'No Russian source for this title' : s.name}
+                  title={off ? 'Not available for this title' : s.name}
                   className={`mat-row w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left text-sm transition ${
                     off ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
                   } ${
@@ -102,6 +106,9 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
               );
             })}
           </div>
+          <p className="px-3 pt-3 text-[11px] leading-relaxed text-white/45">
+            Popups are the provider's ads, not the app — Vidy is ad-free, or try RU Dubs (Beta). A DNS blocker helps too.
+          </p>
         </div>
       )}
     </div>

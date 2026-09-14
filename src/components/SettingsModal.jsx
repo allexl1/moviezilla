@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Clapperboard, Play, Trash2, Zap } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
@@ -8,7 +8,7 @@ import Select from './ui/Select';
 const SERVERS = [
   { value: 'vidy', label: 'Vidy (Recommended)' },
   { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
-  { value: 'russian', label: 'Russian (RU dubs)' },
+  { value: 'vaplayer', label: 'Vaplayer (RU)' },
 ];
 
 function SettingRow({ icon, title, desc, control, danger = false }) {

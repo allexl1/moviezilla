@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Shared Select component — replaces all ad-hoc dropdown implementations.

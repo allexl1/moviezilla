@@ -1,4 +1,3 @@
-import React from 'react';
 import { Star, Play } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
 

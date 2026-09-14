@@ -39,7 +39,14 @@ export default async function handler(req, res) {
     }
 
     const targetUrl = `https://api.klipy.com/v2/${action === 'search' ? 'search' : 'featured'}?${params.toString()}`;
-    const response = await fetch(targetUrl, { headers: { Accept: 'application/json' } });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    let response;
+    try {
+      response = await fetch(targetUrl, { headers: { Accept: 'application/json' }, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {

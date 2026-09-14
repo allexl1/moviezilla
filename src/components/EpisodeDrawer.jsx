@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Check, ListVideo } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 

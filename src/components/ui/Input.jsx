@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Input — labeled glass text input. One recipe for all forms.

@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * SegmentedControl — labeled group of exclusive options.

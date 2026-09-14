@@ -1,4 +1,3 @@
-import React from 'react';
 import { Shuffle } from 'lucide-react';
 import Select from './ui/Select';
 import { COUNTRIES, LANGUAGES } from '../services/tmdb';

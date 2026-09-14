@@ -28,7 +28,7 @@ function devApi() {
 
         // NOTE: connect strips the '/api' route prefix from req.url before
         // invoking this middleware, so match the stripped path here.
-        let handler = null
+        let handler
         if (pathname === '/tmdb') handler = tmdbHandler
         else if (pathname === '/tmdb-image') handler = tmdbImageHandler
         else if (pathname === '/rt') handler = rtHandler

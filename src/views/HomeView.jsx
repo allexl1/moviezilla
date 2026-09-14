@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Clapperboard } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 import { storage, progressLabel } from '../services/storage';
@@ -27,7 +27,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
   const [featuredItem, setFeaturedItem] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const [catalogRetry, setCatalogRetry] = useState(0);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [, setCatalogLoading] = useState(true);
 
   const [popularMovies, setPopularMovies] = useState([]);
   const [popularTV, setPopularTV] = useState([]);

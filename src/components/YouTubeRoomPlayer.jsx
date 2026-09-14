@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 // YouTube IFrame API loader (singleton — one script tag per page).
 let apiPromise = null;
@@ -53,8 +53,8 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
     const cb = onPositionRef.current;
     const pl = playerRef.current;
     if (!cb || !pl?.getCurrentTime) return;
-    let second = 0;
-    let duration = 0;
+    let second;
+    let duration;
     try {
       second = Math.floor(pl.getCurrentTime() || 0);
       duration = Math.floor(pl.getDuration() || 0);

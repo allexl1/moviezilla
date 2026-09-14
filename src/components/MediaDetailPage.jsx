@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
 import { storage, formatClock } from '../services/storage';
 import RowRail from './RowRail';
+
+// RT lookups cache a day (edge caches hits a day too; misses an hour).
+// Module scope: survives detail open/close.
+const rtCache = new Map();
+const RT_TTL = 24 * 60 * 60 * 1000;
 
 function formatMoney(value) {
   if (!value) return null;
@@ -131,22 +136,37 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
   // Rotten Tomatoes via our /api/rt proxy (free keyless backend by
   // default; RapidAPI backend if RAPIDAPI_KEY is set server-side).
+  // Module cache (hits AND misses): the effect keys on title/year strings,
+  // but parent re-renders mint fresh details/media objects — without this
+  // every chrome poke refired the flaky free backend (6x on one visit).
   useEffect(() => {
     let isMounted = true;
-    setRt(null);
     const t = details?.title || details?.name || media?.title || media?.name;
     const y = (details?.release_date || details?.first_air_date || '').slice(0, 4);
     if (!t) return;
+    const ck = `${t}|${y}`;
+    const hit = rtCache.get(ck);
+    if (hit && Date.now() - hit.at < RT_TTL) {
+      if (hit.data) setRt(hit.data);
+      else setRt(null);
+      return;
+    }
+    setRt(null);
     fetch(`/api/rt?title=${encodeURIComponent(t)}&year=${encodeURIComponent(y)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (isMounted && d && (d.critic != null || d.audience != null)) setRt(d);
+        const good = d && (d.critic != null || d.audience != null) ? d : null;
+        rtCache.set(ck, { at: Date.now(), data: good });
+        if (isMounted && good) setRt(good);
       })
-      .catch(() => {});
+      .catch(() => {
+        rtCache.set(ck, { at: Date.now(), data: null });
+      });
     return () => {
       isMounted = false;
     };
-  }, [details, media]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [details?.title, details?.name, media?.title, media?.name, details?.release_date, details?.first_air_date]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');

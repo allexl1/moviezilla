@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { tmdb } from './services/tmdb';
 import { storage, formatClock } from './services/storage';
 import { resolveMediaType, defaultSortFor } from './services/catalog';

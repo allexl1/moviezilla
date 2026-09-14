@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, LogIn, Users, Trash2, X, Copy, Check, MonitorPlay, Search, Link2, Clapperboard, ArrowLeft } from 'lucide-react';
 import { parseYouTubeId, fetchYouTubeMeta } from './YouTubeRoomPlayer';
 import { isRoomsConfigured } from '../services/supabase';

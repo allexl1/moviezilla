@@ -210,7 +210,7 @@ export const storage = {
   getPreferredServer(defaultServer = 'vidy') {
     try {
       const v = localStorage.getItem(STORAGE_KEYS.ACTIVE_SERVER) || defaultServer;
-      return ['vidy', 'vidlink', 'russian'].includes(v) ? v : defaultServer;
+      return ['vidy', 'vidlink', 'vaplayer'].includes(v) ? v : defaultServer;
     } catch {
       return defaultServer;
     }

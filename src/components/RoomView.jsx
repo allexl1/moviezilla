@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Copy,
-  Check,
-  Send,
   Users,
   MessageCircle,
   Pause,
@@ -623,7 +621,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       const r = await fetchRoom(code);
       if (r) setRoom(r);
       onToast?.(`${memberName} is now hosting`);
-    } catch (err) {
+    } catch {
       onToast?.('Transfer failed — retry.');
     }
   };

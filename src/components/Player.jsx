@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ListVideo, Maximize, MessageCircle, X } from 'lucide-react';
 import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
-import { imdbIdOf } from '../services/ratings';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
 import { ChatList, ChatInput } from './chat';
@@ -16,30 +15,17 @@ const TRUSTED_PLAYER_ORIGINS = [
   'https://www.vidy.st',
   'https://vidlink.pro',
   'https://www.vidlink.pro',
-  'https://vidsrc.to',
-  'https://www.vidsrc.to',
-  'https://vidsrc.cc',
-  'https://www.vidsrc.cc',
-  'https://embed.su',
-  'https://www.embed.su',
-  'https://player.smashystream.com',
-  'https://player.autoembed.cc',
-  'https://vidfast.pro',
-  'https://vidfast.net',
-  'https://voidboost.tv',
-  'https://www.voidboost.tv',
+  // vaplayer.ru: trusted for future progress events; tracking is
+  // wall-clock until its protocol is verified.
+  'https://vaplayer.ru',
+  'https://www.vaplayer.ru',
 ];
 
-function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime, imdb }) {
+function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
   const t = Math.max(0, Math.floor(resumeTime || 0));
-  // Russian RU-dub source (Voidboost, keyless, IMDb-addressed). No resume
-  // param or time events documented — wall-clock tracking applies.
-  if (server === 'russian') {
-    if (imdb) return `https://voidboost.tv/embed/tt${String(imdb).replace(/^tt/, '')}`;
-    return isTv
-      ? `https://vidy.st/tv/${mediaId}/${season}/${episode}`
-      : `https://vidy.st/movie/${mediaId}`;
-  }
+  // 'russian' retired 2026-09-14: Voidboost (voidboost.tv AND .cc) is dead
+  // (verified: connection refused, error page in-frame). Old rooms carrying
+  // server:'russian' fall through to Vidy below — they play, just not dubbed.
   // NOTE: VidLink's resume param is `startAt` — `start` does nothing.
   if (server === 'vidlink') {
     const base = isTv
@@ -59,32 +45,14 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime, imd
     }
     return `${base}?${params.toString()}`;
   }
-  if (server === 'vidsrc') {
+  if (server === 'vaplayer') {
+    // Vaplayer (keyless, TMDB-addressed, TV+movie). Found Slovo Patsana
+    // where apiplayer's extractor failed — but 404s some titles itself
+    // (Kukhnya) and never rendered under automation, so it stays
+    // wall-clock tracked until its event protocol is verified.
     return isTv
-      ? `https://vidsrc.to/embed/tv/${mediaId}/${season}/${episode}`
-      : `https://vidsrc.to/embed/movie/${mediaId}`;
-  }
-  // vidsrc.cc supports startAt resume + time events every ~5s.
-  if (server === 'vidsrccc') {
-    const base = isTv
-      ? `https://vidsrc.cc/v2/embed/tv/${mediaId}/${season}/${episode}`
-      : `https://vidsrc.cc/v2/embed/movie/${mediaId}`;
-    return t > 0 ? `${base}?startAt=${t}` : base;
-  }
-  if (server === 'embedsu') {
-    return isTv
-      ? `https://embed.su/embed/tv/${mediaId}/${season}/${episode}`
-      : `https://embed.su/embed/movie/${mediaId}`;
-  }
-  if (server === 'smashy') {
-    return isTv
-      ? `https://player.smashystream.com/tv/${mediaId}?s=${season}&e=${episode}`
-      : `https://player.smashystream.com/movie/${mediaId}`;
-  }
-  if (server === 'autoembed') {
-    return isTv
-      ? `https://player.autoembed.cc/embed/tv/${mediaId}/${season}/${episode}`
-      : `https://player.autoembed.cc/embed/movie/${mediaId}`;
+      ? `https://vaplayer.ru/embed/tv/${mediaId}/${season}/${episode}`
+      : `https://vaplayer.ru/embed/movie/${mediaId}`;
   }
   return isTv
     ? `https://vidy.st/tv/${mediaId}/${season}/${episode}`
@@ -256,7 +224,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       season: initialPlayback.season,
       episode: initialPlayback.episode,
       resumeTime: clampResume(initialPlayback.time),
-      imdb: imdbIdOf(details, isTv ? 'tv' : 'movie'),
     })
   );
 
@@ -269,7 +236,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         season,
         episode,
         resumeTime: clampResume(resumeTime),
-        imdb: imdbIdOf(details, isTv ? 'tv' : 'movie'),
       })
     );
   };
@@ -403,8 +369,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   }, [onClose, isEpisodeOpen]);
 
   // 2. PostMessage listener: real provider time always wins over the
-  // wall-clock estimate (play/pause/seek/timeupdate across Vidy, VidLink,
-  // VidFast-style PLAYER_EVENT / MEDIA_DATA shapes).
+  // wall-clock estimate (play/pause/seek/timeupdate across Vidy, VidLink
+  // PLAYER_EVENT / MEDIA_DATA shapes).
   useEffect(() => {
     function handlePlayerMessage(event) {
       if (!TRUSTED_PLAYER_ORIGINS.includes(event.origin)) return;
@@ -415,7 +381,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         const type = payload.type || inner.type || payload.event || inner.event || '';
         // Accepted names across providers: VidLink (play/pause/seeked/
         // ended/timeupdate), Vidy (timeupdate/play/pause/ended as JSON
-        // strings), vidsrc.cc (play/pause/time/complete every ~5s).
+        // strings), generic PLAYER_EVENT / MEDIA_DATA.
         if (
           type === 'PLAYER_EVENT' ||
           type === 'MEDIA_DATA' ||
@@ -436,7 +402,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           const evtId = inner.id ?? inner.mtmdbId ?? inner.tmdbId ?? payload.id;
           if (evtId != null && String(evtId) !== String(mediaId)) return;
           // Vidy sends position as `timestamp` in half its timeupdates
-          // (the other half uses `currentTime`); VidLink/vidsrc.cc use
+          // (the other half uses `currentTime`); VidLink uses
           // currentTime. `progress` is a percent — never seconds.
           const time =
             payload.currentTime ??
@@ -530,7 +496,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
           }
         }
-      } catch {}
+      } catch {
+        // ignore malformed postMessage payloads (ads / third-party frames)
+      }
     }
 
     window.addEventListener('message', handlePlayerMessage);
@@ -644,7 +612,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             onOpenChange={(open) => {
               if (open) setIsEpisodeOpen(false);
             }}
-            unavailable={imdbIdOf(details, isTv ? 'tv' : 'movie') ? [] : ['russian']}
           />
 
           <button
@@ -755,11 +722,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             src={embedUrl}
             title={title}
             className="w-full h-full border-0"
-            // NOTE: no sandbox attribute on purpose — every provider (Vidy,
-            // VidLink, VidSrc, VidSrc.cc, Embed.su) refuses sandboxed frames
-            // or fails to load in one (verified per server). Popup/ad pressure
-            // is handled by offering multiple servers, not containment.
+            // NOTE: no sandbox attribute — verified 2026-09-14 in headless
+            // Chromium that Vidy and VidLink refuse sandboxed frames
+            // (Vidy: "Iframe Sandbox Detected" page, VidLink: "Sandboxed
+            // iframe detected" crash). Popup pressure is inherent to these
+            // free providers (VidLink ships adsco.re + yandex, confirmed
+            // via traffic; Vidy is ad-free). Both carry the RU domestic
+            // library (Brother 2 verified playing on both).
             allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            referrerPolicy="origin"
             allowFullScreen
           />
         )}

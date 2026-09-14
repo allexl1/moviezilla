@@ -1,8 +1,13 @@
 // Streamed API proxy: schedule + per-match stream sources, no key.
-// Upstream hops domains (su <-> pk); STREAM_BASE is the single knob.
+// Upstream hops domains (su <-> pk); bases are tried in order so one
+// dead domain degrades instead of 500ing. STREAM_BASE env overrides.
 // Matches change by the minute (short edge cache); stream URLs live
 // longer. Never forward credential params.
-const STREAM_BASE = 'https://streamed.pk';
+const STREAM_BASES = [
+  process.env.STREAM_BASE,
+  'https://streamed.pk',
+  'https://streamed.su',
+].filter(Boolean);
 
 const ALLOWED = [
   /^api\/matches\/(football|live|all)$/,
@@ -38,18 +43,40 @@ export default async function handler(req, res) {
     for (const blocked of BLOCKED_PARAMS) delete queryParams[blocked];
 
     const qs = new URLSearchParams(queryParams).toString();
-    const targetUrl = `${STREAM_BASE}/${cleanPath}${qs ? `?${qs}` : ''}`;
 
-    const response = await fetch(targetUrl, {
-      headers: { Accept: 'application/json', 'User-Agent': 'Moviezilla/1.0' },
-    });
+    let response = null;
+    let data = null;
+    let lastStatus = 502;
+    for (const base of STREAM_BASES) {
+      const targetUrl = `${base}/${cleanPath}${qs ? `?${qs}` : ''}`;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        let r;
+        try {
+          r = await fetch(targetUrl, {
+            headers: { Accept: 'application/json', 'User-Agent': 'Moviezilla/1.0' },
+            signal: ctrl.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+        const body = await r.json().catch(() => null);
+        if (r.ok) {
+          response = r;
+          data = body;
+          break;
+        }
+        lastStatus = r.status;
+      } catch {
+        // Try the next base.
+      }
+    }
 
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return res.status(response.status).json({
+    if (!response) {
+      return res.status(502).json({
         error: 'Stream API upstream error',
-        status: response.status,
+        status: lastStatus,
       });
     }
 

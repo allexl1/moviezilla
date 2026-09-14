@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MOVIE_GENRES, SORTS, tmdb } from '../services/tmdb';
-import { pickUpcoming, DATA_TTL } from '../services/catalog';
+import { pickUpcoming } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
+import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
 import Card from '../components/ui/Card';
 import { SkelGrid } from '../components/ui';
 
-// Non-empty payloads cache briefly so detail-close remounts hydrate
-// instantly instead of popping the shelf in late. Module scope: survives
-// unmounts, unlike component state.
-let upcomingCache = { at: 0, items: [] };
+// Stable fetcher reference for the paged rail (must not change identity
+// across renders or the rail refetches in a loop).
+const fetchUpcomingMovies = (page) => tmdb.getUpcoming({ page });
 
 // Movies route view: Coming Soon shelf + released grid + paging.
 // Owns its catalog (useDiscovery) and upcoming shelf; filters come from
@@ -29,10 +29,17 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
     pickRandom,
   } = useDiscovery({ tab: 'movie', ...filters, letterboxdUser });
 
-  const [upcomingMovies, setUpcomingMovies] = useState([]);
-  const [upcomingError, setUpcomingError] = useState(false);
-  const [upcomingTick, setUpcomingTick] = useState(0);
-  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  // Coming Soon shelf: paged + infinite scroll (sentinel in the rail loads
+  // the next TMDB page). Shared hook owns items/page/cache/retry.
+  const {
+    items: upcomingMovies,
+    hasMore: upcomingHasMore,
+    loading: upcomingLoading,
+    loadingMore: upcomingLoadingMore,
+    error: upcomingError,
+    loadMore: loadMoreUpcoming,
+    retry: retryUpcoming,
+  } = usePagedRail('movies-upcoming', fetchUpcomingMovies, pickUpcoming);
   // Same catalog as the home wall: a service tapped on Home must exist
   // in this filter (falls back to the short list until it resolves).
   const [providerOptions, setProviderOptions] = useState([]);
@@ -48,40 +55,6 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
       on = false;
     };
   }, []);
-
-  // Movies keeps its own Upcoming shelf fresh. A failed fetch surfaces a
-  // retry instead of silently vanishing (UpcomingRail returns null on
-  // empty — without this the user just sees nothing).
-  useEffect(() => {
-    let isMounted = true;
-    setUpcomingError(false);
-    setUpcomingLoading(true);
-    if (Date.now() - upcomingCache.at < DATA_TTL && upcomingCache.items.length > 0) {
-      setUpcomingMovies(upcomingCache.items);
-      setUpcomingLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
-    tmdb
-      .getUpcoming()
-      .then((res) => {
-        if (!isMounted) return;
-        const picked = pickUpcoming(res?.results);
-        setUpcomingMovies(picked);
-        if (picked.length > 0) upcomingCache = { at: Date.now(), items: picked };
-      })
-      .catch((err) => {
-        console.error('Failed to load upcoming rail:', err);
-        if (isMounted) setUpcomingError(true);
-      })
-      .finally(() => {
-        if (isMounted) setUpcomingLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [upcomingTick]);
 
   return (
     <>
@@ -124,12 +97,15 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
         badge="Coming Soon"
         dateKey="release_date"
         loading={upcomingLoading}
+        onLoadMore={loadMoreUpcoming}
+        loadingMore={upcomingLoadingMore}
+        hasMore={upcomingHasMore}
       />
       {upcomingMovies.length === 0 && upcomingError && (
         <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
           <span>Couldn't load Coming Soon. Check your connection or API key.</span>
           <button
-            onClick={() => setUpcomingTick((t) => t + 1)}
+            onClick={retryUpcoming}
             className="cine-control-btn"
           >
             Retry

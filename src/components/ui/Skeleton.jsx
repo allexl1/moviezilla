@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Skeleton shimmer blocks — loading states that look like the content

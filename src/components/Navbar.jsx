@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark, Users } from 'lucide-react';
 
 export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings }) {
