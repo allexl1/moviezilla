@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ListVideo, X, Check, Pencil, History } from 'lucide-react';
+import { ListVideo, X, Check, Pencil, History, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage, progressLabel, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
@@ -171,11 +171,65 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     };
   }, [letterboxdUser]);
 
-  // Letterboxd rows ship without posters (the watchlist HTML carries none),
-  // so they render on fallback art — instant, zero TMDB resolve storms.
-  // (A per-title TMDB backfill used to run here in batches; it cost dozens
-  // of requests per open and is gone for performance. Titles still resolve
-  // lazily on tap via handleLetterboxdSelect.)
+  // Letterboxd poster backfill: the LB grid carries no art, so rows used
+  // to render fallback clappers in a wall. Resolve each title via TMDB
+  // once, cache poster paths persistently (later opens cost zero
+  // requests), concurrency-limited with progressive repaint as matches
+  // land. Titles still resolve lazily on tap via handleLetterboxdSelect.
+  const readArtCache = () => {
+    try {
+      const raw = localStorage.getItem('mz_lb_art');
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+  const [lbArt, setLbArt] = useState(readArtCache);
+
+  React.useEffect(() => {
+    if (!letterboxdList || letterboxdList.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const cache = readArtCache();
+      const queue = letterboxdList.filter(
+        (r) => r.source === 'letterboxd' && !cache[r.id]
+      );
+      for (let i = 0; i < queue.length && !cancelled; i += 4) {
+        const batch = queue.slice(i, i + 4);
+        const found = await Promise.all(
+          batch.map(async (r) => {
+            try {
+              const m = await tmdb.resolveTitle(r.title, r.release_date);
+              return m?.poster_path ? [r.id, m.poster_path] : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (cancelled) break;
+        let changed = false;
+        for (const hit of found) {
+          if (hit) {
+            cache[hit[0]] = hit[1];
+            changed = true;
+          }
+        }
+        if (changed) {
+          try {
+            localStorage.setItem('mz_lb_art', JSON.stringify(cache));
+          } catch {
+            // Storage full/blocked — art just won't persist.
+          }
+          setLbArt({ ...cache });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letterboxdList]);
 
   const matchType = (t) => typeFilter === 'all' || t === typeFilter;
   const matchGenre = (ids) =>
@@ -303,9 +357,25 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
             )}
           </div>
         ) : (
-          <button onClick={onOpenSettings} className="cine-control-btn self-start lg:self-auto">
-            Connect Letterboxd
-          </button>
+          <div className="cine-glass-panel rounded-3xl p-5 self-start lg:self-auto max-w-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="cine-btn-circle flex-shrink-0" aria-hidden="true">
+                <Clapperboard className="w-5 h-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-white">Letterboxd sync</span>
+                <span className="block text-xs text-white/60 leading-relaxed">
+                  Pull your watchlist and diary into rows with posters.
+                </span>
+              </span>
+            </div>
+            <button
+              onClick={onOpenSettings}
+              className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm w-full"
+            >
+              Connect Letterboxd
+            </button>
+          </div>
         )}
       </div>
 
@@ -365,7 +435,12 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               return (
               <div key={key} className="relative">
                 <Card
-                  media={item}
+                  media={{
+                    ...item,
+                    poster_path:
+                      (item.source === 'letterboxd' && lbArt[item.id]) ||
+                      item.poster_path,
+                  }}
                   size="fluid"
                   onClick={(m) =>
                     m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)

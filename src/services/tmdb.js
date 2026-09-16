@@ -154,7 +154,9 @@ async function proxyFetch(endpoint, params = {}) {
     ...params,
   });
 
-  const res = await fetch(`/api/tmdb?${query.toString()}`);
+  const res = await fetch(`/api/tmdb?${query.toString()}`, {
+    signal: AbortSignal.timeout(10000),
+  });
 
   if (!res.ok) {
     throw new Error(`TMDB request failed: ${res.status}`);
@@ -168,8 +170,10 @@ async function proxyFetch(endpoint, params = {}) {
 
 // Tiny in-memory TTL cache for immutable detail calls (details, logos,
 // seasons). Catalog/search stay uncached — they change with filters/query.
+// LRU-capped so long sessions can't grow it without bound.
 const responseCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_MAX = 120;
 
 function cacheGet(key) {
   const hit = responseCache.get(key);
@@ -182,7 +186,11 @@ function cacheGet(key) {
 }
 
 function cacheSet(key, data, ttl = CACHE_TTL) {
+  if (responseCache.has(key)) responseCache.delete(key);
   responseCache.set(key, { data, at: Date.now(), ttl });
+  while (responseCache.size > CACHE_MAX) {
+    responseCache.delete(responseCache.keys().next().value);
+  }
 }
 
 export const tmdb = {
@@ -217,6 +225,7 @@ export const tmdb = {
     const params = {
       page,
       sort_by: sort,
+      include_adult: 'false',
       // Released grids only: newest-first discover otherwise fills page 1
       // with future (unreleased) titles that belong in Coming Soon.
       'primary_release_date.lte': today,
@@ -287,6 +296,7 @@ export const tmdb = {
     const params = {
       page,
       sort_by: sort,
+      include_adult: 'false',
       // Same as movies: keep unreleased pilots out of Released Series.
       'first_air_date.lte': today,
     };
@@ -341,6 +351,7 @@ export const tmdb = {
     return proxyFetch('discover/tv', {
       page,
       sort_by: sort,
+      include_adult: 'false',
       with_genres: '16',
       with_original_language: 'ja',
     });
@@ -350,6 +361,7 @@ export const tmdb = {
     return proxyFetch('discover/movie', {
       page,
       sort_by: 'popularity.desc',
+      include_adult: 'false',
       'vote_count.gte': 100,
     });
   },
@@ -358,6 +370,7 @@ export const tmdb = {
     return proxyFetch('discover/tv', {
       page,
       sort_by: 'popularity.desc',
+      include_adult: 'false',
       'vote_count.gte': 100,
     });
   },
@@ -366,6 +379,7 @@ export const tmdb = {
     return proxyFetch('discover/movie', {
       page,
       sort_by: 'vote_average.desc',
+      include_adult: 'false',
       'vote_count.gte': 500,
     });
   },
@@ -387,14 +401,6 @@ export const tmdb = {
       .sort((a, b) => a.priority - b.priority);
   },
 
-  // Provider logo paths for the "Browse by Provider" row (id -> logo_path).
-  async getProviderLogos() {
-    const list = await tmdb.getProviders();
-    const map = {};
-    for (const p of list) map[p.id] = p.logo;
-    return map;
-  },
-
   // Freshness rails — these endpoints (not trending-week) are what surface
   // theatrical releases like a 3-days-ago Mayday on Home.
   async getNowPlaying({ page = 1 } = {}) {
@@ -412,13 +418,10 @@ export const tmdb = {
     const today = new Date().toISOString().slice(0, 10);
     return proxyFetch('discover/tv', {
       page,
+      include_adult: 'false',
       'first_air_date.gte': today,
       sort_by: 'first_air_date.asc',
     });
-  },
-
-  async getAiringToday({ page = 1 } = {}) {
-    return proxyFetch('tv/airing_today', { page, timezone: 'America/New_York' });
   },
 
   async getOnTheAir({ page = 1 } = {}) {
@@ -439,7 +442,9 @@ export const tmdb = {
       append_to_response: 'videos,credits,similar,release_dates,content_ratings,external_ids',
     });
 
-    const res = await fetch(`/api/tmdb?${query.toString()}`);
+    const res = await fetch(`/api/tmdb?${query.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
 
     if (!res.ok) {
       throw new Error(`TMDB details failed: ${res.status}`);
@@ -458,7 +463,9 @@ export const tmdb = {
 
     try {
       const query = new URLSearchParams({ path: `${mediaType}/${id}/images` });
-      const res = await fetch(`/api/tmdb?${query.toString()}`);
+      const res = await fetch(`/api/tmdb?${query.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
       if (!res.ok) throw new Error();
       const data = await res.json();
       const logos = data?.logos || [];
@@ -479,7 +486,9 @@ export const tmdb = {
       path: `tv/${tvId}/season/${seasonNumber}`,
     });
 
-    const res = await fetch(`/api/tmdb?${query.toString()}`);
+    const res = await fetch(`/api/tmdb?${query.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
 
     if (!res.ok) {
       throw new Error(`TMDB season failed: ${res.status}`);
@@ -513,7 +522,9 @@ export const tmdb = {
       append_to_response: 'movie_credits,tv_credits,images,external_ids',
     });
 
-    const res = await fetch(`/api/tmdb?${query.toString()}`);
+    const res = await fetch(`/api/tmdb?${query.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
 
     if (!res.ok) {
       throw new Error(`TMDB person failed: ${res.status}`);

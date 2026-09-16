@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Check, ListVideo } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Check, ListVideo, ChevronDown, Crosshair } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 
 export default function EpisodeDrawer({
@@ -17,10 +17,33 @@ export default function EpisodeDrawer({
   const [loading, setLoading] = useState(false);
   const [seasonError, setSeasonError] = useState('');
   const [seasonRetry, setSeasonRetry] = useState(0);
+  // Expanded episode detail (overview/runtime/air-date/rating). Row tap
+  // still plays instantly — the chevron is the only thing that expands.
+  const [expandedEp, setExpandedEp] = useState(null);
+  const epRefs = useRef({});
 
   useEffect(() => {
     setActiveSeason(currentSeason);
   }, [currentSeason]);
+
+  useEffect(() => {
+    setExpandedEp(null);
+  }, [tvId, activeSeason]);
+
+  // Land on the episode you're actually at: when the current season's
+  // list arrives, bring the current episode into view — no manual scroll.
+  useEffect(() => {
+    if (activeSeason !== currentSeason || episodes.length === 0) return;
+    const el = epRefs.current[currentEpisode];
+    if (el && typeof el.scrollIntoView === 'function') {
+      try {
+        el.scrollIntoView({ block: 'nearest' });
+      } catch {
+        // ignore
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [episodes, activeSeason, tvId]);
 
   useEffect(() => {
     if (!isOpen || !tvId) return;
@@ -63,13 +86,26 @@ export default function EpisodeDrawer({
         {/* Popover Header */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--cine-glass-border)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-[var(--cine-accent)]">
+            <div className="cine-disc w-10 h-10">
               <ListVideo className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight">Episodes</h3>
               <p className="text-[11px] text-white/60">Season {activeSeason} • {episodes.length} episodes</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {activeSeason !== currentSeason && (
+              <button
+                onClick={() => setActiveSeason(currentSeason)}
+                className="cine-pill cine-pill--sm"
+                title={`Jump to season ${currentSeason}, episode ${currentEpisode}`}
+                aria-label="Jump to current episode"
+              >
+                <Crosshair className="w-3 h-3" />
+                Current
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -87,11 +123,7 @@ export default function EpisodeDrawer({
               key={sNum}
               onClick={() => setActiveSeason(sNum)}
               aria-pressed={activeSeason === sNum}
-              className={`h-9 px-4 inline-flex items-center flex-shrink-0 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
-                activeSeason === sNum
-                  ? 'bg-white text-black border-white shadow-sm'
-                  : 'bg-[var(--cine-glass-tint)] text-white/60 hover:text-white hover:bg-[var(--cine-glass-tint-hover)] border-[var(--cine-glass-border)]'
-              }`}
+              className={`cine-pill${activeSeason === sNum ? ' cine-pill--active' : ''}`}
             >
               Season {sNum}
             </button>
@@ -121,6 +153,7 @@ export default function EpisodeDrawer({
           ) : (
             episodes.map((ep) => {
               const isCurrent = activeSeason === currentSeason && ep.episode_number === currentEpisode;
+              const expanded = expandedEp === ep.episode_number;
               const thumb = ep.still_path
                 ? tmdb.getImageUrl(ep.still_path, 'w300')
                 : FALLBACK_POSTER;
@@ -128,6 +161,10 @@ export default function EpisodeDrawer({
               return (
                 <div
                   key={ep.id || ep.episode_number}
+                  ref={(el) => {
+                    if (el) epRefs.current[ep.episode_number] = el;
+                    else delete epRefs.current[ep.episode_number];
+                  }}
                   onClick={() => {
                     onSelectEpisode(activeSeason, ep.episode_number);
                     onClose();
@@ -150,7 +187,35 @@ export default function EpisodeDrawer({
                     <p className="text-[11px] text-white/60 line-clamp-1 mt-0.5">
                       {ep.overview || 'Play episode'}
                     </p>
+                    {expanded && (
+                      <div className="mt-1.5 space-y-1" onClick={(e) => e.stopPropagation()}>
+                        {ep.overview && (
+                          <p className="text-[11px] leading-relaxed text-white/70">{ep.overview}</p>
+                        )}
+                        <p className="text-[10px] text-white/50">
+                          {[
+                            ep.air_date || null,
+                            ep.runtime ? `${ep.runtime}m` : null,
+                            ep.vote_average ? `★ ${Number(ep.vote_average).toFixed(1)}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' • ') || 'No details'}
+                        </p>
+                      </div>
+                    )}
                   </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedEp(expanded ? null : ep.episode_number);
+                    }}
+                    aria-expanded={expanded}
+                    aria-label={expanded ? 'Hide episode details' : 'Show episode details'}
+                    className="cine-icon-btn cine-icon-btn--xs flex-shrink-0"
+                  >
+                    <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                  </button>
 
                   {isCurrent && (
                     <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0 mr-1" />

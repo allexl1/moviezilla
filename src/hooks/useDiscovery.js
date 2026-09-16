@@ -5,7 +5,16 @@ import { hasRating, isReleased, DATA_TTL } from '../services/catalog';
 // Page-1 snapshots by filter key: remounts (detail closed, tab revisited)
 // hydrate instantly instead of flashing skeletons. Only successes cache;
 // failures always hit the network so Retry never replays stale data.
+// LRU-capped: filter-hopping can't grow it without limit.
 const discoveryCache = new Map();
+const DISCOVERY_CACHE_MAX = 24;
+function discoveryCacheSet(key, value) {
+  if (discoveryCache.has(key)) discoveryCache.delete(key);
+  discoveryCache.set(key, value);
+  while (discoveryCache.size > DISCOVERY_CACHE_MAX) {
+    discoveryCache.delete(discoveryCache.keys().next().value);
+  }
+}
 
 // Shared discovery-catalog state machine for the Movies/Shows views.
 // Extracted 1:1 from App's catalog effect during the route split:
@@ -21,6 +30,9 @@ export function useDiscovery({ tab, genre, year, sort, provider, country, langua
   const [catalogError, setCatalogError] = useState('');
   const [catalogRetry, setCatalogRetry] = useState(0);
   const prevFilterKey = useRef('');
+  // Stale-response guard: filter/page changes fire overlapping loads; only
+  // the latest may commit (unmount flags alone can't catch this).
+  const seqRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -36,6 +48,7 @@ export function useDiscovery({ tab, genre, year, sort, provider, country, langua
     }
 
     async function load() {
+      const seq = ++seqRef.current;
       if (page > 1) setLoadingMore(true);
       else setCatalogLoading(true);
       try {
@@ -44,7 +57,7 @@ export function useDiscovery({ tab, genre, year, sort, provider, country, langua
         if (page === 1) {
           const hit = discoveryCache.get(filterKey);
           if (hit && Date.now() - hit.at < DATA_TTL) {
-            if (isMounted) {
+            if (isMounted && seq === seqRef.current) {
               setItems(hit.items);
               setTotalPages(hit.totalPages);
               setCatalogError('');
@@ -54,12 +67,12 @@ export function useDiscovery({ tab, genre, year, sort, provider, country, langua
         }
         const res = tab === 'tv' ? await tmdb.getSeries(base) : await tmdb.getMovies(base);
 
-        if (isMounted) {
-          const list = (res?.results || []).filter((x) => x.poster_path);
+        if (isMounted && seq === seqRef.current) {
+          const list = (res?.results || []).filter((x) => !x.adult && x.poster_path);
 
           if (page === 1) {
             setItems(list);
-            discoveryCache.set(filterKey, { items: list, totalPages: res?.total_pages || 1, at: Date.now() });
+            discoveryCacheSet(filterKey, { items: list, totalPages: res?.total_pages || 1, at: Date.now() });
           } else {
             setItems((prev) => {
               const seen = new Set(prev.map((x) => x.id));
@@ -71,9 +84,9 @@ export function useDiscovery({ tab, genre, year, sort, provider, country, langua
         }
       } catch (err) {
         console.error('Failed to load catalog:', err);
-        if (isMounted) setCatalogError("Couldn't load titles. Check your connection.");
+        if (isMounted && seq === seqRef.current) setCatalogError("Couldn't load titles. Check your connection.");
       } finally {
-        if (isMounted) {
+        if (isMounted && seq === seqRef.current) {
           setLoadingMore(false);
           setCatalogLoading(false);
         }

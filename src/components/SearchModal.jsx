@@ -34,7 +34,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
         if (isMounted) {
           setTrending(
             (res?.results || [])
-              .filter((x) => x.poster_path && (x.title || x.name))
+              .filter((x) => !x.adult && x.poster_path && (x.title || x.name))
               .slice(0, 8)
           );
         }
@@ -62,7 +62,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
         ]);
         setResults(
           (multi?.results || []).filter(
-            (x) => x.poster_path && (x.media_type === 'person' || (x.vote_average || 0) > 0)
+            (x) => !x.adult && x.poster_path && (x.media_type === 'person' || (x.vote_average || 0) > 0)
           )
         );
         setPeople(
@@ -187,7 +187,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                   {history.map((term) => (
                     <span
                       key={term}
-                      className="cine-chip cine-chip--neutral pr-1.5"
+                      className="cine-chip cine-chip--glass pr-1.5"
                     >
                       <button
                         onClick={() => setQuery(term)}
@@ -200,7 +200,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                           storage.removeSearchHistory(term);
                           setHistory(storage.getSearchHistory());
                         }}
-                        className="ml-1 w-5 h-5 rounded-full inline-flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                        className="cine-icon-btn cine-icon-btn--xs ml-1"
                         title={`Remove "${term}"`}
                         aria-label={`Remove "${term}" from search history`}
                       >

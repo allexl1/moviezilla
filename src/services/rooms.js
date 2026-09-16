@@ -154,10 +154,42 @@ export async function fetchRoom(code) {
 export async function patchRoom(code, patch) {
   const sb = getSupabase();
   if (!sb) throw new Error('Rooms not configured.');
+  // Allowlist: never let a caller write arbitrary columns (code,
+  // host_device takeover aside — host transfer is explicit below).
+  // Unknown keys are dropped, values are coerced to sane ranges.
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean) throw new Error('Room code required.');
+  const p = patch && typeof patch === 'object' ? patch : {};
+  const out = {};
+  if (p.state === 'live' || p.state === 'paused') out.state = p.state;
+  if (Number.isFinite(Number(p.position))) {
+    out.position = Math.max(0, Math.min(24 * 3600, Math.floor(Number(p.position))));
+  }
+  for (const k of ['season', 'episode']) {
+    if (Number.isFinite(Number(p[k]))) {
+      out[k] = Math.max(1, Math.min(99, Math.floor(Number(p[k]))));
+    }
+  }
+  if (typeof p.server === 'string' && ['vidy', 'vidlink', 'vaplayer'].includes(p.server)) {
+    out.server = p.server;
+  }
+  if (p.grants && typeof p.grants === 'object' && !Array.isArray(p.grants)) {
+    out.grants = p.grants;
+  }
+  if (typeof p.host_device === 'string' && p.host_device.length > 0 && p.host_device.length <= 64) {
+    out.host_device = p.host_device;
+  }
+  if (typeof p.title === 'string' && p.title.trim()) {
+    out.title = p.title.trim().slice(0, 80);
+  }
+  if (p.media && typeof p.media === 'object' && !Array.isArray(p.media)) {
+    out.media = p.media;
+  }
+  if (Object.keys(out).length === 0) throw new Error('Nothing to update.');
   const { data, error } = await sb
     .from('rooms')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('code', code)
+    .update({ ...out, updated_at: new Date().toISOString() })
+    .eq('code', clean)
     .select()
     .single();
   if (error) throw new Error(error.message || 'Room update failed.');

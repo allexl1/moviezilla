@@ -37,7 +37,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           {isDetailView && (
             <button
               onClick={onBack}
-              className="w-11 h-11 rounded-full flex items-center justify-center text-white/80 hover:text-white bg-[var(--cine-glass-tint)] hover:bg-[var(--cine-glass-tint-hover)] border border-[var(--cine-glass-border)] backdrop-blur-2xl transition cursor-pointer"
+              className="cine-icon-btn"
               title="Back"
               aria-label="Back"
             >
@@ -57,7 +57,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             would beat a Tailwind `hidden` utility) */}
         <div className={`cine-nav-pill-box pointer-events-auto ${scrolled ? 'is-scrolled' : ''}`}>
           {tabs.map((tab) => {
-            const isActive = activeTab === tab.id && !isDetailView;
+            const isActive = activeTab === tab.id;
             const Icon = tab.icon;
             return (
               <button
@@ -97,7 +97,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
       <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none" aria-label="Primary">
         <div className={`pointer-events-auto flex items-center gap-0.5 p-1.5 rounded-full cine-nav-pill-box shadow-2xl ${scrolled ? 'is-scrolled' : ''}`}>
           {tabs.map((tab) => {
-            const isActive = activeTab === tab.id && !isDetailView;
+            const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}

@@ -727,11 +727,11 @@ export default function RoomView({ code, onLeave, onToast }) {
               <RefreshCw className="w-3.5 h-3.5" /> Sync all
             </button>
           )}
-          {/* Manual pause lives on for the host only: pausing inside the
-              video auto-locks event-capable servers (Vidy/VidLink/YouTube),
-              but event-less servers need this button — and the host is the
-              ultimate fallback either way. */}
-          {isHost && !pausedBy && (
+          {/* Manual pause lives on only where in-player pause events can't
+              fire (Vaplayer): pausing inside the video auto-locks
+              event-capable servers (Vidy/VidLink/YouTube), retiring this
+              button there — the host stays the fallback everywhere else. */}
+          {isHost && !pausedBy && !['vidy', 'vidlink'].includes(room.server || 'vidy') && !isYouTube && (
             <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
               <Pause className="w-3.5 h-3.5" /> Pause
             </button>
@@ -877,10 +877,23 @@ export default function RoomView({ code, onLeave, onToast }) {
               const memberIsHost = m.device === room.hostDevice;
               const g = memberIsHost ? { control: true, chat: true } : room.grants?.[m.device] || {};
               return (
-                <div key={m.device} className="mat-row flex items-center gap-3 p-2.5">
+                <div
+                  key={m.device}
+                  className="mat-row flex items-center gap-3 p-2.5"
+                  style={
+                    memberIsHost
+                      ? { background: 'color-mix(in srgb, var(--cine-accent) 7%, transparent)' }
+                      : undefined
+                  }
+                >
                   <span
                     className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-black flex-shrink-0"
-                    style={{ backgroundColor: nameColor(m.name) }}
+                    style={{
+                      backgroundColor: nameColor(m.name),
+                      boxShadow: memberIsHost
+                        ? '0 0 0 2px var(--cine-accent)'
+                        : '0 0 0 2px rgba(255, 255, 255, 0.15)',
+                    }}
                   >
                     {(m.name || '?').slice(0, 1).toUpperCase()}
                   </span>
@@ -955,7 +968,7 @@ function NickGate({ onSave, onLeave }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--cine-bg-deep)] p-6">
       <div className="rounded-3xl cine-glass-panel p-8 w-full max-w-sm space-y-4 text-center">
-        <div className="w-12 h-12 mx-auto rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-white/60">
+        <div className="cine-disc cine-disc--dim w-12 h-12 mx-auto">
           <Users className="w-5 h-5" />
         </div>
         <div>

@@ -6,6 +6,7 @@ import { parseLocation, parseLocationSafe, buildLocation } from './services/rout
 import Navbar from './components/Navbar';
 import SearchModal from './components/SearchModal';
 import SettingsModal from './components/SettingsModal';
+import ErrorBoundary from './components/ErrorBoundary';
 import { SkelRail } from './components/ui';
 
 // Route views: code-split per route so first paint stays lean (the old
@@ -60,6 +61,14 @@ export default function App() {
   // settings are transient UI and stay out of the URL on purpose.
   const autoPlayed = useRef(false);
   const firstPush = useRef(true);
+  // Set when popstate kicks off an async autoplay: the states it sets would
+  // otherwise trigger the mirror below with play still false, clobbering
+  // the ?play=1 entry before playMedia resolves. Consumed once.
+  const skipMirrorOnce = useRef(false);
+  // Previous play flag: closing the player (?play=1 off) REPLACES instead
+  // of pushing, so Back never reopens a just-closed player (back-loop).
+  // Opening the player pushes, so Back closes it.
+  const prevPlay = useRef(false);
   useEffect(() => {
     const r = parseLocationSafe();
     // Legacy ?room= links canonicalize to /room/CODE (resolvable forever).
@@ -85,6 +94,7 @@ export default function App() {
         setActivePlayer(null);
       } else if (!autoPlayed.current && p.media) {
         autoPlayed.current = true;
+        skipMirrorOnce.current = true;
         playMedia({ id: p.media.id, media_type: p.media.media_type });
       }
     };
@@ -95,11 +105,20 @@ export default function App() {
   }, []);
 
   // Mirror nav state to the URL. Pushes (back-button-able), except the very
-  // first run which replaces junk/unknown paths canonically.
+  // first run which replaces junk/unknown paths canonically, and player
+  // closes which replace so Back can't reopen a dismissed player.
+  // Home-hero Play has no selectedMedia, so the player media backs the URL
+  // (?play=1 would otherwise desync to '/' and lose its history entry).
   useEffect(() => {
+    if (skipMirrorOnce.current) {
+      skipMirrorOnce.current = false;
+      prevPlay.current = Boolean(activePlayer);
+      return;
+    }
+    const mediaForUrl = selectedPerson ? null : selectedMedia || activePlayer?.media || null;
     const url = buildLocation({
       tab: activeTab,
-      media: selectedPerson ? null : selectedMedia,
+      media: mediaForUrl,
       personId: selectedPerson,
       play: Boolean(activePlayer),
       roomCode: activeRoomCode,
@@ -109,6 +128,17 @@ export default function App() {
       if (url !== cur) {
         if (firstPush.current) {
           firstPush.current = false;
+          // Reload on ?play=1: the autoplay above will set the player —
+          // stripping the param now would destroy the history entry and
+          // desync Back. Let the autoplay drive the mirror instead.
+          const awaitingAutoplay =
+            !activePlayer &&
+            selectedMedia &&
+            new URLSearchParams(window.location.search).get('play') === '1';
+          if (!awaitingAutoplay) {
+            window.history.replaceState({}, '', url);
+          }
+        } else if (prevPlay.current && !activePlayer) {
           window.history.replaceState({}, '', url);
         } else {
           window.history.pushState({}, '', url);
@@ -119,11 +149,75 @@ export default function App() {
     } catch {
       // ignore
     }
+    prevPlay.current = Boolean(activePlayer);
+  }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode]);
+
+  // Route changes reset scroll (state-router keeps DOM scroll otherwise).
+  // Player toggles excluded — the page underneath must not jump.
+  const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${activeRoomCode ?? ''}`;
+  useEffect(() => {
+    try {
+      window.scrollTo(0, 0);
+    } catch {
+      // ignore
+    }
+  }, [routeId]);
+
+  // Per-route document titles (share/bookmark/switcher readable).
+  useEffect(() => {
+    try {
+      let t = 'Moviezilla — Movies & Shows';
+      if (activePlayer?.media) {
+        const m = activePlayer.media;
+        t = `▶ ${m.title || m.name || 'Playing'} — Moviezilla`;
+      } else if (selectedPerson) {
+        t = 'Person — Moviezilla';
+      } else if (selectedMedia) {
+        const y = (selectedMedia.release_date || selectedMedia.first_air_date || '').split('-')[0];
+        t = `${selectedMedia.title || selectedMedia.name || 'Details'}${y ? ` (${y})` : ''} — Moviezilla`;
+      } else if (activeRoomCode) {
+        t = `Room ${activeRoomCode} — Moviezilla`;
+      } else if (activeTab === 'movie') {
+        t = 'Movies — Moviezilla';
+      } else if (activeTab === 'tv') {
+        t = 'Shows — Moviezilla';
+      } else if (activeTab === 'watchlist') {
+        t = 'Watchlist — Moviezilla';
+      } else if (activeTab === 'rooms') {
+        t = 'Rooms — Moviezilla';
+      } else if (activeTab === 'football') {
+        t = 'Football — Moviezilla';
+      }
+      document.title = t;
+    } catch {
+      // ignore
+    }
   }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode]);
 
   const leaveRoom = () => {
     // URL follows via the mirror effect (→ /rooms).
     setActiveRoomCode(null);
+  };
+
+  // Any navigation away from playback resets ?play=1: a stale player over
+  // a new screen is a desync (wrong title, wrong URL, back-button ghosts).
+  const selectMedia = (item) => {
+    setActivePlayer(null);
+    setSelectedPerson(null);
+    setSelectedMedia(item);
+  };
+  const selectPerson = (id) => {
+    setActivePlayer(null);
+    setSelectedMedia(null);
+    setSelectedPerson(id);
+  };
+  const goHome = () => {
+    setActivePlayer(null);
+    setSelectedMedia(null);
+    setSelectedPerson(null);
+    setActiveRoomCode(null);
+    setRoomDraft(null);
+    setActiveTab('home');
   };
 
   // Freeze ambient animation while the tab is hidden, any overlay
@@ -249,6 +343,7 @@ export default function App() {
           if (tab === 'search') {
             setIsSearchOpen(true);
           } else {
+            setActivePlayer(null);
             setSelectedMedia(null);
             setSelectedPerson(null);
             setActiveTab(tab);
@@ -257,12 +352,14 @@ export default function App() {
         }}
         isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
         onBack={() => {
+          setActivePlayer(null);
           setSelectedMedia(null);
           setSelectedPerson(null);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
+      <ErrorBoundary key={routeId} onHome={goHome}>
       <Suspense
         fallback={
           <main className="cine-container cine-container--page">
@@ -283,8 +380,7 @@ export default function App() {
           <PersonView
             personId={selectedPerson}
             onSelectMedia={(item) => {
-              setSelectedPerson(null);
-              setSelectedMedia(item);
+              selectMedia(item);
             }}
           />
         ) : selectedMedia ? (
@@ -298,12 +394,12 @@ export default function App() {
                 details,
               })
             }
-            onSelectMedia={(item) => setSelectedMedia(item)}
+            onSelectMedia={(item) => selectMedia(item)}
             onSelectPerson={(id) => {
-              setSelectedMedia(null);
-              setSelectedPerson(id);
+              selectPerson(id);
             }}
             onWatchTogether={(media) => {
+              setActivePlayer(null);
               setSelectedMedia(null);
               setRoomDraft(media);
               setActiveTab('rooms');
@@ -311,7 +407,7 @@ export default function App() {
           />
         ) : activeTab === 'home' ? (
           <HomeView
-            onSelectMedia={setSelectedMedia}
+            onSelectMedia={selectMedia}
             onPlay={playMedia}
             onToast={showToast}
             onOpenProvider={(id) => {
@@ -332,7 +428,7 @@ export default function App() {
               filters={filters}
               onFilters={patchFilters}
               letterboxdUser={letterboxdUser}
-              onSelectMedia={setSelectedMedia}
+              onSelectMedia={selectMedia}
             />
           </main>
         ) : activeTab === 'tv' ? (
@@ -341,13 +437,13 @@ export default function App() {
               filters={filters}
               onFilters={patchFilters}
               letterboxdUser={letterboxdUser}
-              onSelectMedia={setSelectedMedia}
+              onSelectMedia={selectMedia}
             />
           </main>
         ) : activeTab === 'watchlist' ? (
           <main className="cine-container cine-container--page">
             <WatchlistView
-              onSelectMedia={(item) => setSelectedMedia(item)}
+              onSelectMedia={(item) => selectMedia(item)}
               onResume={(media, fallback) => playMedia(media, fallback)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               letterboxdUser={letterboxdUser}
@@ -365,6 +461,7 @@ export default function App() {
               draftMedia={roomDraft}
               onEnter={(code) => {
                 setRoomDraft(null);
+                setActivePlayer(null);
                 setActiveRoomCode(code);
               }}
               onToast={showToast}
@@ -372,6 +469,7 @@ export default function App() {
           </main>
         )}
       </Suspense>
+      </ErrorBoundary>
 
       <SettingsModal
         isOpen={isSettingsOpen}
@@ -383,17 +481,19 @@ export default function App() {
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onSelectMedia={(item) => setSelectedMedia(item)}
-        onSelectPerson={(id) => setSelectedPerson(id)}
+        onSelectMedia={(item) => selectMedia(item)}
+        onSelectPerson={(id) => selectPerson(id)}
       />
 
       {activePlayer && (
+        <ErrorBoundary onHome={() => setActivePlayer(null)} homeLabel="Close player">
         <Player
           key={`${activePlayer.media?.media_type || 'media'}_${activePlayer.media?.id}`}
           media={activePlayer.media}
           details={activePlayer.details}
           onClose={() => setActivePlayer(null)}
         />
+        </ErrorBoundary>
       )}
 
       {/* Watchlist toast */}

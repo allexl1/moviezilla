@@ -21,11 +21,8 @@ export function ReactionChips({ msgId, forMsg, myDevice, onToggleReact }) {
             key={emoji}
             onClick={() => onToggleReact(msgId, emoji)}
             title={(v.names || []).join(', ') || emoji}
-            className={`inline-flex items-center gap-1 pl-1 pr-1.5 py-0.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
-              mine
-                ? 'bg-[var(--cine-accent)]/15 border-[var(--cine-accent)]/40 text-white'
-                : 'bg-black/50 border-white/15 text-white/80 hover:border-white/30'
-            }`}
+            aria-pressed={mine}
+            className={`cine-react${mine ? ' cine-react--mine' : ''}`}
           >
             <Emoji char={emoji} size={14} />
             <span>{v.devices.length}</span>
@@ -73,7 +70,7 @@ export function ChatMessage({ m, reactions, myDevice, onToggleReact }) {
           onClick={() => setPickerOpen((o) => !o)}
           title="React"
           aria-label="React to message"
-          className={`absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/70 border border-white/15 items-center justify-center text-white/70 hover:text-white transition cursor-pointer flex opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
+          className={`cine-icon-btn cine-icon-btn--xs absolute top-1/2 -translate-y-1/2 opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
             mine ? '-left-8' : '-right-8'
           }`}
         >
@@ -162,11 +159,8 @@ export function ChatInput({ nickname, muted, input, setInput, onSend, onSendGif 
           onClick={() => setGifOpen((o) => !o)}
           title="Send a GIF"
           aria-label="Send a GIF"
-          className={`h-10 px-2.5 rounded-xl text-[11px] font-black tracking-wide border transition cursor-pointer flex-shrink-0 ${
-            gifOpen
-              ? 'bg-[var(--cine-accent)]/15 border-[var(--cine-accent)]/40 text-[var(--cine-accent)]'
-              : 'bg-[var(--cine-glass-tint)] border-[var(--cine-glass-border)] text-white/60 hover:text-white'
-          }`}
+          aria-pressed={gifOpen}
+          className={`cine-pill cine-pill--sm${gifOpen ? ' cine-react--mine' : ''}`}
         >
           GIF
         </button>

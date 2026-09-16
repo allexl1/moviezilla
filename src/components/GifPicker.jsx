@@ -62,7 +62,7 @@ export default function GifPicker({ onPick, onClose }) {
         <button
           onClick={onClose}
           aria-label="Close GIF picker"
-          className="w-6 h-6 rounded-full inline-flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition cursor-pointer flex-shrink-0"
+          className="cine-icon-btn cine-icon-btn--sm"
         >
           <X className="w-3 h-3" />
         </button>

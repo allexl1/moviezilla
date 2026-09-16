@@ -6,7 +6,7 @@ export default function EmptyState({ icon, title, description, action }) {
   return (
     <div className="rounded-3xl cine-glass-panel p-10 text-center space-y-3">
       {icon && (
-        <div className="w-12 h-12 mx-auto rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-white/50">
+        <div className="cine-disc cine-disc--dim w-12 h-12 mx-auto">
           {icon}
         </div>
       )}

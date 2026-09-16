@@ -4,7 +4,9 @@
 // carries no league names, so top-league-only filtering isn't possible
 // from this source (popular flag + kickoff order instead).
 async function proxyGet(path) {
-  const res = await fetch(`/api/football?path=${encodeURIComponent(path)}`);
+  const res = await fetch(`/api/football?path=${encodeURIComponent(path)}`, {
+    signal: AbortSignal.timeout(10000),
+  });
   if (!res.ok) throw new Error(`Football request failed: ${res.status}`);
   return res.json();
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize, MessageCircle, X } from 'lucide-react';
+import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw, X } from 'lucide-react';
 import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import EpisodeDrawer from './EpisodeDrawer';
@@ -93,6 +93,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const [showChrome, setShowChrome] = useState(true);
   // Bumped to force the server dropdown shut (only one popover at a time).
   const [serverSignal, setServerSignal] = useState(0);
+  // Stall recovery: some providers die after a seek (black frame, no
+  // timeupdates) and never come back. 30s of silence after real playback
+  // surfaces a glass Reload pill instead of a dead screen.
+  const [stalled, setStalled] = useState(false);
+  const stalledRef = useRef(false);
+  // Fullscreen exit we didn't ask for (popup stole focus / blocked tab):
+  // offer one-tap re-entry. Our own exits set fsIntent first and stay quiet.
+  const [fsKicked, setFsKicked] = useState(false);
+  const fsIntentRef = useRef(null);
+  const wasFsRef = useRef(false);
 
   const containerRef = useRef(null);
   const floatEndRef = useRef(null);
@@ -240,6 +250,57 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     );
   };
 
+  // Stall recovery: remount the embed at the last known second (or from
+  // zero). Same code path as an episode switch, minus the episode change.
+  const reloadStream = (fromZero = false) => {
+    saveNowRef.current();
+    const t = fromZero ? 0 : estimatedPosition().time;
+    playbackRef.current = { currentTime: t, duration: playbackRef.current.duration };
+    wallBaseRef.current = t;
+    activeMsRef.current = 0;
+    lastTickRef.current = Date.now();
+    pmSeenRef.current = t > 0;
+    pausedProvRef.current = false;
+    rearmConvergence();
+    rebuildEmbed(server, currentSeason, currentEpisode, t);
+    setKey((prev) => prev + 1);
+    stalledRef.current = false;
+    setStalled(false);
+    poke();
+  };
+
+  // Fullscreen helpers: every programmatic enter/exit declares intent so
+  // the change listener below can tell our exits from popup-forced ones.
+  const enterFs = () => {
+    fsIntentRef.current = 'enter';
+    setFsKicked(false);
+    containerRef.current?.requestFullscreen().catch(() => {
+      fsIntentRef.current = null;
+    });
+  };
+  const exitFs = () => {
+    fsIntentRef.current = 'exit';
+    document.exitFullscreen().catch(() => {
+      fsIntentRef.current = null;
+    });
+  };
+
+  useEffect(() => {
+    const onFs = () => {
+      if (document.fullscreenElement) {
+        wasFsRef.current = true;
+        fsIntentRef.current = null;
+        setFsKicked(false);
+      } else if (wasFsRef.current) {
+        wasFsRef.current = false;
+        if (fsIntentRef.current !== 'exit') setFsKicked(true);
+        fsIntentRef.current = null;
+      }
+    };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
   // Room sync tap: throttled position reports for the watch-party
   // engine (absent in solo mode — zero behavior change there).
   const lastSentRef = useRef({ at: 0, second: -1 });
@@ -285,11 +346,22 @@ export default function Player({ media, details, onClose, onPosition = null, roo
 
   // Log the visit on a 5s heartbeat + on hide/close — so tapping History
   // always reopens the exact episode + second. Entries deduped per title.
+  // Same tick drives the stall detector.
   useEffect(() => {
     const beat = setInterval(() => {
       accumulateWallClock();
       saveNowRef.current();
       reportRef.current();
+      if (
+        !stalledRef.current &&
+        pmSeenRef.current &&
+        !pausedProvRef.current &&
+        !document.hidden &&
+        Date.now() - lastPmRef.current.at > 30000
+      ) {
+        stalledRef.current = true;
+        setStalled(true);
+      }
     }, 5000);
     const onHide = () => {
       if (document.hidden) {
@@ -358,9 +430,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         onClose();
       } else if (e.key.toLowerCase() === 'f') {
         if (!document.fullscreenElement) {
-          containerRef.current?.requestFullscreen().catch(() => {});
+          enterFs();
         } else {
-          document.exitFullscreen().catch(() => {});
+          exitFs();
         }
       }
     }
@@ -461,6 +533,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
             pmSeenRef.current = true;
             lastPmRef.current = { time: t, at: Date.now() };
+            if (stalledRef.current) {
+              stalledRef.current = false;
+              setStalled(false);
+            }
             // Ended: snap to the end (marks Watched via percent) and hold —
             // there is no more video to accrue.
             if (type === 'ended' || type === 'complete') {
@@ -617,9 +693,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           <button
             onClick={() => {
               if (!document.fullscreenElement) {
-                containerRef.current?.requestFullscreen().catch(() => {});
+                enterFs();
               } else {
-                document.exitFullscreen().catch(() => {});
+                exitFs();
               }
             }}
             className="cine-icon-btn"
@@ -676,7 +752,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             <p className="text-xs font-bold text-white">Room chat</p>
             <button
               onClick={chat.onToggle}
-              className="w-7 h-7 rounded-full inline-flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="cine-icon-btn cine-icon-btn--sm"
               title="Close chat"
               aria-label="Close room chat"
             >
@@ -741,6 +817,34 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           </div>
         )}
       </div>
+
+      {/* Recovery pills: our DOM is inside the fullscreen element, so
+          these stay visible and tappable where the iframe swallows every
+          gesture. Only problems surface here — no persistent chrome, so
+          fullscreen stays clean. (Touch users wake controls via the
+          top-left wake zone below.) */}
+      {(stalled || (fsKicked && !document.fullscreenElement)) && !suspended && (
+        <div className="absolute bottom-6 inset-x-0 z-30 flex flex-col items-center gap-2 pointer-events-none px-4">
+          {stalled && (
+            <div className="pointer-events-auto flex items-center gap-2 pl-4 pr-2 py-1.5 cine-glass-panel">
+              <span className="text-xs font-semibold text-white/80">Stream stuck?</span>
+              <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" title="Reload at last position">
+                <RotateCcw className="w-3 h-3" />
+                Reload
+              </button>
+              <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" title="Restart from the beginning">
+                From start
+              </button>
+            </div>
+          )}
+          {fsKicked && !document.fullscreenElement && (
+            <button onClick={enterFs} className="pointer-events-auto cine-btn cine-btn-primary h-11 px-6 text-sm" title="An ad popup kicked you out of fullscreen">
+              <Maximize className="w-4 h-4" />
+              Re-enter fullscreen
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Wake zone: the embed iframe swallows all pointer events, so once
           the chrome hides there is no hover path back. This transparent

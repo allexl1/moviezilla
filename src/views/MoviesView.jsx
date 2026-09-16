@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MOVIE_GENRES, SORTS, tmdb } from '../services/tmdb';
-import { pickUpcoming } from '../services/catalog';
+import { pickUpcoming, getProviderOptions } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
@@ -45,19 +45,16 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
   const [providerOptions, setProviderOptions] = useState([]);
   useEffect(() => {
     let on = true;
-    tmdb
-      .getProviders()
-      .then((list) => {
-        if (on) setProviderOptions(list.map(({ id, name }) => ({ id, name })));
-      })
-      .catch(() => {});
+    getProviderOptions().then((list) => {
+      if (on) setProviderOptions(list);
+    });
     return () => {
       on = false;
     };
   }, []);
 
   return (
-    <>
+    <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex-shrink-0">
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
@@ -164,6 +161,6 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 }

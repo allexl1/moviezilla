@@ -108,7 +108,7 @@ export default function PersonView({ personId, onSelectMedia }) {
   // Full lists — the rail caps them visually with Show-all expansion.
   const rank = (list) =>
     (list || [])
-      .filter((x) => x.poster_path)
+      .filter((x) => !x.adult && x.poster_path)
       .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
   const movies = rank(person.movie_credits?.cast);
   const shows = rank(person.tv_credits?.cast);
@@ -171,7 +171,9 @@ export default function PersonView({ personId, onSelectMedia }) {
             </div>
 
             {bio && (
-              <div className="max-w-2xl">
+              // Article measure: 65ch like Apple editorial columns, so the
+              // bio never runs full-bleed on ultrawide.
+              <div className="max-w-[65ch]">
                 <p className={`text-sm leading-relaxed text-white/70 ${expanded ? '' : 'line-clamp-3'}`}>
                   {bio}
                 </p>

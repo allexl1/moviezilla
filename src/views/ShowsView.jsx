@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TV_GENRES, TV_SORTS, tmdb } from '../services/tmdb';
-import { pickUpcoming, pickAiring } from '../services/catalog';
+import { pickUpcoming, pickAiring, getProviderOptions } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
@@ -54,19 +54,16 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
   const [providerOptions, setProviderOptions] = useState([]);
   useEffect(() => {
     let on = true;
-    tmdb
-      .getProviders()
-      .then((list) => {
-        if (on) setProviderOptions(list.map(({ id, name }) => ({ id, name })));
-      })
-      .catch(() => {});
+    getProviderOptions().then((list) => {
+      if (on) setProviderOptions(list);
+    });
     return () => {
       on = false;
     };
   }, []);
 
   return (
-    <>
+    <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex-shrink-0">
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
@@ -101,11 +98,7 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
                 onClick={() => setShowAiring((v) => !v)}
                 aria-pressed={showAiring}
                 title="Show only series airing right now"
-                className={`h-9 px-4 inline-flex items-center gap-2 rounded-full text-xs font-semibold border backdrop-blur-xl transition cursor-pointer whitespace-nowrap flex-shrink-0 ${
-                  showAiring
-                    ? 'bg-white text-black border-white shadow-md'
-                    : 'bg-[var(--cine-glass-tint)] border-[var(--cine-glass-border)] text-white/60 hover:text-white/90'
-                }`}
+                className={`cine-pill${showAiring ? ' cine-pill--active' : ''}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${showAiring ? 'bg-black' : 'bg-[var(--cine-accent)]'}`} />
                 On Air
@@ -181,6 +174,6 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 }

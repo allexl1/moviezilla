@@ -106,9 +106,6 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
               );
             })}
           </div>
-          <p className="px-3 pt-3 text-[11px] leading-relaxed text-white/45">
-            Popups are the provider's ads, not the app — Vidy is ad-free, or try RU Dubs (Beta). A DNS blocker helps too.
-          </p>
         </div>
       )}
     </div>

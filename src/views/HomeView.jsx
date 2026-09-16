@@ -40,6 +40,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
   const [homeProvider, setHomeProvider] = useState('8');
   const [providerMovies, setProviderMovies] = useState([]);
   const [providers, setProviders] = useState([]);
+  // Provider wall restraint: 10 priority services + overflow toggle instead
+  // of a 17-icon wall with no hierarchy.
+  const [showAllProviders, setShowAllProviders] = useState(false);
+  const visibleProviders = showAllProviders ? providers : providers.slice(0, 10);
 
   const [continueWatching, setContinueWatching] = useState([]);
 
@@ -65,7 +69,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
       try {
         const res = await tmdb.getTrending();
         if (!isMounted) return;
-        const list = (res?.results || []).filter((x) => x.poster_path);
+        const list = (res?.results || []).filter((x) => !x.adult && x.poster_path);
         setItems(list);
         setFeaturedItem(list.length > 0 ? list[0] : null);
         saveHome({ items: list });
@@ -116,7 +120,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
         if (!isMounted) return;
 
         const clean = (res) =>
-          (res?.results || []).filter((x) => x.poster_path && hasRating(x)).slice(0, 14);
+          (res?.results || []).filter((x) => !x.adult && x.poster_path && hasRating(x)).slice(0, 14);
 
         const rails = {
           movies: clean(movies),
@@ -127,7 +131,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
           // Day pool: both endpoints merged, deduped — this is what puts a
           // same-day surge (Moana) on hero slide 1 instead of last week's order.
           day: [...(dayM?.results || []), ...(dayT?.results || [])]
-            .filter((x) => x.poster_path && hasRating(x))
+            .filter((x) => !x.adult && x.poster_path && hasRating(x))
             .filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)
             .slice(0, 14),
         };
@@ -193,7 +197,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
       .getMovies({ provider: homeProvider })
       .then((res) => {
         if (!isMounted) return;
-        const list = (res?.results || []).filter((x) => x.poster_path && hasRating(x)).slice(0, 14);
+        const list = (res?.results || []).filter((x) => !x.adult && x.poster_path && hasRating(x)).slice(0, 14);
         setProviderMovies(list);
         if (homeProvider === '8') saveHome({ providerMovies: list });
       })
@@ -264,8 +268,20 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
       )}
 
       {heroItem && (
+        <>
         <section className="cine-hero">
           <div className="cine-hero-media" aria-hidden="true">
+            <img
+              key={`melt-${heroItem.id}`}
+              src={tmdb.getImageUrl(
+                heroItem.backdrop_path,
+                'w1280',
+                heroItem.backdrop_fallback
+              )}
+              alt=""
+              aria-hidden="true"
+              className="cine-home-melt-base"
+            />
             <img
               key={heroItem.id}
               src={tmdb.getImageUrl(
@@ -371,6 +387,20 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
             </div>
           )}
         </section>
+        {/* Melt tail: laps 40px over the hero bottom and crossfades down
+            over 260px, transparent-capped both ends so no joint exists. */}
+        <div className="cine-melt-tail" aria-hidden="true">
+          <img
+            key={`tail-${heroItem.id}`}
+            src={tmdb.getImageUrl(
+              heroItem.backdrop_path,
+              'w1280',
+              heroItem.backdrop_fallback
+            )}
+            alt=""
+          />
+        </div>
+        </>
       )}
       {!heroItem && !catalogError && (
         <p className="text-center py-16 text-xs text-white/60">
@@ -453,11 +483,11 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
             </div>
 
             <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
-              {providers.map((p) => (
+              {visibleProviders.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => onOpenProvider(p.id)}
-                  className="flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
+                  className="cine-provider-tile flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
                   title={p.name}
                   aria-label={`Browse ${p.name} movies`}
                 >
@@ -475,6 +505,22 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
                   </span>
                 </button>
               ))}
+              {providers.length > 10 && (
+                <button
+                  onClick={() => setShowAllProviders((v) => !v)}
+                  aria-expanded={showAllProviders}
+                  className="cine-provider-tile flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
+                  title={showAllProviders ? 'Show fewer providers' : `Show all ${providers.length} providers`}
+                  aria-label={showAllProviders ? 'Show fewer providers' : `Show all ${providers.length} providers`}
+                >
+                  <span className="cine-provider-icon cine-provider-more">
+                    {showAllProviders ? '−' : `+${providers.length - 10}`}
+                  </span>
+                  <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition max-w-20 truncate">
+                    {showAllProviders ? 'Less' : 'All'}
+                  </span>
+                </button>
+              )}
             </div>
           </section>
         )}

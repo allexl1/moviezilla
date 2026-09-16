@@ -101,7 +101,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
       .then((res) =>
         setTrending(
           (res?.results || [])
-            .filter((x) => x.poster_path && (x.title || x.name))
+            .filter((x) => !x.adult && x.poster_path && (x.title || x.name))
             .slice(0, 12)
         )
       )
@@ -123,7 +123,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         const res = await tmdb.searchMulti(query.trim());
         setResults(
           (res?.results || [])
-            .filter((x) => x.poster_path && (x.title || x.name) && (x.media_type === 'movie' || x.media_type === 'tv'))
+            .filter((x) => !x.adult && x.poster_path && (x.title || x.name) && (x.media_type === 'movie' || x.media_type === 'tv'))
             .slice(0, 6)
         );
       } catch {
@@ -416,7 +416,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         {/* Create */}
         <section className="rounded-3xl cine-glass-panel p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-[var(--cine-accent)]">
+            <div className="cine-disc w-10 h-10">
               <Plus className="w-4 h-4" />
             </div>
             <div>
@@ -460,7 +460,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         {/* Join */}
         <section className="rounded-3xl cine-glass-panel p-6 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] flex items-center justify-center text-[var(--cine-accent)]">
+            <div className="cine-disc w-10 h-10">
               <LogIn className="w-4 h-4" />
             </div>
             <div>

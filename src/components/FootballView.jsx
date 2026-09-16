@@ -155,11 +155,8 @@ export default function FootballView({ onToast }) {
               <button
                 key={`${s.via}_${s.n}_${i}`}
                 onClick={() => setStreamIdx(i)}
-                className={`h-9 px-4 inline-flex items-center flex-shrink-0 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
-                  i === streamIdx
-                    ? 'bg-white text-black border-white'
-                    : 'bg-[var(--cine-glass-tint)] text-white/60 hover:text-white border-[var(--cine-glass-border)]'
-                }`}
+                aria-pressed={i === streamIdx}
+                className={`cine-pill${i === streamIdx ? ' cine-pill--active' : ''}`}
               >
                 {s.via} {s.n}
                 {s.hd ? ' • HD' : ''}
@@ -177,7 +174,7 @@ export default function FootballView({ onToast }) {
               href={m.url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-white/60 hover:text-white border border-white/10 hover:border-white/25 rounded-full px-3 py-1.5 transition"
+              className="cine-pill cine-pill--sm"
             >
               {m.name}
               <ExternalLink className="w-3 h-3" />

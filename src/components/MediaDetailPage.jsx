@@ -10,6 +10,12 @@ import RowRail from './RowRail';
 // Module scope: survives detail open/close.
 const rtCache = new Map();
 const RT_TTL = 24 * 60 * 60 * 1000;
+const RT_CACHE_MAX = 120;
+function rtCacheSet(key, value) {
+  if (rtCache.has(key)) rtCache.delete(key);
+  rtCache.set(key, value);
+  while (rtCache.size > RT_CACHE_MAX) rtCache.delete(rtCache.keys().next().value);
+}
 
 function formatMoney(value) {
   if (!value) return null;
@@ -152,20 +158,21 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       return;
     }
     setRt(null);
-    fetch(`/api/rt?title=${encodeURIComponent(t)}&year=${encodeURIComponent(y)}`)
+    fetch(`/api/rt?title=${encodeURIComponent(t)}&year=${encodeURIComponent(y)}`, {
+      signal: AbortSignal.timeout(8000),
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const good = d && (d.critic != null || d.audience != null) ? d : null;
-        rtCache.set(ck, { at: Date.now(), data: good });
+        rtCacheSet(ck, { at: Date.now(), data: good });
         if (isMounted && good) setRt(good);
       })
       .catch(() => {
-        rtCache.set(ck, { at: Date.now(), data: null });
+        rtCacheSet(ck, { at: Date.now(), data: null });
       });
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [details?.title, details?.name, media?.title, media?.name, details?.release_date, details?.first_air_date]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
@@ -197,7 +204,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     const score = (x) => (x.genre_ids || []).filter((g) => genreIds.has(g)).length;
     const clean = (list) =>
       (list || [])
-        .filter((x) => x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 10)
+        .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 10)
         .sort(
           (a, b) =>
             score(b) - score(a) ||
@@ -271,7 +278,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <img src={backdrop} alt={title} className="w-full h-full object-cover object-center cine-detail-melt-img" />
         )}
         <div className="absolute inset-0 cine-detail-hero-scrim pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/80 via-transparent to-transparent pointer-events-none" />
+        {/* Side readability shade: masked out at the bottom edge like the
+            main scrim, so the left side melts exactly like the right. */}
+        <div className="cine-detail-side-shade" />
 
         {/* Back to the still backdrop */}
         {heroVideo && (
@@ -354,7 +363,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             {releaseYear && <span>{releaseYear}</span>}
             {runtime && <span className="text-white/70">{runtime}</span>}
             {cert && (
-              <span className="px-2 py-0.5 rounded-md bg-white/10 border border-white/20 text-xs font-bold text-white/85">
+              <span className="cine-chip cine-chip--solid text-xs font-bold text-white/85">
                 {cert}
               </span>
             )}
@@ -516,8 +525,17 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         )}
       </div>
 
-      {/* Main Details Body */}
-      <div className="relative z-10 max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
+      {/* Melt tail: laps 40px over the hero bottom and crossfades down
+          over 260px, transparent-capped both ends. Hidden while a trailer
+          plays. */}
+      {!heroVideo && (
+        <div className="cine-melt-tail" aria-hidden="true">
+          <img src={backdrop} alt="" />
+        </div>
+      )}
+
+      {/* Main Details Body (above the melt tail: content crisp, haze behind) */}
+      <div className="relative z-20 max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
         {detailsError && (
           <div className="flex items-center gap-3 text-xs text-white/60">
             <span>{detailsError}</span>
@@ -578,13 +596,13 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         {cast.length > 0 && (
           <section className="space-y-4">
             <h3 className="cine-section-title">Cast</h3>
-            <div className="flex gap-5 overflow-x-auto no-scrollbar pb-2">
+            <div className="cine-cast-rail flex gap-5 overflow-x-auto no-scrollbar pb-2">
               {cast.map((actor) => (
                 <div
                   key={actor.id}
                   onClick={() => onSelectPerson?.(actor.id)}
                   title={actor.name}
-                  className="flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
+                  className="cine-cast-card flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
                 >
                   <div className="cine-cast-avatar w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">
                     <img
@@ -632,11 +650,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                   <div className="absolute bottom-2.5 left-3 right-3">
-                    <p className="text-xs font-bold text-white truncate">{t.name}</p>
-                    <p className="text-[10px] text-white/50">{t.type}</p>
+                    <p className="cine-trailer-cap text-[11px] font-semibold text-white/90 truncate">{t.name}</p>
+                    <p className="cine-trailer-cap text-[11px] text-white/60">{t.type}</p>
                   </div>
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                    <div className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center">
+                    <div className="cine-card-play" style={{ width: 44, height: 44 }}>
                       <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
                     </div>
                   </div>

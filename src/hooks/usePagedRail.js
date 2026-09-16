@@ -3,7 +3,17 @@ import { DATA_TTL } from '../services/catalog';
 
 // Module-scope cache: survives unmounts so detail-close remounts hydrate
 // instantly (same pattern as the old per-view caches, now shared).
+// LRU-capped: keys are per-filter rails, bounded so filter-hopping can't
+// grow it without limit (insertion-order Map = cheapest LRU available).
+const RAIL_CACHE_MAX = 24;
 const railCache = new Map(); // key -> { at, items, page, hasMore }
+function railCacheSet(key, value) {
+  if (railCache.has(key)) railCache.delete(key);
+  railCache.set(key, value);
+  while (railCache.size > RAIL_CACHE_MAX) {
+    railCache.delete(railCache.keys().next().value);
+  }
+}
 
 // Paged shelf state machine for Coming Soon / On Air rails.
 // - load(1) on mount (or restores a fresh cache)
@@ -22,6 +32,9 @@ export function usePagedRail(key, fetcher, pick, active = true) {
   const [tick, setTick] = useState(0);
   const liveRef = useRef({ items: [], page: 1 });
   liveRef.current = { items, page };
+  // Stale-response guard: Load-more taps fire overlapping pages; only the
+  // latest may commit (unmount flags alone can't catch this).
+  const seqRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -32,6 +45,7 @@ export function usePagedRail(key, fetcher, pick, active = true) {
 
   const load = useCallback(
     async (p, append) => {
+      const seq = ++seqRef.current;
       if (append) setLoadingMore(true);
       else {
         setLoading(true);
@@ -39,7 +53,7 @@ export function usePagedRail(key, fetcher, pick, active = true) {
       }
       try {
         const res = await fetcher(p);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || seq !== seqRef.current) return;
         const picked = pick(res?.results || []);
         const prev = append ? liveRef.current.items : [];
         const fresh = picked.filter((x) => !prev.some((y) => y.id === x.id));
@@ -49,14 +63,14 @@ export function usePagedRail(key, fetcher, pick, active = true) {
         setPage(p);
         setHasMore(more);
         if (merged.length > 0) {
-          railCache.set(key, { at: Date.now(), items: merged, page: p, hasMore: more });
+          railCacheSet(key, { at: Date.now(), items: merged, page: p, hasMore: more });
         }
       } catch (err) {
         console.error(`Failed to load rail ${key}:`, err);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || seq !== seqRef.current) return;
         if (!append) setError(true);
       }
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || seq !== seqRef.current) return;
       if (append) setLoadingMore(false);
       else setLoading(false);
     },

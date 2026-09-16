@@ -3,7 +3,9 @@
 
 async function callGif(action, params = {}) {
   const query = new URLSearchParams({ action, ...params });
-  const res = await fetch(`/api/gif?${query.toString()}`);
+  const res = await fetch(`/api/gif?${query.toString()}`, {
+    signal: AbortSignal.timeout(8000),
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(data.error || `GIF request failed: ${res.status}`);

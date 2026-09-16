@@ -86,7 +86,7 @@ export default function UpcomingRail({
           const year = yearOf(media);
           return (
             <button
-              key={`${title}_${media.id}`}
+              key={`${title}_${media.media_type || mediaType}_${media.id}`}
               onClick={() => onSelect?.({ ...media, media_type: media.media_type || mediaType })}
               className="cine-soon-card group flex-shrink-0"
               title={year ? `${name} — ${verb} ${year}` : name}

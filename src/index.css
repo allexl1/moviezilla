@@ -420,39 +420,97 @@ select:focus-visible,
   overflow: hidden;
 }
 
+/* ─── Liquid glass buttons — single navbar recipe ─────────────────────────
+   Apple HIG: glass lives on the nav/overlay layer (bars, floating pills),
+   regular variant, never as opaque content fills. Web recipe per
+   react-liquid-glass-svg / @liquid/glass + 2026 CSS guides:
+   - frost scaffold: translucent dark base + blur(28px) saturate(150%)
+     (centre stays clear, saturation keeps it alive not grey)
+   - specular edge: bright top border + inset 0 1px white highlight
+   - depth: soft black drop shadow
+   True SVG-refraction (feDisplacementMap via backdrop-filter:url) is
+   Chromium-only; Safari/iOS falls back to this frost — so frost IS the
+   shipped look, refraction would only be a progressive treat. No new dep.
+   All variants below intentionally match .cine-nav-pill-box + the MZ logo
+   tile (bg-white/10, border-white/20, backdrop-blur-2xl). */
+
 .cine-btn-primary {
-  background: var(--cine-white);
-  color: var(--cine-bg);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 .cine-btn-primary:hover {
-  background: #f0f0f0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
   transform: scale(1.03);
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 44px rgba(0, 0, 0, 0.5);
 }
 
 .cine-btn-ghost {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--cine-glass-border);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   color: var(--cine-text-primary);
 }
 
 .cine-btn-ghost:hover {
-  background: var(--cine-glass-tint-hover);
-  border-color: var(--cine-glass-border-hover);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
   transform: scale(1.05);
 }
 
+/* Accent keeps the navbar glass body — lime lives only in text + a soft
+   outer glow (Apple: tint selectively for primary actions, never whole
+   fills; also honors the no-green-fill rule from the screenshot chats). */
 .cine-btn-accent {
-  background: var(--cine-accent);
-  color: var(--cine-bg);
-  box-shadow: 0 0 20px color-mix(in srgb, var(--cine-accent) 30%, transparent);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-accent);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 24px color-mix(in srgb, var(--cine-accent) 22%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 .cine-btn-accent:hover {
-  background: var(--cine-accent-hover);
-  box-shadow: 0 4px 20px color-mix(in srgb, var(--cine-accent) 40%, transparent);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 28px color-mix(in srgb, var(--cine-accent) 32%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* Liquid-glass sheen (cinejoy .glassy-button parity) — progressive
@@ -511,18 +569,27 @@ select:focus-visible,
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  border: 1px solid var(--cine-glass-border);
-  background: var(--cine-glass-tint);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.5);
   color: var(--cine-text-primary);
-  backdrop-filter: var(--cine-blur-md);
-  -webkit-backdrop-filter: var(--cine-blur-md);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .cine-btn-circle:hover {
-  background: var(--cine-glass-tint-hover);
-  border-color: var(--cine-glass-border-hover);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
   transform: scale(1.06);
 }
 
@@ -541,17 +608,16 @@ select:focus-visible,
   font-weight: var(--cine-font-semibold);
   letter-spacing: 0.01em;
   color: var(--cine-text-primary);
-  /* Solid base first: if the color-mix gradient below is unsupported the
-     button stays dark glass instead of falling back to native white. */
-  background-color: rgba(18, 18, 24, 0.88);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04) 55%, rgba(255, 255, 255, 0.02)),
-    rgba(20, 20, 26, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-top-color: rgba(255, 255, 255, 0.2);
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
-  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.16), inset 0 -1px rgba(0, 0, 0, 0.25);
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
   white-space: nowrap;
@@ -559,9 +625,10 @@ select:focus-visible,
 
 .cine-control-btn:hover {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05)),
-    rgba(28, 28, 34, 0.78);
-  border-color: rgba(255, 255, 255, 0.22);
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
 }
 
@@ -578,16 +645,18 @@ select:focus-visible,
   justify-content: center;
   font-size: 0.875rem;
   color: var(--cine-text-primary);
-  /* Solid base first (see .cine-control-btn): never native-white. */
-  background-color: rgba(18, 18, 24, 0.88);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.04) 55%, rgba(255, 255, 255, 0.02)),
-    rgba(20, 20, 26, 0.72);
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-top-color: rgba(255, 255, 255, 0.2);
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
-  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.16), inset 0 -1px rgba(0, 0, 0, 0.25);
+  /* Small discs sit over dark video frames where a faint edge disappears —
+     the top border + inset carry extra specular so the rim still reads. */
+  border-top-color: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 10px 26px rgba(0, 0, 0, 0.42);
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
   flex-shrink: 0;
@@ -595,9 +664,10 @@ select:focus-visible,
 
 .cine-icon-btn:hover {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05)),
-    rgba(28, 28, 34, 0.78);
-  border-color: rgba(255, 255, 255, 0.22);
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
 }
 
 .cine-icon-btn:active {
@@ -609,6 +679,152 @@ select:focus-visible,
 .cine-icon-btn--sm {
   width: 2rem;
   height: 2rem;
+}
+
+/* Extra-small icon button for in-chip dismiss + hover affordances. */
+.cine-icon-btn--xs {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+}
+
+/* ─── Shared option pill — navbar glass at pill scale ───────────────────
+   The single recipe for every exclusive-option control (segments, season
+   pills, stream pills, On-Air toggle, mirror links). Flat tint pills are
+   banned here: one recipe, selected-white active like the nav. */
+.cine-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.25rem;
+  padding: 0 1rem;
+  border-radius: var(--cine-radius-full);
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-semibold);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.6);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  cursor: pointer;
+}
+
+a.cine-pill {
+  text-decoration: none;
+}
+
+.cine-pill:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
+}
+
+.cine-pill:active {
+  transform: scale(0.97);
+}
+
+.cine-pill--lg {
+  height: 2.75rem;
+  padding: 0 1.5rem;
+  font-size: 0.875rem;
+  font-weight: var(--cine-font-bold);
+}
+
+.cine-pill--sm {
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 11px;
+}
+
+/* Selected pill: the navbar's own white active language. */
+.cine-pill--active {
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  border-color: transparent;
+  border-top-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: var(--cine-shadow-1);
+}
+
+.cine-pill--active:hover {
+  background: var(--cine-white);
+  color: var(--cine-bg);
+  border-color: transparent;
+  border-top-color: transparent;
+}
+
+/* ─── Reaction chip — glass at 11px scale ─────────────────────────────── */
+.cine-react {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.35rem;
+  border-radius: var(--cine-radius-full);
+  font-size: 11px;
+  font-weight: var(--cine-font-bold);
+  color: rgba(255, 255, 255, 0.8);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: all var(--cine-duration-base) var(--cine-ease-out);
+  cursor: pointer;
+}
+
+.cine-react:hover {
+  border-color: rgba(255, 255, 255, 0.30);
+}
+
+.cine-react--mine {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--cine-accent) 40%, transparent);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    color-mix(in srgb, var(--cine-accent) 15%, rgba(12, 12, 16, 0.55));
+}
+
+/* ─── Static icon disc — glass without button affordance ───────────────
+   Decorative medallions (settings rows, empty states, lobby icons):
+   same frost, no cursor, no hover lift. */
+.cine-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--cine-radius-full);
+  color: var(--cine-accent);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
+}
+
+.cine-disc--dim {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* Hero-grade CTA (cinejoy Play pill parity: 52px, generous padding) */
@@ -668,7 +884,8 @@ select:focus-visible,
   flex-direction: column;
   gap: var(--cine-space-10);
   position: relative;
-  z-index: 10;
+  /* Above the melt tail (11): content stays crisp, haze stays behind it. */
+  z-index: 12;
 }
 
 /* Standard pages (Movies / Shows / Watchlist) clear the fixed navbar. */
@@ -707,6 +924,11 @@ select:focus-visible,
   height: 100%;
   object-fit: cover;
   object-position: center top;
+  /* Dissolve the photo BEFORE the hero's DOM edge (same melt as detail):
+     at the boundary only ghost shows through on both sides, so no tone
+     step can form at any scroll offset, on any backdrop. */
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
 }
 
 /* Full-bleed trailer: cover-fit the 16:9 YouTube frame into any hero shape
@@ -720,16 +942,24 @@ select:focus-visible,
   min-width: 177.78vh;
   min-height: 100%;
   transform: translate(-50%, -50%);
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
 }
 
 .cine-hero-scrim {
   position: absolute;
   inset: 0;
-  /* Ends at the ghost's own darkness (0.55) instead of solid bg: the edge
-     pixel above the hero boundary equals the ghost pixel below it, at any
-     scroll offset. The dissolve above does the melting, not this edge. */
+  /* Transparent AT the hero edge on EVERY x (the image there is already
+     dissolved by mask, so the edge shows bare ghost on both sides).
+     The mask is the actual fix for "blends right, lines left": the old
+     90deg left-darkening ran at full strength down to y=0, so the left
+     edge showed ghost-behind-black while below it showed bare ghost.
+     Masking the whole scrim out at the boundary removes the step on the
+     full width. Darkness lives higher up, where the hero copy sits. */
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   background:
-    linear-gradient(0deg, rgba(5, 5, 5, 0.55) 0%, rgba(5, 5, 5, 0.85) 18%, rgba(5, 5, 5, 0.45) 45%, transparent 80%),
+    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 
@@ -749,20 +979,54 @@ select:focus-visible,
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  /* Uniform dim blur — deliberately NO viewport gradient here. A shaded
-     ghost is viewport-fixed while the hero edge scrolls, so any tone
-     "match" holds at exactly one scroll offset and reads as a hard
-     screen edge everywhere else. Uniform 0.45 meets the hero scrim end
-     at EVERY scroll offset; section text-shadow keeps titles readable. */
+  /* Luminous ghost (reference parity): bright enough that scrolled
+     sections sit on color, not near-black. Uniform — no viewport gradient,
+     so no scroll-dependent edge can form. */
   opacity: 1;
-  filter: blur(40px) brightness(0.45) saturate(1.25);
+  filter: blur(40px) brightness(0.62) saturate(1.4);
   transform: scale(1.08);
 }
 
 .cine-home-bg-shade {
   position: absolute;
   inset: 0;
-  background: transparent;
+  /* Bottom-anchored veil (NOT top): at scroll 0 the handoff zone sits at
+     the viewport bottom, which is exactly what must go dark so the tail
+     smear has nothing bright to step against. Top-anchored veils sit
+     behind the opaque hero and do nothing at the boundary. Fixed + smooth
+     = scroll-stable (only sharp scrolling-matched slabs can hold at one
+     offset; smooth fixed ramps hold everywhere). A mild top shade keeps
+     the nav zone legible. Identical stops both pages. */
+  background:
+    linear-gradient(0deg,
+      rgba(5, 5, 5, 0.92) 0%,
+      rgba(5, 5, 5, 0.75) 12%,
+      rgba(5, 5, 5, 0.4) 28%,
+      transparent 48%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
+}
+
+/* Home melt-base: same 3-layer architecture as detail (sharp dissolves
+   into same-picture blur instead of ending at a boundary). Fill render so
+   its bottom row is the true source bottom row, exactly what the tail
+   continues. Sharp stays cover — the 32% dissolve hides the difference. */
+.cine-home-melt-base {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Same -48px overhang as detail: keep the blur feather past the clip so
+     the edge row is interior, alpha 1. (Home has no bg-black behind the
+     melt, which is the whole reason home melted while detail drew a black
+     outline — same fix both pages so they can't drift apart.) Explicit
+     height: replaced elements ignore top/bottom stretching. */
+  height: calc(100% + 48px);
+  width: 100%;
+  object-fit: fill;
+  filter: blur(40px) brightness(0.62) saturate(1.4);
+  transform: scale(1.08);
+  transform-origin: center bottom;
+  pointer-events: none;
 }
 
 .cine-hero-content {
@@ -857,11 +1121,14 @@ select:focus-visible,
   border-radius: var(--cine-radius-full);
   background:
     linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(20, 20, 26, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
-  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.12), inset 0 -1px rgba(0, 0, 0, 0.25);
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
 .cine-duo-btn button {
@@ -966,7 +1233,8 @@ select:focus-visible,
 
   .cine-hero-dots {
     right: 1.25rem;
-    bottom: 1.5rem;
+    /* Clear of the melt tail's top lap so the dots never haze over. */
+    bottom: 3.25rem;
   }
 }
 
@@ -1105,14 +1373,22 @@ select:focus-visible,
   width: 32px;
   height: 32px;
   border-radius: 9999px;
-  background: var(--cine-white);
-  color: var(--cine-bg);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: var(--cine-font-bold);
-  box-shadow: var(--cine-shadow-1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 .cine-cw-title {
@@ -1285,6 +1561,35 @@ nav .cine-nav-btn {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* ─── True refraction (Chromium-only liquid glass) ──────────────────────
+   Frost above is the shipped look everywhere. Where body.mz-refract is set
+   (see main.jsx UA gate), compact chrome additionally bends the backdrop
+   through #lg-dist (feTurbulence + feDisplacementMap, index.html) — that
+   edge lensing is what separates liquid glass from frosted blur. Large
+   surfaces (panels, drawers, ghosts) are deliberately excluded: refraction
+   cost scales with filter region, and Apple renders menus thicker, not
+   more refractive. Safari keeps frost via the -webkit- declarations above
+   (it drops the url() line as invalid); max-power kills both further down. */
+body.mz-refract .cine-nav-pill-box,
+body.mz-refract .cine-btn-primary,
+body.mz-refract .cine-btn-ghost,
+body.mz-refract .cine-btn-accent,
+body.mz-refract .cine-control-btn,
+body.mz-refract .cine-icon-btn,
+body.mz-refract .cine-btn-circle,
+body.mz-refract .cine-duo-btn,
+body.mz-refract .cine-select,
+body.mz-refract .cine-input,
+body.mz-refract .cine-cw-play-btn,
+body.mz-refract .cine-soon-play,
+body.mz-refract .cine-card-play,
+body.mz-refract .cine-pill,
+body.mz-refract .cine-react,
+body.mz-refract .cine-disc,
+body.mz-refract .cine-chip--glass {
+  backdrop-filter: url(#lg-dist) blur(28px) saturate(150%);
+}
+
 /* ─── Chip / Tag ────────────────────────────────────────────────────────── */
 .cine-chip {
   display: inline-flex;
@@ -1317,6 +1622,21 @@ nav .cine-nav-btn {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Glass chip for recent-search pills and other chrome-adjacent tags:
+   the single navbar recipe at pill scale. */
+.cine-chip--glass {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-text-primary);
+  border-color: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
 /* High-contrast rating chip for list rows (search/history):
    solid dark pill, lime figure — readable over glass, no cheap tint. */
 .cine-chip--rating {
@@ -1340,18 +1660,21 @@ nav .cine-nav-btn {
   padding: 0 2.25rem 0 1.1rem;
   border-radius: var(--cine-radius-full);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
-    rgba(20, 20, 26, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow: var(--cine-shadow-1), inset 0 1px rgba(255, 255, 255, 0.06);
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.8125rem;
   font-weight: var(--cine-font-semibold);
   letter-spacing: 0.01em;
   outline: none;
   cursor: pointer;
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
     linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
@@ -1364,7 +1687,8 @@ nav .cine-nav-btn {
 }
 
 .cine-select:hover {
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-top-color: rgba(255, 255, 255, 0.28);
 }
 
 .cine-select:focus {
@@ -1423,19 +1747,27 @@ nav .cine-nav-btn {
   width: 100%;
   padding: 0.625rem 1rem;
   border-radius: 0.75rem;
-  background: var(--cine-glass-tint);
-  border: 1px solid var(--cine-glass-border);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
   color: var(--cine-text-primary);
   font-size: 0.875rem;
   outline: none;
   transition: all 0.2s ease;
-  backdrop-filter: var(--cine-blur-lg);
-  -webkit-backdrop-filter: var(--cine-blur-lg);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
 }
 
 .cine-input:focus {
   border-color: var(--cine-accent);
-  background: var(--cine-glass-tint-hover);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(20, 20, 26, 0.60);
 }
 
 .cine-input::placeholder {
@@ -1505,16 +1837,42 @@ nav .cine-nav-btn {
 
 /* ─── Provider Icon Wall (reference parity: rounded app icons) ────────── */
 .cine-provider-icon {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 1.1rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
   overflow: hidden;
   display: block;
   background: var(--cine-surface-strong);
   border: 1px solid var(--cine-glass-border);
   box-shadow: var(--cine-shadow-2);
   transition: transform var(--cine-duration-base) var(--cine-ease-out),
-    border-color var(--cine-duration-base) var(--cine-ease-out);
+    border-color var(--cine-duration-base) var(--cine-ease-out),
+    opacity var(--cine-duration-base) var(--cine-ease-out);
+}
+
+/* Resting hierarchy: tiles sit at 80% until hovered, so the wall reads as
+   a picker instead of 17 shouting icons. */
+.cine-provider-tile .cine-provider-icon {
+  opacity: 0.8;
+}
+
+.cine-provider-tile:hover .cine-provider-icon {
+  opacity: 1;
+}
+
+/* Overflow tile: glass count badge doubling as the expand control. */
+.cine-provider-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: var(--cine-font-bold);
+  color: var(--cine-text-primary);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
 }
 
 button:hover .cine-provider-icon,
@@ -1627,12 +1985,20 @@ button:hover .cine-provider-icon,
   width: 2.75rem;
   height: 2.75rem;
   border-radius: var(--cine-radius-full);
-  background: var(--cine-white);
-  color: var(--cine-bg);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--cine-shadow-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 .cine-soon-name {
@@ -1686,12 +2052,20 @@ button:hover .cine-provider-icon,
   width: 2.5rem;
   height: 2.5rem;
   border-radius: var(--cine-radius-full);
-  background: var(--cine-white);
-  color: var(--cine-bg);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  color: var(--cine-text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--cine-shadow-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.5);
 }
 
 .cine-card-hover-title {
@@ -1714,6 +2088,12 @@ button:hover .cine-provider-icon,
   color: var(--cine-accent);
 }
 
+/* Trailer captions sit on bright artwork: a shadow does what glass can't
+   at 11px (a glass pill behind two words would shout over the thumb). */
+.cine-trailer-cap {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+}
+
 /* ─── Detail Blurred Continuation ─────────────────────────────────────────
    The hero backdrop lives on below the fold as a dim frozen ghost, so the
    page melts instead of hard-cutting (reference parity). Static — one
@@ -1725,14 +2105,89 @@ button:hover .cine-provider-icon,
    anywhere, so no seam can form regardless of backdrop brightness. */
 .cine-detail-melt-base {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Taller than the hero by 48px: blur feathers alpha at every render
+     bound, and that feather over the hero's bg-black painted a black
+     outline right at the edge (measured +40 luminance jump in 10px).
+     The overhang pushes the feather past the clip (hero overflow hides
+     it) so the visible edge row is interior, alpha 1. Explicit height:
+     replaced elements ignore top/bottom stretching and size from ratio
+     instead, so this must be spelled out. Fill keeps the bottom row
+     exact regardless of box height. */
+  height: calc(100% + 48px);
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  filter: blur(40px) brightness(0.45) saturate(1.25);
+  /* FILL, not cover: the base must span the full image width (squashed —
+     invisible under 40px blur) so its bottom row is the true source bottom
+     row, exactly what the bleed-tail below re-shows. Cover would side-crop
+     it and re-open a seam at the columns. */
+  object-fit: fill;
+  /* Home parity: same luminous ghost tone so sharp → blur → blur has no
+     step on either page. Scale about the BOTTOM keeps the edge rows exact
+     (fringe spills top/sides, clipped) — a center scale would shift the
+     edge rows away from what the tail re-shows. */
+  filter: blur(40px) brightness(0.62) saturate(1.4);
   transform: scale(1.08);
+  transform-origin: center bottom;
   pointer-events: none;
+}
+
+/* Sharp layer always paints above its melt-base (same pattern both pages).
+   Relies on nothing implicit — explicit position + z. */
+.cine-hero-media img.cine-hero-fade,
+img.cine-detail-melt-img {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Melt bleed-tail (the no-seam guarantee) ───────────────────────────
+   The hero box and the page ghost can never tone-match: different boxes
+   compute different cover crops, so ANY hero-edge-vs-ghost boundary is a
+   potential line on some backdrop. This removes the boundary instead of
+   matching across it: a 300px strip below the hero re-shows the melt's
+   exact bottom rows (same full-width render family) and fades to
+   transparent, so the edge above is tone-identical by construction and the
+   bottom below is alpha-zero by construction. No step can form on any
+   backdrop, at any scroll. Content (z-10) glides over it; the ghost below
+   becomes pure ambient color, seam-irrelevant. */
+.cine-melt-tail {
+  position: relative;
+  /* Above hero (10) but BELOW body content (12/20): the top 48px laps over
+     the hero bottom to crossfade with it, while text and cards stay crisp
+     above the haze (haze behind content = veil; haze over content = blur).
+     Transparent-capped at both ends, so no joint can exist anywhere.
+     pointer-events none; trailer mode hides it in JSX. */
+  z-index: 11;
+  height: 260px;
+  margin-top: -48px;
+  margin-bottom: -212px;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg,
+    transparent 0, rgba(0, 0, 0, 0.55) 14px, rgba(0, 0, 0, 0.85) 30px,
+    #000 48px, #000 90px,
+    rgba(0, 0, 0, 0.5) 170px, rgba(0, 0, 0, 0.18) 220px, transparent 260px);
+  mask-image: linear-gradient(180deg,
+    transparent 0, rgba(0, 0, 0, 0.55) 14px, rgba(0, 0, 0, 0.85) 30px,
+    #000 48px, #000 90px,
+    rgba(0, 0, 0, 0.5) 170px, rgba(0, 0, 0, 0.18) 220px, transparent 260px);
+}
+
+.cine-melt-tail img {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  width: 100%;
+  /* Full squashed copy of the art: same full-width bottom-anchored render
+     family as the melt-base, same 40px blur, so column variation (dark
+     forest vs bright road) survives instead of averaging into one mush
+     tone. Exactness isn't required — every joint here is a crossfade,
+     and crossfades hide tone deltas that hard joints can't. */
+  height: 100%;
+  object-fit: fill;
+  filter: blur(40px) brightness(0.62) saturate(1.4);
 }
 
 .cine-detail-melt-img {
@@ -1743,10 +2198,26 @@ button:hover .cine-provider-icon,
 /* Bottom scrim that feeds the melt: transparent AT the hero edge (the
    melt-base beneath already carries the ghost's exact tone — any black
    here would double-darken and redraw the edge line). Peaks behind the
-   text block, gone by the upper hero. */
+   text block, gone by the upper hero. Masked like home so the fade holds
+   on the full width, not just where there is no side shading. */
 .cine-detail-hero-scrim {
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   background:
     linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.55) 10%, rgba(5, 5, 5, 0.85) 28%, rgba(5, 5, 5, 0.35) 55%, transparent 85%);
+}
+
+/* Side readability shade. Lives in plain CSS (not Tailwind arbitrary
+   properties — those silently fail to generate and the unmasked shade
+   re-draws the edge on the left half, which is exactly the home/detail
+   difference). Masked out at the bottom edge like every other scrim. */
+.cine-detail-side-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(5, 5, 5, 0.8) 0%, transparent 55%);
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
 }
 .cine-detail-bg {
   position: fixed;
@@ -1761,18 +2232,31 @@ button:hover .cine-provider-icon,
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  /* Center, matching .cine-detail-melt-base + the sharp hero frame: the
+     ghost must sample the same crop or the boundary compares two different
+     pictures. (Home already matches at center top on both layers.) */
+  object-position: center;
   /* Same uniform-ghost rule as home: no viewport gradient, so the match
-     holds at every scroll offset instead of exactly one. */
+     holds at every scroll offset instead of exactly one. Same luminous
+     tone as home so both pages melt identically. */
   opacity: 1;
-  filter: blur(40px) brightness(0.45) saturate(1.25);
+  filter: blur(40px) brightness(0.62) saturate(1.4);
   transform: scale(1.08);
 }
 
 .cine-detail-bg-shade {
   position: absolute;
   inset: 0;
-  background: transparent;
+  /* Same bottom-anchored veil as home (see .cine-home-bg-shade): the tail
+     guarantees no step at the edge, this guarantees no fast black→color
+     read below it. Identical stops — the pages must never drift apart. */
+  background:
+    linear-gradient(0deg,
+      rgba(5, 5, 5, 0.92) 0%,
+      rgba(5, 5, 5, 0.75) 12%,
+      rgba(5, 5, 5, 0.4) 28%,
+      transparent 48%),
+    linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
 }
 
 /* ─── Award chip (gold honours — Wikidata) ──────────────────────────────── */
@@ -1799,8 +2283,17 @@ button:hover .cine-provider-icon,
 }
 
 /* ─── Cast hover (detail person circles) ──────────────────────────────────
-   Lift only — no inner image transform. An inner zoom inside an
-   overflow-hidden circle crops foreheads mid-transition (the clip bug). */
+   Lift restored per request. Real clip cause: the rail is
+   overflow-x-auto, which forces overflow-y hidden — a 4px rise gets
+   sliced by the rail box itself ("goes behind something"). Fix is
+   breathing room: .cine-cast-rail adds vertical padding (cancelled by
+   negative margin so layout doesn't shift), so the lift travels inside
+   the scroll box. Hover also raises stacking + border + shadow in place. */
+.cine-cast-rail {
+  padding-block: 8px;
+  margin-block: -8px;
+}
+
 .cine-cast-avatar {
   transition: transform var(--cine-duration-base) var(--cine-ease-out),
     border-color var(--cine-duration-base) var(--cine-ease-out),
@@ -1809,8 +2302,13 @@ button:hover .cine-provider-icon,
 
 .group:hover .cine-cast-avatar {
   transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: var(--cine-shadow-2);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), var(--cine-shadow-2);
+}
+
+.cine-cast-card:hover {
+  position: relative;
+  z-index: 5;
 }
 
 /* Opt out of the global keyboard focus ring where the container already
@@ -1890,7 +2388,10 @@ body.mz-max-power .cine-select,
 body.mz-max-power .cine-input,
 body.mz-max-power .cine-provider-pill,
 body.mz-max-power .cine-cw-card,
-body.mz-max-power .cine-duo-btn {
+body.mz-max-power .cine-duo-btn,
+body.mz-max-power .cine-pill,
+body.mz-max-power .cine-react,
+body.mz-max-power .cine-disc {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -1916,14 +2417,23 @@ body.mz-max-power .cine-home-bg-img {
   transform: none;
 }
 
+/* Thermal emergency: melt layers are extra blur cost — strip to dim
+   stills (or hide the tail outright), same promise as the ghosts. */
+body.mz-max-power .cine-home-melt-base,
+body.mz-max-power .cine-detail-melt-base,
 body.mz-max-power .cine-detail-bg-img {
-  filter: brightness(0.45);
+  filter: brightness(0.5);
   transform: none;
+}
+
+body.mz-max-power .cine-melt-tail {
+  display: none;
 }
 
 body.mz-max-power .cine-card:hover,
 body.mz-max-power .cine-glass-card:hover,
 body.mz-max-power .cine-control-btn:hover,
+body.mz-max-power .cine-pill:hover,
 body.mz-max-power .cine-soon-card:hover,
 body.mz-max-power button:hover .cine-provider-icon,
 body.mz-max-power .group:hover .cine-provider-icon {
@@ -1933,4 +2443,61 @@ body.mz-max-power .group:hover .cine-provider-icon {
 body.mz-max-power .cine-card-hover,
 body.mz-max-power .cine-soon-hover {
   display: none;
+}
+
+/* HIG: prefers-reduced-transparency — solid fallbacks, same layout.
+   Mirrors the max-power solids (transparency is unconditional otherwise,
+   which fails the accessibility contract for low-vision users). */
+@media (prefers-reduced-transparency: reduce) {
+  .cine-glass-header,
+  .cine-glass-panel,
+  .cine-glass-panel--strong,
+  .cine-glass-card,
+  .cine-nav-pill-box,
+  .cine-control-btn,
+  .cine-icon-btn,
+  .cine-btn-primary,
+  .cine-btn-ghost,
+  .cine-btn-accent,
+  .cine-btn-circle,
+  .cine-select,
+  .cine-input,
+  .cine-provider-pill,
+  .cine-cw-card,
+  .cine-duo-btn,
+  .cine-card-play,
+  .cine-modal-backdrop,
+  .cine-chip--glass,
+  .cine-pill,
+  .cine-react,
+  .cine-disc,
+  .cine-chip--solid {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .cine-glass-header,
+  .cine-nav-pill-box {
+    background: rgba(10, 10, 14, 0.97);
+  }
+
+  .cine-glass-panel,
+  .cine-glass-panel--strong,
+  .cine-modal-backdrop {
+    background: #101014;
+  }
+
+  .cine-control-btn,
+  .cine-icon-btn,
+  .cine-btn-primary,
+  .cine-btn-ghost,
+  .cine-btn-accent,
+  .cine-btn-circle,
+  .cine-chip--glass,
+  .cine-pill,
+  .cine-react,
+  .cine-disc,
+  .cine-card-play {
+    background: #17171d;
+  }
 }

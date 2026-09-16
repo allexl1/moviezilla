@@ -3,6 +3,12 @@
 // P166 (award received) with P585 (point in time) and P1686 (for work).
 // Cached a week in localStorage: awards history never changes.
 const MEM = new Map();
+const MEM_MAX = 200;
+function memSet(key, value) {
+  if (MEM.has(key)) MEM.delete(key);
+  MEM.set(key, value);
+  while (MEM.size > MEM_MAX) MEM.delete(MEM.keys().next().value);
+}
 const LS_KEY = 'mz_awards';
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 
@@ -35,7 +41,7 @@ export async function getAwardsByImdb(imdbId) {
   if (MEM.has(imdbId)) return MEM.get(imdbId);
   const cached = lsGet(imdbId);
   if (cached) {
-    MEM.set(imdbId, cached);
+    memSet(imdbId, cached);
     return cached;
   }
 
@@ -51,7 +57,7 @@ export async function getAwardsByImdb(imdbId) {
   try {
     const res = await fetch(
       `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`,
-      { headers: { Accept: 'application/sparql-results+json' } }
+      { headers: { Accept: 'application/sparql-results+json' }, signal: AbortSignal.timeout(10000) }
     );
     if (!res.ok) throw new Error(`WDQS ${res.status}`);
     const data = await res.json();
@@ -68,11 +74,11 @@ export async function getAwardsByImdb(imdbId) {
       awards.push({ label, year: /^\d{4}$/.test(year) ? year : '', work });
     }
     awards.sort((a, b) => (b.year || '').localeCompare(a.year || ''));
-    MEM.set(imdbId, awards);
+    memSet(imdbId, awards);
     lsSet(imdbId, awards);
     return awards;
   } catch {
-    MEM.set(imdbId, []);
+    memSet(imdbId, []);
     return [];
   }
 }

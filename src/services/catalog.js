@@ -42,6 +42,7 @@ export function pickUpcoming(results, dateKey = 'release_date') {
   const dateOf = (x) => x?.[dateKey] || '';
   const strict = (results || []).filter(
     (x) =>
+      !x.adult &&
       x.backdrop_path &&
       x.poster_path &&
       (x.overview || '').trim().length > 20 &&
@@ -52,7 +53,7 @@ export function pickUpcoming(results, dateKey = 'release_date') {
     return strict.sort((a, b) => dateOf(a).localeCompare(dateOf(b))).slice(0, 10);
   }
   return (results || [])
-    .filter((x) => x.backdrop_path && x.poster_path && dateOf(x))
+    .filter((x) => !x.adult && x.backdrop_path && x.poster_path && dateOf(x))
     .sort((a, b) => {
       const fa = dateOf(a) >= today ? 0 : 1;
       const fb = dateOf(b) >= today ? 0 : 1;
@@ -63,11 +64,11 @@ export function pickUpcoming(results, dateKey = 'release_date') {
 
 export function pickAiring(results) {
   const strict = (results || []).filter(
-    (x) => x.backdrop_path && x.poster_path && (x.overview || '').trim().length > 20
+    (x) => !x.adult && x.backdrop_path && x.poster_path && (x.overview || '').trim().length > 20
   );
   if (strict.length >= 4) return strict.slice(0, 10);
   return (results || [])
-    .filter((x) => x.backdrop_path && x.poster_path)
+    .filter((x) => !x.adult && x.backdrop_path && x.poster_path)
     .slice(0, 10);
 }
 
@@ -97,6 +98,20 @@ export const defaultSortFor = () => 'new.popular';
 // within this window reuses data instead of flashing skeletons. Matches
 // the old instant-back behavior; trending-class data moves slowly anyway.
 export const DATA_TTL = 5 * 60 * 1000;
+
+// Shared provider options (id + name for FilterBar): one cached flight for
+// every view — Movies/Shows/Home each ran their own getProviders effect
+// for the identical list. Promise-cached, never refetched in-session.
+let providerOptionsPromise = null;
+export function getProviderOptions() {
+  if (!providerOptionsPromise) {
+    providerOptionsPromise = import('./tmdb')
+      .then(({ tmdb }) => tmdb.getProviders())
+      .then((list) => (list || []).map(({ id, name }) => ({ id, name })))
+      .catch(() => []);
+  }
+  return providerOptionsPromise;
+}
 
 // Provider shortlist for the home "Movies on provider" picker.
 export const PROVIDERS = [

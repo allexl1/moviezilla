@@ -8,7 +8,9 @@ export const letterboxd = {
   async fetchUserWatchlist(username) {
     if (!username) return [];
     try {
-      const res = await fetch(`/api/letterboxd/${encodeURIComponent(username)}`);
+      const res = await fetch(`/api/letterboxd/${encodeURIComponent(username)}`, {
+        signal: AbortSignal.timeout(12000),
+      });
       if (!res.ok) {
         let detail = '';
         try {

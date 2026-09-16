@@ -19,7 +19,7 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
           className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 border ${
             danger
               ? 'bg-red-500/10 border-red-500/20 text-red-400'
-              : 'bg-[var(--cine-glass-tint)] border-[var(--cine-glass-border)] text-[var(--cine-accent)]'
+              : 'cine-disc'
           }`}
         >
           {icon}
