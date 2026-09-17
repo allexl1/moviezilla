@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Clapperboard, Play, Trash2, Zap } from 'lucide-react';
+import { X, Clapperboard, Play, Trash2, Zap, Download } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
@@ -10,6 +10,32 @@ const SERVERS = [
   { value: 'vidlink', label: 'VidLink (Ultra Fast)' },
   { value: 'vaplayer', label: 'Vaplayer (RU)' },
 ];
+
+const ACCENTS = [
+  { name: 'Lime', value: '#95ff50' },
+  { name: 'Sky', value: '#5ac8ff' },
+  { name: 'Violet', value: '#b78cff' },
+  { name: 'Amber', value: '#ffb347' },
+  { name: 'Pink', value: '#ff6b9d' },
+];
+
+const DEFAULT_ACCENT = '#95ff50';
+
+function liftHex(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lift = (c) => Math.min(255, Math.round(c + (255 - c) * 0.12));
+  return `#${((1 << 24) + (lift(n >> 16 & 255) << 16) + (lift(n >> 8 & 255) << 8) + lift(n & 255)).toString(16).slice(1)}`;
+}
+
+function applyAccent(hex) {
+  try {
+    document.documentElement.style.setProperty('--cine-accent', hex);
+    document.documentElement.style.setProperty('--cine-accent-hover', liftHex(hex));
+    localStorage.setItem('mz_accent', hex);
+  } catch {
+    // ignore
+  }
+}
 
 function SettingRow({ icon, title, desc, control, danger = false }) {
   return (
@@ -37,6 +63,13 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
 export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, currentUsername }) {
   const [username, setUsername] = useState(currentUsername || '');
   const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidy'));
+  const [accent, setAccent] = useState(() => {
+    try {
+      return localStorage.getItem('mz_accent') || DEFAULT_ACCENT;
+    } catch {
+      return DEFAULT_ACCENT;
+    }
+  });
   const [powerMode, setPowerMode] = useState(() => {
     try {
       const v = localStorage.getItem('mz_low_power');
@@ -49,6 +82,44 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
   useEffect(() => {
     if (isOpen) setUsername(currentUsername || '');
   }, [isOpen, currentUsername]);
+
+  // One-tap PWA install: the closest thing to "fullscreen without the
+  // Fullscreen API". Standalone mode has no browser chrome, so ad popups
+  // open in the real browser instead of kicking the video. Browsers offer
+  // no chromeless mode without install — this button removes the friction
+  // (no manual menu hunt). iOS has no install prompt event: show the
+  // manual path instead.
+  const [installEvt, setInstallEvt] = useState(null);
+  const [isStandalone] = useState(() => {
+    try {
+      return (
+        window.matchMedia?.('(display-mode: standalone)').matches === true ||
+        window.navigator.standalone === true
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [isIos] = useState(() => /iphone|ipad|ipod/i.test(window.navigator.userAgent || ''));
+  useEffect(() => {
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setInstallEvt(e);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+  }, []);
+  const handleInstall = async () => {
+    if (!installEvt) return;
+    try {
+      installEvt.prompt();
+      await installEvt.userChoice;
+    } catch {
+      // dismissed — the button stays for another try
+    } finally {
+      setInstallEvt(null);
+    }
+  };
 
   const handleSave = () => {
     localStorage.setItem('mz_letterboxd_user', username.trim());
@@ -131,6 +202,56 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
             />
           }
         />
+
+        <SettingRow
+          icon={<span className="w-4 h-4 rounded-full" style={{ backgroundColor: accent }} />}
+          title="Accent color"
+          desc="The pop color across buttons, glows and highlights."
+          control={
+            <div className="flex items-center gap-2 flex-wrap" role="radiogroup" aria-label="Accent color">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.value}
+                  role="radio"
+                  aria-checked={accent.toLowerCase() === a.value}
+                  title={a.name}
+                  aria-label={`${a.name} accent`}
+                  onClick={() => {
+                    setAccent(a.value);
+                    applyAccent(a.value);
+                  }}
+                  className={`w-8 h-8 rounded-full transition cursor-pointer ${
+                    accent.toLowerCase() === a.value
+                      ? 'ring-2 ring-white ring-offset-2 ring-offset-black'
+                      : 'ring-1 ring-white/20 hover:ring-white/50'
+                  }`}
+                  style={{ backgroundColor: a.value }}
+                />
+              ))}
+            </div>
+          }
+        />
+
+        {!isStandalone && (installEvt || isIos) && (
+          <SettingRow
+            icon={<Download className="w-4 h-4" />}
+            title="Install app"
+            desc={
+              installEvt
+                ? 'Opens standalone — no browser bar, popups stop kicking fullscreen.'
+                : 'On iPhone: Share → Add to Home Screen, then open from the icon.'
+            }
+            control={
+              installEvt ? (
+                <button onClick={handleInstall} className="cine-control-btn w-full">
+                  Install
+                </button>
+              ) : (
+                <p className="text-[11px] text-white/50 leading-relaxed">Share → Add to Home Screen</p>
+              )
+            }
+          />
+        )}
 
         <SettingRow
           danger

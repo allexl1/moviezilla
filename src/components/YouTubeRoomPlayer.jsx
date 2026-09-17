@@ -99,7 +99,11 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
                 if (pollRef.current) clearInterval(pollRef.current);
                 report();
                 pollRef.current = setInterval(report, 2000);
-                onPlayRef.current?.();
+                try {
+                  onPlayRef.current?.();
+                } catch {
+                  // A throwing host callback must never break the poll.
+                }
               } else if (e.data === window.YT.PlayerState.PAUSED) {
                 if (pollRef.current) {
                   clearInterval(pollRef.current);
@@ -136,23 +140,25 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
   }, [videoId]);
 
   // Room actions: exact seek, true remote pause/play — no reload ever.
+  // A pause WITHOUT a second pauses in place (host-away hold): seeking
+  // to 0 first would be the follower losing their spot for no reason.
   useEffect(() => {
     if (!roomTarget || roomTarget.key == null) return;
-    const second = Math.max(0, roomTarget.second || 0);
+    const second = roomTarget.second != null ? Math.max(0, roomTarget.second) : null;
     const apply = () => {
       const pl = playerRef.current;
       if (!pl?.seekTo) {
-        pendingSeek.current = second;
+        if (second != null) pendingSeek.current = second;
         return;
       }
       try {
         if (roomTarget.action === 'pause') {
-          pl.seekTo(second, true);
+          if (second != null) pl.seekTo(second, true);
           pl.pauseVideo();
         } else {
           const t = pl.getCurrentTime?.() || 0;
-          if (Math.abs(t - second) > 3 || roomTarget.action === 'play') {
-            pl.seekTo(second, true);
+          if ((second != null && Math.abs(t - second) > 3) || roomTarget.action === 'play') {
+            if (second != null) pl.seekTo(second, true);
           }
           if (roomTarget.action === 'play') pl.playVideo();
         }
@@ -161,7 +167,7 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
       }
     };
     if (playerRef.current) apply();
-    else pendingSeek.current = second;
+    else if (second != null) pendingSeek.current = second;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomTarget?.key]);
 

@@ -395,7 +395,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
           {view === 'history' && (
             <SegmentedControl label="When" options={WHEN_FILTERS} value={whenFilter} onChange={setWhenFilter} />
           )}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
             <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} label="Filter by genre" />
           </div>

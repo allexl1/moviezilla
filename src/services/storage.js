@@ -38,6 +38,72 @@ function notifyWatchlist() {
   }
 }
 
+// --- Account sync hooks ------------------------------------------------------
+// Local concerns live here; the engine in account.js subscribes to the
+// window event — storage never imports it (no cycle). Tombstones let
+// offline deletes win over older server rows on the next merge.
+const SYNC_KEYS = {
+  TOMBS: 'moviezilla_sync_tombstones',
+  CLEAR_PROGRESS: 'moviezilla_sync_clear_progress',
+};
+
+function dispatchAccountDirty(kind, extra = {}) {
+  try {
+    window.dispatchEvent(new CustomEvent('mz:account-dirty', { detail: { kind, ...extra } }));
+  } catch {
+    // Non-browser: the engine simply never fires.
+  }
+}
+
+export function getTombstones() {
+  const t = safeGet(SYNC_KEYS.TOMBS, {});
+  return { wl: t.wl || {}, prog: t.prog || {} };
+}
+
+function setTombstones(t) {
+  safeSet(SYNC_KEYS.TOMBS, t);
+}
+
+export function addTombstone(scope, id) {
+  if (id == null || id === '') return;
+  const t = getTombstones();
+  const bucket = { ...(t[scope] || {}) };
+  bucket[String(id)] = Date.now();
+  const keys = Object.keys(bucket)
+    .sort((a, b) => bucket[b] - bucket[a])
+    .slice(0, 200);
+  const next = {};
+  for (const k of keys) next[k] = bucket[k];
+  setTombstones({ ...t, [scope]: next });
+}
+
+export function clearTombstones(scope, ids) {
+  const t = getTombstones();
+  const bucket = { ...(t[scope] || {}) };
+  for (const id of ids || []) delete bucket[String(id)];
+  setTombstones({ ...t, [scope]: bucket });
+}
+
+export function setProgressClearFlag() {
+  safeSet(SYNC_KEYS.CLEAR_PROGRESS, { at: Date.now() });
+}
+
+export function getProgressClearFlag() {
+  try {
+    return Boolean(JSON.parse(localStorage.getItem(SYNC_KEYS.CLEAR_PROGRESS) || 'null'));
+  } catch {
+    return false;
+  }
+}
+
+export function clearProgressClearFlag() {
+  try {
+    localStorage.removeItem(SYNC_KEYS.CLEAR_PROGRESS);
+  } catch {
+    // ignore
+  }
+}
+
 // Seconds → "4:05" / "1:02:03" for position display when no duration (and
 // hence no percent) is known.
 export function formatClock(totalSeconds) {
@@ -77,6 +143,7 @@ export const storage = {
       if (title && !prev.title) prev.title = title;
       if (poster && !prev.poster) prev.poster = poster;
       safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+      dispatchAccountDirty('progress');
       return;
     }
 
@@ -129,6 +196,40 @@ export const storage = {
       updatedAt: Date.now(),
     };
 
+    safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+    dispatchAccountDirty('progress');
+  },
+
+  // Raw entries for the sync engine (merge/push work on whole entries).
+  getProgressEntries() {
+    return Object.values(safeGet(STORAGE_KEYS.PROGRESS, {}));
+  },
+
+  // Server-newer row lands here: top-level clock adopts the server while
+  // the device's per-server/per-episode refinements survive (slots are
+  // device-specific — Vidy seconds mean nothing on a phone that only
+  // ever used VidLink).
+  applyServerProgress({ mediaId, type, season, episode, currentTime, duration, percent, title, poster, updatedAt }) {
+    if (mediaId == null) return;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const key = `${type}_${mediaId}`;
+    const prev = allProgress[key] || {};
+    allProgress[key] = {
+      ...prev,
+      mediaId,
+      type,
+      season: season || 1,
+      episode: episode || 1,
+      currentTime: Math.floor(currentTime || 0),
+      duration: Math.floor(duration || 0),
+      percent: Math.min(100, Math.floor(percent || 0)),
+      title: title || prev.title || '',
+      poster: poster || prev.poster || '',
+      genres: prev.genres || [],
+      episodes: prev.episodes,
+      servers: prev.servers,
+      updatedAt: updatedAt || Date.now(),
+    };
     safeSet(STORAGE_KEYS.PROGRESS, allProgress);
   },
 
@@ -203,6 +304,8 @@ export const storage = {
     } catch (err) {
       console.error('Failed to clear playback history:', err);
     }
+    setProgressClearFlag();
+    dispatchAccountDirty('progress');
   },
 
   // Preferred Server memory. Only offered ids survive — a stale stored
@@ -246,11 +349,13 @@ export const storage = {
     let updated;
     if (idx >= 0) {
       updated = list.filter((x) => x.id !== item.id);
+      addTombstone('wl', item.id);
     } else {
-      updated = [item, ...list];
+      updated = [{ ...item, updatedAt: Date.now() }, ...list];
     }
     safeSet(STORAGE_KEYS.WATCHLIST, updated);
     notifyWatchlist();
+    dispatchAccountDirty('watchlist');
     return idx === -1; // returns true if added, false if removed
   },
 
@@ -310,6 +415,8 @@ export const storage = {
       const all = safeGet(STORAGE_KEYS.PROGRESS, {});
       delete all[`${type}_${mediaId}`];
       safeSet(STORAGE_KEYS.PROGRESS, all);
+      addTombstone('prog', `${type}_${mediaId}`);
+      dispatchAccountDirty('progress');
     } catch (err) {
       console.error('Failed to remove playback history:', err);
     }
@@ -319,6 +426,20 @@ export const storage = {
   removeFromWatchlist(id) {
     const list = safeGet(STORAGE_KEYS.WATCHLIST, []).filter((x) => x.id !== id);
     safeSet(STORAGE_KEYS.WATCHLIST, list);
+    addTombstone('wl', id);
     notifyWatchlist();
+    dispatchAccountDirty('watchlist');
+  },
+
+  // Wholesale replace (sync merge). Notifies UI like any other write.
+  replaceWatchlist(list) {
+    safeSet(STORAGE_KEYS.WATCHLIST, Array.isArray(list) ? list : []);
+    notifyWatchlist();
+  },
+
+  // Same replace without the UI event: stamping push watermarks must not
+  // re-render lists or re-trigger the engine.
+  replaceWatchlistSilent(list) {
+    safeSet(STORAGE_KEYS.WATCHLIST, Array.isArray(list) ? list : []);
   },
 };

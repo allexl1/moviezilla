@@ -3,7 +3,7 @@ import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight } from 'lucide-
 import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
-import { storage, formatClock } from '../services/storage';
+import { storage } from '../services/storage';
 import RowRail from './RowRail';
 
 // RT lookups cache a day (edge caches hits a day too; misses an hour).
@@ -241,11 +241,6 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     (v) => (v.type === 'Trailer' || v.type === 'Teaser') && v.site === 'YouTube'
   ).slice(0, 6);
   const overview = details?.overview || media?.overview || 'No storyline available.';
-  // Solo episode entry for shows: jump straight back to the saved
-  // episode + second. Player restores S/E from storage at mount, so a
-  // plain onPlay lands exactly where history left off.
-  const resume = mediaType === 'tv' ? storage.getProgress('tv', mediaId) : null;
-  const resumeReady = resume && (resume.currentTime || 0) >= 30;
 
   return (
     <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
@@ -347,16 +342,6 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               </button>
             )}
 
-            {resumeReady && (
-              <button
-                onClick={() => onPlay(media, details)}
-                className="cine-control-btn"
-                title={`Continue Season ${resume.season} Episode ${resume.episode}`}
-              >
-                <Play className="w-4 h-4" fill="currentColor" />
-                <span>{`S${resume.season} E${resume.episode} • ${formatClock(resume.currentTime)}`}</span>
-              </button>
-            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm font-semibold text-white/90 pt-1">

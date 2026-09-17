@@ -31,19 +31,26 @@ export default function EpisodeDrawer({
   }, [tvId, activeSeason]);
 
   // Land on the episode you're actually at: when the current season's
-  // list arrives, bring the current episode into view — no manual scroll.
+  // list arrives (or the drawer reopens with a cached list), bring the
+  // current episode into view — no manual scroll. isOpen is a dep on
+  // purpose: episodes persist across opens (early return keeps state),
+  // so without it reopening never rescrolled (S1E18 reopened on E1).
   useEffect(() => {
-    if (activeSeason !== currentSeason || episodes.length === 0) return;
-    const el = epRefs.current[currentEpisode];
-    if (el && typeof el.scrollIntoView === 'function') {
-      try {
-        el.scrollIntoView({ block: 'nearest' });
-      } catch {
-        // ignore
+    if (!isOpen || activeSeason !== currentSeason || episodes.length === 0) return;
+    // Wait a frame so row refs are laid out before scrolling.
+    const raf = requestAnimationFrame(() => {
+      const el = epRefs.current[currentEpisode];
+      if (el && typeof el.scrollIntoView === 'function') {
+        try {
+          el.scrollIntoView({ block: 'center' });
+        } catch {
+          // ignore
+        }
       }
-    }
+    });
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [episodes, activeSeason, tvId]);
+  }, [episodes, activeSeason, tvId, isOpen, currentEpisode]);
 
   useEffect(() => {
     if (!isOpen || !tvId) return;
@@ -110,6 +117,8 @@ export default function EpisodeDrawer({
           <button
             onClick={onClose}
             className="cine-icon-btn"
+            title="Close episode list"
+            aria-label="Close episode list"
           >
             <X className="w-4 h-4" />
           </button>

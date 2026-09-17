@@ -772,10 +772,10 @@ a.cine-pill {
 .cine-react {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem 0.25rem 0.35rem;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
   border-radius: var(--cine-radius-full);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: var(--cine-font-bold);
   color: rgba(255, 255, 255, 0.8);
   background:
@@ -793,12 +793,18 @@ a.cine-pill {
   border-color: rgba(255, 255, 255, 0.30);
 }
 
+/* Mine = selected-WHITE language (nav/segment parity), never a color
+   fill: any emoji — white snowman included — stays legible on dark
+   glass over any backdrop. */
 .cine-react--mine {
   color: #fff;
-  border-color: color-mix(in srgb, var(--cine-accent) 40%, transparent);
+  border-color: rgba(255, 255, 255, 0.6);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-    color-mix(in srgb, var(--cine-accent) 15%, rgba(12, 12, 16, 0.55));
+    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    rgba(12, 12, 16, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 16px rgba(255, 255, 255, 0.08);
 }
 
 /* ─── Static icon disc — glass without button affordance ───────────────
@@ -1707,6 +1713,50 @@ body.mz-refract .cine-chip--glass {
 }
 
 .cine-select--genre {
+}
+
+/* Visible range slider: dark track that reads on dark glass, white
+   thumb. Bare `accent-white` renders an invisible track in some
+   browsers — this owns both engines. */
+input[type='range'].cine-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.cine-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.cine-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 9999px;
+  border: none;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+.cine-range::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.cine-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
+}
+
+/* Room chat message type: size rides a per-device var (settings slider),
+   15px default. Unlayered rule beats the Tailwind size utility on purpose. */
+.msg-text {
+  font-size: var(--mz-chat-size, 15px);
 }
 
 /* Minimal toast (watchlist add/remove). One recipe, auto-dismissed. */

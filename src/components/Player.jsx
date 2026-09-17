@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw } from 'lucide-react';
 import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
-import { ChatList, ChatInput } from './chat';
+import { FloatingRoomChat } from './chat';
 
 // Only accept playback progress messages from our own embed servers.
 // Anything else (other tabs, ads, nested third-party frames) is ignored.
@@ -20,6 +20,27 @@ const TRUSTED_PLAYER_ORIGINS = [
   'https://vaplayer.ru',
   'https://www.vaplayer.ru',
 ];
+
+// Late sandbox (popup guard): applied to OUR iframe element only after
+// the provider has booted — never upfront. Verified by experiment
+// (headless Chromium, both providers, Sep 2026):
+//  - sandbox UPFRONT: Vidy shows "Iframe Sandbox Detected", VidLink shows
+//    "Please Disable Sandbox" — both refuse to play. Dead end.
+//  - sandbox added 2s/4s/6s/8s/10s/12s AFTER load: zero detection trips
+//    on either provider, Vidy keeps playing AND keeps emitting timeupdates
+//    (clock advancing), VidLink telemetry advancing too. Detection is
+//    init-time only.
+// Arming rides the iframe's own load event +2.5s (early enough to beat
+// first-click popunders, late enough to clear init detection) with first
+// playback telemetry as an even earlier trigger. Enforcement is identical
+// either way (VidLink console: "Blocked opening 'about:blank' ...
+// 'allow-popups' permission is not set"). No allow-popups,
+// no allow-top-navigation — popups and page hijacks die in the frame.
+// Providers outside vidy.st / vidlink.pro are never armed (unverified).
+// If a provider ever starts re-checking mid-session, playback could break
+// — that risk is why arming stays limited to the two verified hosts.
+const SBX_TOKENS = 'allow-scripts allow-same-origin allow-forms allow-presentation';
+const SBX_ARM_MS = 2500;
 
 function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
   const t = Math.max(0, Math.floor(resumeTime || 0));
@@ -98,14 +119,17 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // surfaces a glass Reload pill instead of a dead screen.
   const [stalled, setStalled] = useState(false);
   const stalledRef = useRef(false);
-  // Fullscreen exit we didn't ask for (popup stole focus / blocked tab):
-  // offer one-tap re-entry. Our own exits set fsIntent first and stay quiet.
-  const [fsKicked, setFsKicked] = useState(false);
-  const fsIntentRef = useRef(null);
-  const wasFsRef = useRef(false);
 
   const containerRef = useRef(null);
   const floatEndRef = useRef(null);
+  const frameRef = useRef(null);
+  // Embed URL this iframe element has been sandbox-armed for. Fresh
+  // elements (episode/server switches remount the frame) re-arm from
+  // scratch — the guard below compares against the CURRENT url.
+  const sandboxArmed = useRef(null);
+  // Pending arm timer: restarted on every frame load so arming always
+  // lands after the LATEST load (rapid rebuilds can't arm early).
+  const sandboxTimer = useRef(null);
   // Room auto-pause callbacks (stable mirrors — props change identity).
   const onProviderPauseRef = useRef(null);
   const onProviderPlayRef = useRef(null);
@@ -269,37 +293,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     poke();
   };
 
-  // Fullscreen helpers: every programmatic enter/exit declares intent so
-  // the change listener below can tell our exits from popup-forced ones.
+  // Fullscreen helpers: plain enter/exit on our container. (There used
+  // to be a "kicked out of fullscreen" detector + re-enter pill here —
+  // removed by request. Popup-forced exits can't be distinguished from
+  // intentional ones anyway, and the pill fired on plain Esc too.)
   const enterFs = () => {
-    fsIntentRef.current = 'enter';
-    setFsKicked(false);
-    containerRef.current?.requestFullscreen().catch(() => {
-      fsIntentRef.current = null;
-    });
+    containerRef.current?.requestFullscreen().catch(() => {});
   };
   const exitFs = () => {
-    fsIntentRef.current = 'exit';
-    document.exitFullscreen().catch(() => {
-      fsIntentRef.current = null;
-    });
+    document.exitFullscreen().catch(() => {});
   };
-
-  useEffect(() => {
-    const onFs = () => {
-      if (document.fullscreenElement) {
-        wasFsRef.current = true;
-        fsIntentRef.current = null;
-        setFsKicked(false);
-      } else if (wasFsRef.current) {
-        wasFsRef.current = false;
-        if (fsIntentRef.current !== 'exit') setFsKicked(true);
-        fsIntentRef.current = null;
-      }
-    };
-    document.addEventListener('fullscreenchange', onFs);
-    return () => document.removeEventListener('fullscreenchange', onFs);
-  }, []);
 
   // Room sync tap: throttled position reports for the watch-party
   // engine (absent in solo mode — zero behavior change there).
@@ -323,8 +326,40 @@ export default function Player({ media, details, onClose, onPosition = null, roo
 
   // Room follow: host (or granted driver) moved — rebuild the embed at
   // their second. Same code path as a local episode/server switch.
+  // Parked followers (suspended) skip everything except an explicit
+  // resume: rebuilding a held player is pure suffering with no playback.
+  // `suspended` is a real dep (not key-only): toggling it re-runs the
+  // effect, and the guard decides.
+  //
+  // Late-sandbox arming lives here (after embedUrl exists — TDZ): the
+  // iframe's own load event + SBX_ARM_MS, plus first telemetry as the
+  // fast path. Refs + timeouts only, no state (arming never re-renders).
+  const armSandbox = () => {
+    const el = frameRef.current;
+    if (!el) return;
+    // Read back the CURRENT src (never a stale closure): rebuilds swap
+    // the element under us, and only verified hosts get armed.
+    const url = el.getAttribute('src') || '';
+    if (!url || sandboxArmed.current === url) return;
+    if (!url.includes('vidy.st') && !url.includes('vidlink.pro')) return;
+    try {
+      el.setAttribute('sandbox', SBX_TOKENS);
+      sandboxArmed.current = url;
+    } catch {
+      // DOM unavailable — unarmed, playback unaffected.
+    }
+  };
+  const onFrameLoad = () => {
+    // Fresh element (first mount or rebuild): previous arming belongs to
+    // the old frame. Restart the clock — arming always lands >=2.5s
+    // after the LATEST load, past init-time detection (see SBX_TOKENS).
+    sandboxArmed.current = null;
+    if (sandboxTimer.current) clearTimeout(sandboxTimer.current);
+    sandboxTimer.current = setTimeout(() => armSandbox(), SBX_ARM_MS);
+  };
   useEffect(() => {
     if (!roomTarget || roomTarget.key == null) return;
+    if (suspended && roomTarget.action !== 'play') return;
     const second = Math.max(0, roomTarget.second || 0);
     const season = roomTarget.season || currentSeason;
     const episode = roomTarget.episode || currentEpisode;
@@ -342,18 +377,25 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     rebuildEmbed(srv, season, episode, second);
     setKey((p) => p + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomTarget?.key]);
+  }, [roomTarget?.key, suspended]);
 
   // Log the visit on a 5s heartbeat + on hide/close — so tapping History
   // always reopens the exact episode + second. Entries deduped per title.
-  // Same tick drives the stall detector.
+  // Same tick drives the stall detector. Suspended followers sit out: the
+  // frame is gone, so accruing wall-clock would inflate their history and
+  // poison the resume second. Position reports stay live (cheap, keeps
+  // the room's picture of this device fresh). `suspended` is a dep so the
+  // interval closure always sees the current hold state.
   useEffect(() => {
     const beat = setInterval(() => {
-      accumulateWallClock();
-      saveNowRef.current();
+      if (!suspended) {
+        accumulateWallClock();
+        saveNowRef.current();
+      }
       reportRef.current();
       if (
         !stalledRef.current &&
+        !suspended &&
         pmSeenRef.current &&
         !pausedProvRef.current &&
         !document.hidden &&
@@ -383,10 +425,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('beforeunload', onPageHide);
-      accumulateWallClock();
-      saveNowRef.current();
+      if (!suspended) {
+        accumulateWallClock();
+        saveNowRef.current();
+      }
     };
-  }, [mediaId]);
+  }, [mediaId, suspended]);
 
   // Auto-hide chrome after 4s idle (basic player behavior).
   const poke = () => {
@@ -399,6 +443,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     poke();
     return () => {
       if (hideTimer.current) clearTimeout(hideTimer.current);
+      if (sandboxTimer.current) clearTimeout(sandboxTimer.current);
     };
   }, []);
 
@@ -418,10 +463,24 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // player; F toggles fullscreen). Any key also wakes the chrome — pointer
   // events over the embed iframe never reach this container, so keys are a
   // guaranteed recovery path.
+  // Guards: typing in chat/GIF/search inputs must never trigger player
+  // shortcuts (typing "f" in room chat toggled fullscreen); Esc in native
+  // fullscreen belongs to the browser (it exits fullscreen) — closing the
+  // whole player there is what stranded users + spuriously raised the
+  // re-enter pill.
   useEffect(() => {
     function handleKeyDown(e) {
+      const t = e.target;
+      const typing =
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable);
+      if (typing) return;
       poke();
       if (e.key === 'Escape') {
+        if (document.fullscreenElement) return;
         e.preventDefault();
         if (isEpisodeOpen) {
           setIsEpisodeOpen(false);
@@ -533,6 +592,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
             pmSeenRef.current = true;
             lastPmRef.current = { time: t, at: Date.now() };
+            // First real playback evidence: the provider has booted past
+            // init-time sandbox detection — arm the popup guard now.
+            armSandbox();
             if (stalledRef.current) {
               stalledRef.current = false;
               setStalled(false);
@@ -675,6 +737,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               }}
               className="cine-control-btn"
               aria-label="Toggle episode list"
+              aria-expanded={isEpisodeOpen}
             >
               <ListVideo className="w-4 h-4 text-[var(--cine-accent)]" />
               <span>Episodes</span>
@@ -703,6 +766,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             aria-label="Toggle fullscreen"
           >
             <Maximize className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => reloadStream(false)}
+            className="cine-icon-btn"
+            title="Reload stream at the current position"
+            aria-label="Reload stream"
+          >
+            <RotateCcw className="w-4 h-4" />
           </button>
 
           {/* Room chat lives in the chrome row (next to fullscreen) and the
@@ -745,36 +817,25 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       {/* Floating room chat: sibling of chrome/video (NOT gated on
           showChrome), so it stays open and interactive while chrome fades
           and inside fullscreen (this container is the fullscreen element).
-          Above iframe (auto), wake zone (z-20) and chrome (z-30). */}
+          Above iframe (auto), wake zone (z-20) and chrome (z-30). Shared
+          component with the YouTube room player so both stay identical. */}
       {chat?.open && (
-        <div className="absolute right-3 top-24 bottom-24 z-40 w-[320px] max-w-[80vw] rounded-2xl cine-glass-panel flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--cine-glass-border)] flex-shrink-0">
-            <p className="text-xs font-bold text-white">Room chat</p>
-            <button
-              onClick={chat.onToggle}
-              className="cine-icon-btn cine-icon-btn--sm"
-              title="Close chat"
-              aria-label="Close room chat"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <ChatList
-            messages={chat.messages}
-            reactions={chat.reactions}
-            myDevice={chat.myDevice}
-            onToggleReact={chat.onToggleReact}
-            endRef={floatEndRef}
-          />
-          <ChatInput
-            nickname={chat.nickname}
-            muted={chat.muted}
-            input={chat.input}
-            setInput={chat.setInput}
-            onSend={chat.onSend}
-            onSendGif={chat.onSendGif}
-          />
-        </div>
+        <FloatingRoomChat
+          open
+          onToggle={chat.onToggle}
+          messages={chat.messages}
+          reactions={chat.reactions}
+          myDevice={chat.myDevice}
+          nickname={chat.nickname}
+          input={chat.input}
+          setInput={chat.setInput}
+          muted={chat.muted}
+          onSend={chat.onSend}
+          onSendGif={chat.onSendGif}
+          onToggleReact={chat.onToggleReact}
+          endRef={floatEndRef}
+          seenInfo={chat.seenInfo}
+        />
       )}
 
       {/* Video Viewport — src is memoised state: chrome pokes and clock
@@ -795,6 +856,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         ) : (
           <iframe
             key={`${server}-${key}-${currentSeason}-${currentEpisode}`}
+            ref={frameRef}
+            onLoad={onFrameLoad}
             src={embedUrl}
             title={title}
             className="w-full h-full border-0"
@@ -818,31 +881,23 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         )}
       </div>
 
-      {/* Recovery pills: our DOM is inside the fullscreen element, so
-          these stay visible and tappable where the iframe swallows every
-          gesture. Only problems surface here — no persistent chrome, so
-          fullscreen stays clean. (Touch users wake controls via the
+      {/* Stall recovery: our DOM is inside the fullscreen element, so
+          this stays visible and tappable where the iframe swallows every
+          gesture. Only real problems surface here — no persistent chrome,
+          so fullscreen stays clean. (Touch users wake controls via the
           top-left wake zone below.) */}
-      {(stalled || (fsKicked && !document.fullscreenElement)) && !suspended && (
+      {stalled && !suspended && (
         <div className="absolute bottom-6 inset-x-0 z-30 flex flex-col items-center gap-2 pointer-events-none px-4">
-          {stalled && (
-            <div className="pointer-events-auto flex items-center gap-2 pl-4 pr-2 py-1.5 cine-glass-panel">
-              <span className="text-xs font-semibold text-white/80">Stream stuck?</span>
-              <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" title="Reload at last position">
-                <RotateCcw className="w-3 h-3" />
-                Reload
-              </button>
-              <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" title="Restart from the beginning">
-                From start
-              </button>
-            </div>
-          )}
-          {fsKicked && !document.fullscreenElement && (
-            <button onClick={enterFs} className="pointer-events-auto cine-btn cine-btn-primary h-11 px-6 text-sm" title="An ad popup kicked you out of fullscreen">
-              <Maximize className="w-4 h-4" />
-              Re-enter fullscreen
+          <div className="pointer-events-auto flex items-center gap-2 pl-4 pr-2 py-1.5 cine-glass-panel rounded-2xl">
+            <span className="text-xs font-semibold text-white/80">Stream stuck?</span>
+            <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" title="Reload at last position">
+              <RotateCcw className="w-3 h-3" />
+              Reload
             </button>
-          )}
+            <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" title="Restart from the beginning">
+              From start
+            </button>
+          </div>
         </div>
       )}
 

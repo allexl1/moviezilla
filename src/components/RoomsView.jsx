@@ -19,23 +19,28 @@ import Input from './ui/Input';
 import EmptyState from './ui/EmptyState';
 import Row from './ui/Row';
 import RowRail from './RowRail';
+import { useAccount } from '../services/account';
 
-function NickRow({ nickname, setNicknameState, onToast }) {
+function NickRow({ nickname, isAccount, setNicknameState, onToast }) {
   const [draft, setDraft] = useState(nickname);
   useEffect(() => setDraft(nickname), [nickname]);
   if (nickname) {
     return (
       <div className="flex items-center gap-2">
         <span className="cine-chip cine-chip--accent">{nickname}</span>
-        <button
-          onClick={() => {
-            setNickname('');
-            setNicknameState('');
-          }}
-          className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
-        >
-          Change
-        </button>
+        {isAccount ? (
+          <span className="text-[11px] font-medium text-white/40">From your account</span>
+        ) : (
+          <button
+            onClick={() => {
+              setNickname('');
+              setNicknameState('');
+            }}
+            className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
+          >
+            Change
+          </button>
+        )}
       </div>
     );
   }
@@ -73,7 +78,11 @@ function NickRow({ nickname, setNicknameState, onToast }) {
 }
 
 export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
-  const [nickname, setNicknameState] = useState(() => myNickname());
+  // Account name wins everywhere when signed in (device nickname is the
+  // logged-out fallback — forgotten, never merged, by design).
+  const { displayName: acctName } = useAccount();
+  const [deviceNick, setDeviceNick] = useState(() => myNickname());
+  const nickname = acctName || deviceNick;
   const [title, setTitle] = useState(
     () => draftMedia?.title || draftMedia?.name || ''
   );
@@ -303,7 +312,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">Rooms</h1>
           <p className="text-sm text-white/60 mt-1">Watch together, in sync, with chat</p>
         </div>
-        <NickRow nickname={nickname} setNicknameState={setNicknameState} onToast={onToast} />
+        <NickRow nickname={nickname} isAccount={Boolean(acctName)} setNicknameState={setDeviceNick} onToast={onToast} />
       </div>
 
       {error && <p className="text-xs text-red-400/90">{error}</p>}
@@ -324,7 +333,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               <p className="text-xs text-white/60 mt-0.5">Tap a title — the room is created instantly</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/10 px-4 py-3.5 focus-within:border-white/25 transition">
+          <div className="flex items-center gap-3 rounded-2xl cine-glass-panel px-4 py-3.5 focus-within:border-white/25 transition">
             <Search className="w-5 h-5 text-white/60 flex-shrink-0" />
             <input
               type="text"
@@ -371,7 +380,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">or paste a link</span>
             <div className="h-px flex-1 bg-white/10" />
           </div>
-          <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/10 px-4 py-3.5 focus-within:border-white/25 transition">
+          <div className="flex items-center gap-3 rounded-2xl cine-glass-panel px-4 py-3.5 focus-within:border-white/25 transition">
             <Link2 className="w-5 h-5 text-white/60 flex-shrink-0" />
             <input
               type="text"

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark, Users } from 'lucide-react';
+import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark, Users, User } from 'lucide-react';
+import { useAccount } from '../services/account';
 
-export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings }) {
+export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings, onOpenAccount }) {
   const tabs = [
     { id: 'home', label: 'Home', icon: House },
     { id: 'movie', label: 'Movies', icon: Clapperboard },
@@ -13,6 +14,8 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
   // Blur handoff: past ~48px the floating bars go solid-blur so content
   // sliding underneath melts instead of clipping. rAF-throttled, one bool.
   const [scrolled, setScrolled] = useState(false);
+  const { user, displayName } = useAccount();
+  const initial = (displayName || user?.email || '').slice(0, 1).toUpperCase();
   useEffect(() => {
     let raf = 0;
     const onScroll = () => {
@@ -90,6 +93,34 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           >
             <Settings className="w-4 h-4" strokeWidth={2} />
           </button>
+
+          {user ? (
+            <button
+              onClick={onOpenAccount}
+              className="cine-nav-icon-btn"
+              title="Account"
+              aria-label="Account"
+            >
+              <span
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                style={{
+                  background: 'color-mix(in srgb, var(--cine-accent) 25%, transparent)',
+                  color: 'var(--cine-accent)',
+                }}
+              >
+                {initial}
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenAccount}
+              className="cine-nav-icon-btn"
+              title="Sign in"
+              aria-label="Sign in"
+            >
+              <User className="w-4 h-4" strokeWidth={2.2} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -121,6 +152,25 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" strokeWidth={2} />
+          </button>
+          <button
+            onClick={onOpenAccount}
+            className="cine-nav-btn"
+            aria-label={user ? 'Account' : 'Sign in'}
+          >
+            {user ? (
+              <span
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                style={{
+                  background: 'color-mix(in srgb, var(--cine-accent) 25%, transparent)',
+                  color: 'var(--cine-accent)',
+                }}
+              >
+                {initial}
+              </span>
+            ) : (
+              <User className="w-4 h-4" strokeWidth={2.2} />
+            )}
           </button>
         </div>
       </nav>

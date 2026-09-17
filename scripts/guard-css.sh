@@ -33,7 +33,10 @@ if [ -n "$hit" ]; then
 fi
 
 # 3. Raw accent hex outside the token definition and third-party API params.
-hit=$(grep -rEn '#95ff50|#95FF50' src index.html 2>/dev/null | grep -vi 'cine-accent\|primaryColor\|vidlink\|theme-color\|manifest' || true)
+# Exception: SettingsModal.jsx owns the accent picker — its literals ARE the
+# centralized theming path (ACCENTS + applyAccent write the var, main.jsx
+# boots it). Everything else must use var(--cine-accent).
+hit=$(grep -rEn '#95ff50|#95FF50' src index.html 2>/dev/null | grep -v 'src/components/SettingsModal.jsx' | grep -vi 'cine-accent\|primaryColor\|vidlink\|theme-color\|manifest' || true)
 if [ -n "$hit" ]; then
   fail "raw accent hex found — use var(--cine-accent) so theming stays centralized." "$hit"
 fi

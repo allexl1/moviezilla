@@ -6,6 +6,7 @@ import { parseLocation, parseLocationSafe, buildLocation } from './services/rout
 import Navbar from './components/Navbar';
 import SearchModal from './components/SearchModal';
 import SettingsModal from './components/SettingsModal';
+import AccountModal from './components/AccountModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { SkelRail } from './components/ui';
 
@@ -42,6 +43,7 @@ export default function App() {
     () => localStorage.getItem('mz_letterboxd_user') || ''
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
 
   // Discovery filters (shared shape for Movies/Shows views; tab switches
   // reset them exactly like before).
@@ -221,12 +223,12 @@ export default function App() {
   };
 
   // Freeze ambient animation while the tab is hidden, any overlay
-  // covers the page (search/settings/player/details), or we're on a
+  // covers the page (search/settings/account/player/details), or we're on a
   // utility tab (movies/shows/watchlist): the aurora keeps compositing
   // behind fixed overlays and dense lists otherwise (thermal).
   useEffect(() => {
     const apply = () => {
-      const covered = isSearchOpen || isSettingsOpen || Boolean(activePlayer) || Boolean(selectedMedia) || activeTab !== 'home';
+      const covered = isSearchOpen || isSettingsOpen || isAccountOpen || Boolean(activePlayer) || Boolean(selectedMedia) || activeTab !== 'home';
       document.body.classList.toggle('mz-paused', covered || document.hidden);
     };
     apply();
@@ -235,7 +237,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', apply);
       document.body.classList.remove('mz-paused');
     };
-  }, [isSearchOpen, isSettingsOpen, activePlayer, selectedMedia, activeTab]);
+  }, [isSearchOpen, isSettingsOpen, isAccountOpen, activePlayer, selectedMedia, activeTab]);
 
   // Minimal toast (watchlist add/remove), auto-dismissed.
   const toastTimer = useRef(null);
@@ -319,7 +321,7 @@ export default function App() {
     }
   }
 
-  const overlaid = isSearchOpen || isSettingsOpen || Boolean(activePlayer);
+  const overlaid = isSearchOpen || isSettingsOpen || isAccountOpen || Boolean(activePlayer);
 
   return (
     <div className="relative min-h-screen bg-[var(--cine-bg-deep)] text-white select-none">
@@ -357,8 +359,8 @@ export default function App() {
           setSelectedPerson(null);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAccount={() => setIsAccountOpen(true)}
       />
-
       <ErrorBoundary key={routeId} onHome={goHome}>
       <Suspense
         fallback={
@@ -476,6 +478,11 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         currentUsername={letterboxdUser}
         onSaveLetterboxd={handleSaveLetterboxd}
+      />
+
+      <AccountModal
+        isOpen={isAccountOpen}
+        onClose={() => setIsAccountOpen(false)}
       />
 
       <SearchModal

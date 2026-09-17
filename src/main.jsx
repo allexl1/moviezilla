@@ -36,6 +36,24 @@ try {
   // Storage unavailable — motion stays on.
 }
 
+// Apply saved prefs before first paint (no flash): accent + chat size.
+try {
+  const accent = localStorage.getItem('mz_accent');
+  if (accent && /^#[0-9a-f]{6}$/i.test(accent)) {
+    const n = parseInt(accent.slice(1), 16);
+    const lift = (c) => Math.min(255, Math.round(c + (255 - c) * 0.12));
+    const hover = `#${((1 << 24) + (lift(n >> 16 & 255) << 16) + (lift(n >> 8 & 255) << 8) + lift(n & 255)).toString(16).slice(1)}`;
+    document.documentElement.style.setProperty('--cine-accent', accent);
+    document.documentElement.style.setProperty('--cine-accent-hover', hover);
+  }
+  const size = Number(localStorage.getItem('mz_chat_size'));
+  if (Number.isFinite(size) && size >= 13 && size <= 19) {
+    document.body.style.setProperty('--mz-chat-size', `${size}px`);
+  }
+} catch {
+  // Storage unavailable — defaults stand.
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

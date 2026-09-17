@@ -90,6 +90,7 @@ function rowToRoom(row) {
     code: row.code,
     title: row.title,
     media: row.media || {},
+    queue: Array.isArray(row.queue) ? row.queue : [],
     season: row.season ?? 1,
     episode: row.episode ?? 1,
     server: row.server || 'vidy',
@@ -170,7 +171,7 @@ export async function patchRoom(code, patch) {
       out[k] = Math.max(1, Math.min(99, Math.floor(Number(p[k]))));
     }
   }
-  if (typeof p.server === 'string' && ['vidy', 'vidlink', 'vaplayer'].includes(p.server)) {
+  if (typeof p.server === 'string' && ['vidy', 'vidlink', 'vaplayer', 'youtube'].includes(p.server)) {
     out.server = p.server;
   }
   if (p.grants && typeof p.grants === 'object' && !Array.isArray(p.grants)) {
@@ -184,6 +185,27 @@ export async function patchRoom(code, patch) {
   }
   if (p.media && typeof p.media === 'object' && !Array.isArray(p.media)) {
     out.media = p.media;
+  }
+  // Room playlist queue: capped + field-sanitized so a hostile client
+  // can't stuff the row. Items: {key,kind,title,by,id,type,poster |
+  // youtubeId}. Empty/missing key or title drops the item.
+  if (Array.isArray(p.queue)) {
+    out.queue = p.queue.slice(0, 50).map((it) => {
+      if (!it || typeof it !== 'object') return null;
+      const kind = it.kind === 'youtube' ? 'youtube' : 'tmdb';
+      const title = String(it.title || '').slice(0, 120);
+      const key = String(it.key || '').slice(0, 80);
+      if (!key || !title) return null;
+      const clean = { key, kind, title, by: String(it.by || '').slice(0, 24) };
+      if (kind === 'youtube') {
+        clean.youtubeId = String(it.youtubeId || '').slice(0, 16);
+      } else {
+        clean.id = Math.floor(Number(it.id)) || 0;
+        clean.type = it.type === 'tv' ? 'tv' : 'movie';
+        clean.poster = String(it.poster || '').slice(0, 200);
+      }
+      return clean;
+    }).filter(Boolean);
   }
   if (Object.keys(out).length === 0) throw new Error('Nothing to update.');
   const { data, error } = await sb
