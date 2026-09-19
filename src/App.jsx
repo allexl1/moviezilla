@@ -412,10 +412,6 @@ export default function App() {
             onSelectMedia={selectMedia}
             onPlay={playMedia}
             onToast={showToast}
-            onOpenProvider={(id) => {
-              setActiveTab('movie');
-              patchFilters({ provider: id });
-            }}
             onOpenTopRated={() => {
               patchFilters({ sort: 'vote_average.desc' });
               setActiveTab('movie');

@@ -261,9 +261,8 @@ function AccountBody() {
         ) : (
           <div className="space-y-4">
             <p className="text-center text-[13px] text-white/60">
-              <span className="font-bold text-white/90">Tap the link</span> in the email to sign in
-              {` — or enter the 6-digit code below if yours shows one, for `}
-              <span className="font-bold text-white/90">{email || 'your inbox'}</span>
+              Tap the link we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span>
+              {` — or enter the 6-digit code below`}
             </p>
             <div className="flex justify-center">
               <OtpBoxes code={code} onCode={setCode} disabled={busy} />

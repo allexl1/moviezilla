@@ -513,6 +513,35 @@ select:focus-visible,
     0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
+/* Solid white primary — the ONE non-glass action (hero Play). Deliberate:
+   over bright ever-changing artwork glass reads muddy and unstable, while
+   white is constant and carries the primary hierarchy. Same language as
+   .cine-nav-btn.is-active and .cine-pill--active. Never refracted, never
+   tinted — icon + label stay near-black everywhere. */
+.cine-btn-white {
+  background: var(--cine-white);
+  color: #0a0a0e;
+  border: 1px solid transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.cine-btn-white:hover {
+  background: #f2f2f5;
+  color: #0a0a0e;
+  transform: scale(1.03);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(255, 255, 255, 0.12);
+}
+
+.cine-btn-white:active {
+  transform: scale(0.98);
+}
+
 /* Liquid-glass sheen (cinejoy .glassy-button parity) — progressive
    enhancement layered over .cine-btn. Sweep on hover, idle top-light. */
 @property --cine-sheen-angle {
@@ -1002,13 +1031,14 @@ a.cine-pill {
      behind the opaque hero and do nothing at the boundary. Fixed + smooth
      = scroll-stable (only sharp scrolling-matched slabs can hold at one
      offset; smooth fixed ramps hold everywhere). A mild top shade keeps
-     the nav zone legible. Identical stops both pages. */
+     the nav zone legible. Mid-band stays light so no dark slab reads
+     behind the rails — rails carry no background of their own. */
   background:
     linear-gradient(0deg,
       rgba(5, 5, 5, 0.92) 0%,
-      rgba(5, 5, 5, 0.75) 12%,
-      rgba(5, 5, 5, 0.4) 28%,
-      transparent 48%),
+      rgba(5, 5, 5, 0.72) 12%,
+      rgba(5, 5, 5, 0.32) 26%,
+      transparent 44%),
     linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
 }
 
@@ -1298,6 +1328,18 @@ a.cine-pill {
   transform: scale(1.04);
 }
 
+/* Rails sit on near-black ambient: poster drop shadows merge into a muddy
+   slab under the row (very visible in Safari). Kill shadow + border here —
+   artwork edge + radius carry separation. Grids keep theirs. */
+.cine-rail .cine-card-poster {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.cine-rail .cine-card:hover .cine-card-poster {
+  border-color: var(--cine-glass-border-hover);
+}
+
 .cine-card-title {
   font-size: 0.875rem;
   font-weight: var(--cine-font-semibold);
@@ -1315,9 +1357,10 @@ a.cine-pill {
 /* ─── Horizontal Scroll Rail ────────────────────────────────────────────── */
 .cine-rail {
   display: flex;
-  gap: 1rem;
+  gap: 1.25rem;
   overflow-x: auto;
   padding-bottom: 0.5rem;
+  background: transparent;
   /* NOTE: no content-visibility here on purpose. It lets the browser skip
      rendering rail contents, and when it misfires the header renders with
      zero cards (the infamous empty Coming Soon). Rails are one short row
@@ -1365,9 +1408,13 @@ a.cine-pill {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0.5rem;
+  /* Always visible (touch has no hover): 35% dim at the base per HIG,
+     so the mini-play reads over bright artwork. */
+  opacity: 1;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.35));
   transition: opacity 0.2s ease;
 }
 
@@ -1584,7 +1631,6 @@ body.mz-refract .cine-control-btn,
 body.mz-refract .cine-icon-btn,
 body.mz-refract .cine-btn-circle,
 body.mz-refract .cine-duo-btn,
-body.mz-refract .cine-select,
 body.mz-refract .cine-input,
 body.mz-refract .cine-cw-play-btn,
 body.mz-refract .cine-soon-play,
@@ -1651,7 +1697,12 @@ body.mz-refract .cine-chip--glass {
   border-color: rgba(149, 255, 80, 0.28);
 }
 
-/* ─── Select / Dropdown ────────────────────────────────────────────────── */
+/* ─── Select / Dropdown ──────────────────────────────────────────────────
+   Pill metrics (same as .cine-pill): these sit next to pills everywhere
+   (FilterBar, "Movies on" rail), so one scale, no shouting.
+   Opaque by design (mat-row precedent): a 36px control over chaotic
+   artwork can't afford translucency — glass tinted brown/grey here and
+   read as dirty. Solid fill, no backdrop work, no refraction. */
 .cine-select {
   appearance: none;
   -webkit-appearance: none;
@@ -1662,43 +1713,36 @@ body.mz-refract .cine-chip--glass {
   min-width: 10rem;
   max-width: 10rem;
   text-overflow: ellipsis;
-  height: 2.35rem;
-  padding: 0 2.25rem 0 1.1rem;
+  height: 2.25rem;
+  padding: 0 2.25rem 0 1rem;
   border-radius: var(--cine-radius-full);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  background-color: #101016;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.82);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: var(--cine-font-semibold);
   letter-spacing: 0.01em;
   outline: none;
   cursor: pointer;
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  transition: all var(--cine-duration-base) var(--cine-ease-out);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
-    linear-gradient(rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-  background-repeat: no-repeat, no-repeat;
-  background-position: right 0.9rem center, 0 0;
-  background-size: 12px, auto;
+  transition: border-color var(--cine-duration-base) var(--cine-ease-out),
+    background-color var(--cine-duration-base) var(--cine-ease-out);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .cine-select:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.24);
+  background-color: #17171d;
 }
 
 .cine-select:focus {
-  border-color: var(--cine-glass-border-hover);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .cine-select option {

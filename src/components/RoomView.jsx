@@ -362,6 +362,28 @@ export default function RoomView({ code, onLeave, onToast }) {
             );
           }
         } else if (type === 'seek' || type === 'play') {
+          // P0-1 manual-sync only: embeds reload on every remount, so live
+          // seeks never auto-move. Only resume-from-pause (followers are
+          // parked) or an explicit host Sync-all (payload.force) remounts.
+          // Everything else is display-only: host clock + "tap Sync" note.
+          // YouTube has a real seek API (no reload) so it keeps auto-follow.
+          if (!yt) {
+            const isResume = Boolean(pausedByRef.current);
+            const isForced = payload.force === true;
+            if (!isResume && !isForced) {
+              const s = Math.floor(payload.second || 0);
+              setHostPos((prev) =>
+                prev && Math.abs(prev.second - s) < 2
+                  ? prev
+                  : { second: s, at: payload.at || Date.now(), season: payload.season, episode: payload.episode }
+              );
+              const mine = myPos.current.second || 0;
+              const behind = Math.floor(s - mine);
+              if (s > 5 && behind > 15) setSyncNote(`Host +${behind}s — tap Sync`);
+              return;
+            }
+            // Resume / forced Sync-all: fall through to remount below.
+          }
           setPausedBy(null);
           setPausedByDevice(null);
           pausedByDeviceRef.current = null;
@@ -477,8 +499,11 @@ export default function RoomView({ code, onLeave, onToast }) {
       pos.episode !== last.episode;
     if (!jumped) return;
     lastSeekSent.current = { at: Date.now(), second: pos.second, season: pos.season, episode: pos.episode };
-    // I just followed someone — sync silently, never echo.
+    // I just followed someone — sync silently, never echo. Grace covers
+    // my own manual Sync (4s), applied covers a just-applied remote move
+    // (6s convergence window) so a reload can't chase its own tail.
     if (Date.now() - followGraceRef.current < 4000) return;
+    if (Date.now() - followAppliedRef.current < 6000) return;
     clearPauseRetries();
     channelRef.current?.send('seek', {
       device,
@@ -892,7 +917,7 @@ export default function RoomView({ code, onLeave, onToast }) {
   const broadcastPlay = async () => {
     const second = Math.floor(myPos.current.second || 0);
     channelRef.current?.send('play', {
-      device, name: name, second, at: Date.now(),
+      device, name: name, second, at: Date.now(), force: true,
     });
     setPausedBy(null);
     setPausedByDevice(null);
@@ -900,9 +925,11 @@ export default function RoomView({ code, onLeave, onToast }) {
     // Resume remounts suspended followers at the frozen second — and resets
     // my clock so no phantom "seek" fires on the way back up. (My own frame
     // was never unmounted: the pauser keeps their player, so no reload and
-    // no blank time on my side.)
+    // no blank time on my side — embeds skip self roomTarget entirely.)
     const isYt = room?.media?.kind === 'youtube';
-    setRoomTarget({ key: `me:${Date.now()}`, action: isYt ? 'play' : undefined, second });
+    if (isYt) {
+      setRoomTarget({ key: `me:${Date.now()}`, action: 'play', second });
+    }
     followGraceRef.current = Date.now();
     followAppliedRef.current = Date.now();
     frozenPosRef.current = null;
@@ -1108,22 +1135,12 @@ export default function RoomView({ code, onLeave, onToast }) {
               <RefreshCw className="w-3.5 h-3.5" /> Sync all
             </button>
           )}
-          {/* Manual pause: the deterministic fallback on EVERY server,
-              including YouTube. In-player pause events auto-lock
-              event-capable servers, but providers are best-effort (some
-              never emit pause) — so the host always keeps this button.
-              Pausing inside the video and tapping here do the same thing;
-              double events are idempotent. */}
-          {isHost && !pausedBy && (
-            <button onClick={broadcastPause} className="cine-control-btn h-9 px-4 text-xs" title="Pause for everyone">
-              <Pause className="w-3.5 h-3.5" /> Pause
-            </button>
-          )}
-          {isHost && pausedBy && (
-            <button onClick={broadcastPlay} className="cine-control-btn h-9 px-4 text-xs" title="Resume for everyone">
-              <Play className="w-3.5 h-3.5" /> Resume
-            </button>
-          )}
+          {/* Event-only pause: no manual Pause/Resume buttons by design.
+              Pausing inside the video (embed pause event / YouTube state)
+              locks the room via handleProviderPause; resuming in-player
+              re-opens via handleProviderPlay. Sync-all doubles as the
+              resume fallback if a provider never emits play. Status line
+              shows "Paused by X" + grey hold covers followers. */}
           {!canControl && (
             <button
               onClick={syncToHost}

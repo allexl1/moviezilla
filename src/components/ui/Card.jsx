@@ -16,7 +16,7 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
 
   const sizeClasses = {
     sm: 'w-32',
-    default: 'w-40 md:w-44',
+    default: 'w-44 md:w-52',
     lg: 'w-48 md:w-56',
     fluid: 'w-full',
   };

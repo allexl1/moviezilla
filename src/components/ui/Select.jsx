@@ -14,7 +14,13 @@ export default function Select({
     <div className="relative flex-shrink-0">
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          // Native selects keep focus after mouse/touch picks, leaving the
+          // focus ring stuck on (the "double ring"). Blur it away — keyboard
+          // users still get the ring while tabbed, it just doesn't linger.
+          e.target.blur();
+        }}
         aria-label={label}
         className={`cine-select ${className}`}
       >

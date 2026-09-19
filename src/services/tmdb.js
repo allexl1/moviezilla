@@ -384,6 +384,15 @@ export const tmdb = {
     });
   },
 
+  async getTopRatedTV({ page = 1 } = {}) {
+    return proxyFetch('discover/tv', {
+      page,
+      sort_by: 'vote_average.desc',
+      include_adult: 'false',
+      'vote_count.gte': 500,
+    });
+  },
+
   // Full provider catalog (id, name, logo, priority) for the icon wall.
   // Sorted by TMDB display priority so the big services come first.
   async getProviders() {

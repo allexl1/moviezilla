@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Play, Plus, Info, Star, CalendarDays, Clapperboard } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
-import { storage, progressLabel } from '../services/storage';
-import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL } from '../services/catalog';
+import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
+import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
 import RowRail from '../components/RowRail';
 import Select from '../components/ui/Select';
 import { SkelRail } from '../components/ui';
@@ -22,7 +22,7 @@ function readHome() {
 // rails. Owns all home data (trending, rails, providers, hero rotation).
 // Mounted only on the home tab; unmounts on detail/person/rooms/player,
 // so overlay guards reduce to the `overlaid` prop (search/settings/player).
-export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvider, onOpenTopRated, onOpenTab, overlaid, playerSignal }) {
+export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRated, onOpenTab, overlaid, playerSignal }) {
   const [items, setItems] = useState([]);
   const [featuredItem, setFeaturedItem] = useState(null);
   const [catalogError, setCatalogError] = useState('');
@@ -32,6 +32,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
   const [popularMovies, setPopularMovies] = useState([]);
   const [popularTV, setPopularTV] = useState([]);
   const [topRated, setTopRated] = useState([]);
+  const [topRatedTV, setTopRatedTV] = useState([]);
+  const [onAir, setOnAir] = useState([]);
+  const [classics, setClassics] = useState([]);
+  const [acclaimed, setAcclaimed] = useState([]);
   const [animeSpotlight, setAnimeSpotlight] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
   // Day-fresh trending pool for the hero (trending/week moves too slowly
@@ -39,11 +43,6 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
   const [trendingDay, setTrendingDay] = useState([]);
   const [homeProvider, setHomeProvider] = useState('8');
   const [providerMovies, setProviderMovies] = useState([]);
-  const [providers, setProviders] = useState([]);
-  // Provider wall restraint: 10 priority services + overflow toggle instead
-  // of a 17-icon wall with no hierarchy.
-  const [showAllProviders, setShowAllProviders] = useState(false);
-  const visibleProviders = showAllProviders ? providers : providers.slice(0, 10);
 
   const [continueWatching, setContinueWatching] = useState([]);
 
@@ -98,6 +97,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
       setPopularMovies(r.movies);
       setPopularTV(r.series);
       setTopRated(r.rated);
+      setTopRatedTV(r.ratedTV || []);
+      setOnAir(r.onAir || []);
+      setClassics(r.classics || []);
+      setAcclaimed(r.acclaimed || []);
       setAnimeSpotlight(r.anime);
       setNowPlaying(r.now);
       setTrendingDay(r.day);
@@ -107,10 +110,13 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
 
     async function loadRails() {
       try {
-        const [movies, series, rated, anime, now, dayM, dayT] = await Promise.all([
+        const [movies, series, rated, ratedTV, onAirRes, classicsRes, anime, now, dayM, dayT] = await Promise.all([
           tmdb.getPopularMovies(),
           tmdb.getPopularTV(),
           tmdb.getTopRatedMovies(),
+          tmdb.getTopRatedTV(),
+          tmdb.getOnTheAir(),
+          tmdb.getMovies({ year: '1990s', sort: 'vote_average.desc' }),
           tmdb.getAnime(),
           tmdb.getNowPlaying(),
           tmdb.getTrendingToday('movie'),
@@ -122,10 +128,26 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
         const clean = (res) =>
           (res?.results || []).filter((x) => !x.adult && x.poster_path && hasRating(x)).slice(0, 14);
 
+        const topMovies = clean(rated);
+        const topShows = clean(ratedTV).map((x) => ({ ...x, media_type: 'tv' }));
+        // Critically Acclaimed: best-rated movies + shows, capped per type
+        // so TV scores (which run higher) can't crowd movies out entirely.
+        // Honest award-correlate — a true Oscar shelf needs curated IDs
+        // (TMDB has no awards field) plus the detail-page awards fix.
+        const acclaimedList = [...topMovies.slice(0, 7).map((x) => ({ ...x, media_type: 'movie' })), ...topShows.slice(0, 7)]
+          .filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i)
+          .sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))
+          .slice(0, 14);
+
         const rails = {
           movies: clean(movies),
           series: clean(series),
-          rated: clean(rated),
+          rated: topMovies,
+          ratedTV: topShows,
+          // Airing rails are unrated by nature — no hasRating gate.
+          onAir: pickAiring(onAirRes?.results),
+          classics: clean(classicsRes),
+          acclaimed: acclaimedList,
           anime: clean(anime),
           now: clean(now),
           // Day pool: both endpoints merged, deduped — this is what puts a
@@ -138,6 +160,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
         setPopularMovies(rails.movies);
         setPopularTV(rails.series);
         setTopRated(rails.rated);
+        setTopRatedTV(rails.ratedTV);
+        setOnAir(rails.onAir);
+        setClassics(rails.classics);
+        setAcclaimed(rails.acclaimed);
         setAnimeSpotlight(rails.anime);
         setNowPlaying(rails.now);
         setTrendingDay(rails.day);
@@ -155,30 +181,6 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
     return () => {
       isMounted = false;
       clearInterval(refresh);
-    };
-  }, []);
-
-  // Full provider catalog for the icon wall (sorted by TMDB priority).
-  useEffect(() => {
-    let isMounted = true;
-    const hit = readHome();
-    if (hit?.providers) {
-      setProviders(hit.providers);
-      return () => {
-        isMounted = false;
-      };
-    }
-    tmdb
-      .getProviders()
-      .then((list) => {
-        if (!isMounted) return;
-        const slim = list.slice(0, 24);
-        setProviders(slim);
-        saveHome({ providers: slim });
-      })
-      .catch((err) => console.error('Failed to load providers:', err));
-    return () => {
-      isMounted = false;
     };
   }, []);
 
@@ -226,6 +228,14 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
 
   const heroItem = heroItems[heroIndex] || featuredItem || items[0] || null;
   const heroMediaType = heroItem ? resolveMediaType(heroItem) : 'movie';
+
+  // Hero resume: one dominant Play language. If this title has a real
+  // position (30s+, not watched), the CTA reads "Resume • 12:34" —
+  // same recipe, same size, just honest about where Play lands.
+  const heroSaved = heroItem?.id ? storage.getProgress(heroMediaType, heroItem.id) : null;
+  const heroResumeSec = heroSaved && (heroSaved.percent || 0) < WATCHED_PCT && (heroSaved.currentTime || 0) >= 30
+    ? Math.floor(heroSaved.currentTime)
+    : 0;
 
   // Rotate spotlight; pause while an overlay covers Home.
   useEffect(() => {
@@ -343,10 +353,11 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
             <div className="cine-actions">
               <button
                 onClick={() => onPlay(heroItem, heroItem)}
-                className="cine-btn cine-btn-primary cine-btn-shimmer cine-cta"
+                className="cine-btn cine-btn-white cine-cta"
+                aria-label={heroResumeSec > 0 ? `Resume from ${formatClock(heroResumeSec)}` : 'Play'}
               >
                 <Play className="w-[18px] h-[18px]" fill="currentColor" />
-                <span>Play</span>
+                <span>{heroResumeSec > 0 ? `Resume • ${formatClock(heroResumeSec)}` : 'Play'}</span>
               </button>
 
               <div className="cine-duo-btn">
@@ -476,55 +487,6 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
           </section>
         )}
 
-        {providers.length > 0 && (
-          <section className="space-y-3">
-            <div className="cine-section-head">
-              <h2 className="cine-section-title">Where to Watch</h2>
-            </div>
-
-            <div className="flex gap-4 overflow-x-auto no-scrollbar py-1">
-              {visibleProviders.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => onOpenProvider(p.id)}
-                  className="cine-provider-tile flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
-                  title={p.name}
-                  aria-label={`Browse ${p.name} movies`}
-                >
-                  <span className="cine-provider-icon">
-                    <img
-                      src={tmdb.getImageUrl(p.logo, 'w185')}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover"
-                    />
-                  </span>
-                  <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition max-w-20 truncate">
-                    {p.name}
-                  </span>
-                </button>
-              ))}
-              {providers.length > 10 && (
-                <button
-                  onClick={() => setShowAllProviders((v) => !v)}
-                  aria-expanded={showAllProviders}
-                  className="cine-provider-tile flex flex-col items-center gap-2 flex-shrink-0 cursor-pointer group"
-                  title={showAllProviders ? 'Show fewer providers' : `Show all ${providers.length} providers`}
-                  aria-label={showAllProviders ? 'Show fewer providers' : `Show all ${providers.length} providers`}
-                >
-                  <span className="cine-provider-icon cine-provider-more">
-                    {showAllProviders ? '−' : `+${providers.length - 10}`}
-                  </span>
-                  <span className="text-[11px] font-medium text-white/60 group-hover:text-white/80 transition max-w-20 truncate">
-                    {showAllProviders ? 'Less' : 'All'}
-                  </span>
-                </button>
-              )}
-            </div>
-          </section>
-        )}
-
         <section>
           {catalogError && (
             <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
@@ -546,6 +508,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
             ) : (
               <RowRail title="Trending Now" items={items.filter(hasRating)} onSelect={onSelectMedia} />
             )}
+            <RowRail title="Trending Today" items={trendingDay} onSelect={onSelectMedia} />
             <RowRail
               title="Now Playing in Theaters"
               items={nowPlaying}
@@ -568,6 +531,12 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
               action={{ label: 'View All', onClick: () => onOpenTab('tv') }}
             />
             <RowRail
+              title="On The Air"
+              items={onAir}
+              onSelect={onSelectMedia}
+              mediaType="tv"
+            />
+            <RowRail
               title="Top Rated Movies"
               items={topRated}
               onSelect={onSelectMedia}
@@ -576,6 +545,24 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenProvide
                 label: 'View All',
                 onClick: () => onOpenTopRated(),
               }}
+            />
+            <RowRail
+              title="Top Rated Shows"
+              items={topRatedTV}
+              onSelect={onSelectMedia}
+              mediaType="tv"
+              action={{ label: 'View All', onClick: () => onOpenTab('tv') }}
+            />
+            <RowRail
+              title="Critically Acclaimed"
+              items={acclaimed}
+              onSelect={onSelectMedia}
+            />
+            <RowRail
+              title="90s Classics"
+              items={classics}
+              onSelect={onSelectMedia}
+              mediaType="movie"
             />
             <RowRail
               titleNode={

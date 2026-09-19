@@ -22,25 +22,24 @@ const TRUSTED_PLAYER_ORIGINS = [
 ];
 
 // Late sandbox (popup guard): applied to OUR iframe element only after
-// the provider has booted — never upfront. Verified by experiment
-// (headless Chromium, both providers, Sep 2026):
+// the provider has booted AND enough time passed — never upfront and never
+// on timer alone. History:
 //  - sandbox UPFRONT: Vidy shows "Iframe Sandbox Detected", VidLink shows
 //    "Please Disable Sandbox" — both refuse to play. Dead end.
-//  - sandbox added 2s/4s/6s/8s/10s/12s AFTER load: zero detection trips
-//    on either provider, Vidy keeps playing AND keeps emitting timeupdates
-//    (clock advancing), VidLink telemetry advancing too. Detection is
-//    init-time only.
-// Arming rides the iframe's own load event +2.5s (early enough to beat
-// first-click popunders, late enough to clear init detection) with first
-// playback telemetry as an even earlier trigger. Enforcement is identical
-// either way (VidLink console: "Blocked opening 'about:blank' ...
-// 'allow-popups' permission is not set"). No allow-popups,
-// no allow-top-navigation — popups and page hijacks die in the frame.
+//  - timer-only +2.5s + immediate telemetry arm: worked for a while, then
+//    regressed on VidLink and tripped Vidy 1/1000 on slow boots (arming
+//    landed inside init detection).
+// P0-2-A: gate on BOTH — elapsed >=4s since frame load AND boot proof
+// (provider telemetry OR chrome interaction post-load). Telemetry alone no
+// longer arms early; chrome taps (Episodes/Server/Fullscreen/Reload/chat)
+// retry the arm. Neither Vidy nor VidLink is assumed ad-free anymore.
+// No allow-popups, no allow-top-navigation — when armed, popups and page
+// hijacks die in the frame (VidLink console: "Blocked opening
+// 'about:blank' ... 'allow-popups' permission is not set").
 // Providers outside vidy.st / vidlink.pro are never armed (unverified).
-// If a provider ever starts re-checking mid-session, playback could break
-// — that risk is why arming stays limited to the two verified hosts.
 const SBX_TOKENS = 'allow-scripts allow-same-origin allow-forms allow-presentation';
-const SBX_ARM_MS = 2500;
+const SBX_MIN_MS = 4000;
+const SBX_FALLBACK_MS = 6000;
 
 function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
   const t = Math.max(0, Math.floor(resumeTime || 0));
@@ -130,6 +129,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // Pending arm timer: restarted on every frame load so arming always
   // lands after the LATEST load (rapid rebuilds can't arm early).
   const sandboxTimer = useRef(null);
+  // P0-2-A gating: when this frame loaded + whether chrome was touched
+  // since (Episodes/Server/Fullscreen/Reload/chat). Arming requires elapsed
+  // >= SBX_MIN_MS AND (telemetry seen OR chrome touched) — timer alone
+  // never arms, telemetry alone never arms early.
+  const frameLoadAt = useRef(0);
+  const chromeTouched = useRef(false);
   // Room auto-pause callbacks (stable mirrors — props change identity).
   const onProviderPauseRef = useRef(null);
   const onProviderPlayRef = useRef(null);
@@ -262,6 +267,13 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   );
 
   const rebuildEmbed = (srv, season, episode, resumeTime) => {
+    // New frame identity: boot proof must come from the NEW frame.
+    // Reset clock + touch + telemetry here (not just onLoad) so a stale
+    // pmSeen/touch from the old frame can never arm the new one early
+    // and trip init detection. onFrameLoad refreshes the clock on actual load.
+    frameLoadAt.current = Date.now();
+    chromeTouched.current = false;
+    pmSeenRef.current = false;
     setEmbedUrl(
       buildEmbedUrl({
         server: srv,
@@ -283,7 +295,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     wallBaseRef.current = t;
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
-    pmSeenRef.current = t > 0;
+    // Saved seconds are resume position, not boot proof (see rebuildEmbed).
+    pmSeenRef.current = false;
     pausedProvRef.current = false;
     rearmConvergence();
     rebuildEmbed(server, currentSeason, currentEpisode, t);
@@ -331,10 +344,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // `suspended` is a real dep (not key-only): toggling it re-runs the
   // effect, and the guard decides.
   //
-  // Late-sandbox arming lives here (after embedUrl exists — TDZ): the
-  // iframe's own load event + SBX_ARM_MS, plus first telemetry as the
-  // fast path. Refs + timeouts only, no state (arming never re-renders).
-  const armSandbox = () => {
+  // Late-sandbox arming lives here (after embedUrl exists — TDZ).
+  // P0-2-A: tryArmSandbox gates on elapsed + boot proof. Timer alone never
+  // arms, telemetry alone never arms early. Refs + timeouts only, no state.
+  const tryArmSandbox = () => {
     const el = frameRef.current;
     if (!el) return;
     // Read back the CURRENT src (never a stale closure): rebuilds swap
@@ -342,6 +355,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     const url = el.getAttribute('src') || '';
     if (!url || sandboxArmed.current === url) return;
     if (!url.includes('vidy.st') && !url.includes('vidlink.pro')) return;
+    const elapsed = Date.now() - (frameLoadAt.current || 0);
+    if (elapsed < SBX_MIN_MS) {
+      if (sandboxTimer.current) clearTimeout(sandboxTimer.current);
+      sandboxTimer.current = setTimeout(() => tryArmSandbox(), SBX_MIN_MS - elapsed + 500);
+      return;
+    }
+    // Boot proof required: provider spoke OR user touched chrome post-load.
+    // Without it the provider likely hasn't cleared init detection — wait;
+    // telemetry / interaction handlers will retry.
+    if (!pmSeenRef.current && !chromeTouched.current) return;
     try {
       el.setAttribute('sandbox', SBX_TOKENS);
       sandboxArmed.current = url;
@@ -349,13 +372,21 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       // DOM unavailable — unarmed, playback unaffected.
     }
   };
+  // Back-compat alias: telemetry path calls armSandbox().
+  const armSandbox = () => tryArmSandbox();
+  const markChromeTouched = () => {
+    chromeTouched.current = true;
+    tryArmSandbox();
+  };
   const onFrameLoad = () => {
     // Fresh element (first mount or rebuild): previous arming belongs to
-    // the old frame. Restart the clock — arming always lands >=2.5s
-    // after the LATEST load, past init-time detection (see SBX_TOKENS).
+    // the old frame. Restart the clock — arming lands >=4s after the LATEST
+    // load AND after boot proof, past init-time detection.
     sandboxArmed.current = null;
+    frameLoadAt.current = Date.now();
+    chromeTouched.current = false;
     if (sandboxTimer.current) clearTimeout(sandboxTimer.current);
-    sandboxTimer.current = setTimeout(() => armSandbox(), SBX_ARM_MS);
+    sandboxTimer.current = setTimeout(() => tryArmSandbox(), SBX_FALLBACK_MS);
   };
   useEffect(() => {
     if (!roomTarget || roomTarget.key == null) return;
@@ -592,8 +623,8 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
             pmSeenRef.current = true;
             lastPmRef.current = { time: t, at: Date.now() };
-            // First real playback evidence: the provider has booted past
-            // init-time sandbox detection — arm the popup guard now.
+            // Boot proof for the popup guard: telemetry marks pmSeen, then
+            // tryArm gates on elapsed>=4s (never arms early on slow boots).
             armSandbox();
             if (stalledRef.current) {
               stalledRef.current = false;
@@ -661,8 +692,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     const epSaved = storage.getEpisodeProgress('tv', mediaId, seasonNum, episodeNum, server);
     const epStart = epSaved?.currentTime || 0;
     playbackRef.current = { currentTime: epStart, duration: epSaved?.duration || 0 };
-    if (epStart > 0) pmSeenRef.current = true;
-    else pmSeenRef.current = false;
+    // Boot proof comes only from the NEW frame's telemetry (rebuildEmbed
+    // resets pmSeen) — a saved resume second is not proof of boot.
+    pmSeenRef.current = false;
     wallBaseRef.current = epStart;
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
@@ -732,6 +764,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           {isTv && !roomLocked && (
             <button
               onClick={() => {
+                markChromeTouched();
                 setIsEpisodeOpen(!isEpisodeOpen);
                 setServerSignal((s) => s + 1);
               }}
@@ -749,12 +782,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             onSelectServer={handleServerChange}
             closeSignal={serverSignal}
             onOpenChange={(open) => {
-              if (open) setIsEpisodeOpen(false);
+              if (open) {
+                markChromeTouched();
+                setIsEpisodeOpen(false);
+              }
             }}
           />
 
           <button
             onClick={() => {
+              markChromeTouched();
               if (!document.fullscreenElement) {
                 enterFs();
               } else {
@@ -782,7 +819,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               jump to fullscreen, where only this element is shown. */}
           {chat && (
             <button
-              onClick={chat.onToggle}
+              onClick={() => {
+                markChromeTouched();
+                chat.onToggle();
+              }}
               className="cine-icon-btn relative"
               title="Room chat"
               aria-label="Toggle room chat"
