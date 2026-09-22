@@ -201,7 +201,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                           setHistory(storage.getSearchHistory());
                         }}
                         className="cine-icon-btn cine-icon-btn--xs ml-1"
-                        title={`Remove "${term}"`}
+                        
                         aria-label={`Remove "${term}" from search history`}
                       >
                         <X className="w-3 h-3" />

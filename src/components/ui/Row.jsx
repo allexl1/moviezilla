@@ -16,6 +16,11 @@ export default function Row({
   thumbClassName = 'w-12 h-16',
   titleClassName = 'text-xs md:text-sm font-semibold text-white/90 truncate',
   wash = null,
+  // Resume affordances (Watchlist history): progress 0-100 paints the
+  // accent bar along the row base; overlay (e.g. mini play) sits on the
+  // thumb. Both optional — search/menu rows pass neither.
+  progress = null,
+  overlay = null,
 }) {
   return (
     <div
@@ -35,7 +40,7 @@ export default function Row({
           }}
         />
       )}
-      <div className={`${thumbClassName} rounded-xl overflow-hidden bg-black/50 flex-shrink-0`}>
+      <div className={`${thumbClassName} rounded-xl overflow-hidden bg-black/50 flex-shrink-0 relative`}>
         <img
           src={poster}
           alt={title}
@@ -46,12 +51,22 @@ export default function Row({
             e.target.src = FALLBACK_POSTER;
           }}
         />
+        {overlay && (
+          <span className="absolute right-1.5 bottom-1.5" aria-hidden="true">
+            {overlay}
+          </span>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <h4 className={titleClassName}>{title}</h4>
         {meta && <p className="text-[11px] text-white/60 mt-0.5 truncate">{meta}</p>}
       </div>
       {right && <div className="flex-shrink-0">{right}</div>}
+      {progress != null && (
+        <span className="cine-row-progress" aria-hidden="true">
+          <span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+        </span>
+      )}
     </div>
   );
 }

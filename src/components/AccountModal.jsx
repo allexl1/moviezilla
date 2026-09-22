@@ -207,7 +207,7 @@ function AccountBody() {
       <div className="space-y-5">
         {/* Brand + headline: centered auth-card convention */}
         <div className="flex flex-col items-center text-center space-y-2.5 pt-1">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-2xl flex items-center justify-center text-white font-black text-xl shadow-2xl">
+          <div className="cine-logo-tile" aria-hidden="true">
             MZ
           </div>
           <h3 className="text-xl font-extrabold text-white tracking-tight">
@@ -250,7 +250,7 @@ function AccountBody() {
             <button
               onClick={() => send(false)}
               disabled={busy}
-              className="cine-btn cine-btn-primary cine-btn-shimmer h-12 px-6 text-[15px] w-full disabled:opacity-50"
+              className="cine-btn cine-btn-white h-12 px-6 text-[15px] w-full disabled:opacity-50"
             >
               {busy ? 'Sending…' : signup ? 'Create account' : 'Log in'}
             </button>
@@ -270,7 +270,7 @@ function AccountBody() {
             <button
               onClick={verify}
               disabled={busy}
-              className="cine-btn cine-btn-primary cine-btn-shimmer h-12 px-6 text-[15px] w-full disabled:opacity-50"
+              className="cine-btn cine-btn-white h-12 px-6 text-[15px] w-full disabled:opacity-50"
             >
               {busy ? 'Verifying…' : signup ? 'Create account' : 'Log in'}
             </button>
@@ -347,7 +347,7 @@ function AccountBody() {
             }
           }}
           className="cine-pill cine-pill--sm flex-shrink-0"
-          title="Pull, converge and push now"
+          aria-label="Pull, converge and push now"
         >
           <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? 'Syncing…' : 'Sync now'}
@@ -377,13 +377,13 @@ export default function AccountModal({ isOpen, onClose }) {
             <h2 className="text-xl font-bold text-white tracking-tight">Account</h2>
             <p className="text-xs text-white/45 mt-0.5">Library sync across devices</p>
           </div>
-          <button onClick={onClose} className="cine-icon-btn" title="Close" aria-label="Close account">
+          <button onClick={onClose} className="cine-icon-btn"  aria-label="Close account">
             <X className="w-4 h-4" />
           </button>
         </div>
       ) : (
         <div className="flex justify-end">
-          <button onClick={onClose} className="cine-icon-btn" title="Close" aria-label="Close account">
+          <button onClick={onClose} className="cine-icon-btn"  aria-label="Close account">
             <X className="w-4 h-4" />
           </button>
         </div>

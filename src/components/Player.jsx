@@ -334,6 +334,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       season: currentSeason,
       episode: currentEpisode,
       server,
+      // Real provider telemetry (not the wall estimate): the room trusts
+      // this — and only this — as "someone is really watching".
+      live: pmSeenRef.current === true,
     });
   };
 
@@ -736,11 +739,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           Solid gradient (not translucent) so Back/Episodes stay readable
           over bright video frames. */}
       <div className={`absolute top-0 inset-x-0 z-30 flex flex-col items-start gap-3 p-5 md:px-10 pb-16 bg-gradient-to-b from-black via-black/70 to-transparent transition-opacity duration-300 pointer-events-none ${showChrome ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Room-framed mode hides Back + title: the room header above owns
+            both (back, title, watch status) — showing them twice, stacked,
+            was the duplicate. Controls row below stays. */}
+        {!framed && (
         <div className={`flex items-center gap-3 ${showChrome ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <button
             onClick={onClose}
             className="cine-icon-btn"
-            title="Exit (Esc)"
+
             aria-label="Exit player"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -756,6 +763,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             )}
           </div>
         </div>
+        )}
 
         {/* Controls row: Episodes, Server Switcher, Fullscreen. The row is
             the positioning context for the episode popover, so it opens
@@ -799,7 +807,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               }
             }}
             className="cine-icon-btn"
-            title="Fullscreen (F)"
+            
             aria-label="Toggle fullscreen"
           >
             <Maximize className="w-4 h-4" />
@@ -808,7 +816,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           <button
             onClick={() => reloadStream(false)}
             className="cine-icon-btn"
-            title="Reload stream at the current position"
+            
             aria-label="Reload stream"
           >
             <RotateCcw className="w-4 h-4" />
@@ -824,7 +832,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
                 chat.onToggle();
               }}
               className="cine-icon-btn relative"
-              title="Room chat"
+              
               aria-label="Toggle room chat"
             >
               <MessageCircle className="w-4 h-4" />
@@ -899,7 +907,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             ref={frameRef}
             onLoad={onFrameLoad}
             src={embedUrl}
-            title={title}
+            
             className="w-full h-full border-0"
             // NOTE: no sandbox attribute — verified 2026-09-14 in headless
             // Chromium that Vidy and VidLink refuse sandboxed frames
@@ -930,11 +938,11 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         <div className="absolute bottom-6 inset-x-0 z-30 flex flex-col items-center gap-2 pointer-events-none px-4">
           <div className="pointer-events-auto flex items-center gap-2 pl-4 pr-2 py-1.5 cine-glass-panel rounded-2xl">
             <span className="text-xs font-semibold text-white/80">Stream stuck?</span>
-            <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" title="Reload at last position">
+            <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" aria-label="Reload at last position">
               <RotateCcw className="w-3 h-3" />
               Reload
             </button>
-            <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" title="Restart from the beginning">
+            <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" aria-label="Restart from the beginning">
               From start
             </button>
           </div>

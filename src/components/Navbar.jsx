@@ -1,6 +1,74 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Search, Settings, House, Clapperboard, Tv, Bookmark, Users, User } from 'lucide-react';
 import { useAccount } from '../services/account';
+
+// Sliding active thumb (segmented-control language): the white pill glides
+// between tabs via measured FLIP instead of blinking. Buttons keep their
+// layout; the thumb is an absolutely-positioned span behind the active one.
+// Skipped under max-power / reduced motion via CSS (transition:none).
+function TabGroup({ tabs, activeTab, onTabChange, showIcons }) {
+  const boxRef = useRef(null);
+  const [thumb, setThumb] = useState(null);
+  useEffect(() => {
+    const measure = () => {
+      const box = boxRef.current;
+      if (!box) return;
+      const btn = box.querySelector(`[data-ntab="${activeTab}"]`);
+      if (!btn) return;
+      setThumb((prev) => {
+        const next = { x: btn.offsetLeft, w: btn.offsetWidth };
+        if (prev && prev.x === next.x && prev.w === next.w) return prev;
+        return next;
+      });
+      // Dock strip scrolls on small screens: keep the active tab in view.
+      // No-op when everything fits (desktop pill).
+      try {
+        btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      } catch {
+        // ignore
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    let dead = false;
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!dead) measure();
+      }).catch(() => {});
+    }
+    return () => {
+      dead = true;
+      window.removeEventListener('resize', measure);
+    };
+  }, [activeTab, tabs.length]);
+  return (
+    <span ref={boxRef} className="cine-nav-tabs">
+      {thumb && (
+        <span
+          className="cine-nav-thumb"
+          aria-hidden="true"
+          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w }}
+        />
+      )}
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            data-ntab={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            aria-current={isActive || undefined}
+            className={`cine-nav-btn ${isActive ? 'is-active' : ''}`}
+          >
+            {isActive && showIcons && <Icon className="w-4 h-4" strokeWidth={2.4} />}
+            {tab.label}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
 
 export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, onOpenSettings, onOpenAccount }) {
   const tabs = [
@@ -41,15 +109,15 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             <button
               onClick={onBack}
               className="cine-icon-btn"
-              title="Back"
+              
               aria-label="Back"
             >
               <ArrowLeft className="w-5 h-5" strokeWidth={2.4} />
             </button>
           )}
 
-          <div onClick={() => onTabChange('home')} className="cursor-pointer select-none">
-            <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-2xl flex items-center justify-center text-white font-black text-xl shadow-2xl">
+          <div onClick={() => onTabChange('home')} className="cursor-pointer">
+            <div className="cine-logo-tile">
               MZ
             </div>
           </div>
@@ -59,27 +127,14 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             visibility lives in CSS: unlayered .cine-nav-pill-box display
             would beat a Tailwind `hidden` utility) */}
         <div className={`cine-nav-pill-box pointer-events-auto ${scrolled ? 'is-scrolled' : ''}`}>
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={`cine-nav-btn ${isActive ? 'is-active' : ''}`}
-              >
-                {isActive && <Icon className="w-4 h-4" strokeWidth={2.4} />}
-                {tab.label}
-              </button>
-            );
-          })}
+          <TabGroup tabs={tabs} activeTab={activeTab} onTabChange={onTabChange} showIcons />
 
           <span className="w-px self-stretch my-2 bg-white/10 mx-1" />
 
           <button
             onClick={() => onTabChange('search')}
             className="cine-nav-icon-btn"
-            title="Search"
+            
             aria-label="Search"
           >
             <Search className="w-4 h-4" strokeWidth={2.2} />
@@ -88,7 +143,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
           <button
             onClick={onOpenSettings}
             className="cine-nav-icon-btn"
-            title="Settings"
+            
             aria-label="Settings"
           >
             <Settings className="w-4 h-4" strokeWidth={2} />
@@ -98,7 +153,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             <button
               onClick={onOpenAccount}
               className="cine-nav-icon-btn"
-              title="Account"
+              
               aria-label="Account"
             >
               <span
@@ -115,7 +170,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
             <button
               onClick={onOpenAccount}
               className="cine-nav-icon-btn"
-              title="Sign in"
+              
               aria-label="Sign in"
             >
               <User className="w-4 h-4" strokeWidth={2.2} />
@@ -127,18 +182,7 @@ export default function Navbar({ activeTab, onTabChange, onBack, isDetailView, o
       {/* Mobile Bottom Dock */}
       <nav className="md:hidden fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none" aria-label="Primary">
         <div className={`pointer-events-auto flex items-center gap-0.5 p-1.5 rounded-full cine-nav-pill-box shadow-2xl ${scrolled ? 'is-scrolled' : ''}`}>
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={`cine-nav-btn ${isActive ? 'is-active' : ''}`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          <TabGroup tabs={tabs} activeTab={activeTab} onTabChange={onTabChange} showIcons={false} />
           <button
             onClick={() => onTabChange('search')}
             className="cine-nav-btn"

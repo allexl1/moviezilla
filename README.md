@@ -26,6 +26,7 @@ Secrets live in `.env.local` (gitignored) and Vercel project env. Client only ta
 | `TMDB_API_KEY` | `.env.local` + Vercel | TMDB proxy (`api/tmdb.js`) |
 | `KLIPY_API_KEY` | `.env.local` + Vercel | GIF picker (`api/gif.js`, Klipy) |
 | `RAPIDAPI_KEY` | optional | Paid Rotten Tomatoes backend (`api/rt.js`); without it the free fallback is used, misses return 404 |
+| `OMDB_API_KEY` | `.env.local` + Vercel | Primary Rotten Tomatoes backend (`api/rt.js`, free 1000 req/day) — exact IMDb-ID match |
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `.env.local` + Vercel | Rooms + chat (`src/services/supabase.js`) |
 
 ## Notes

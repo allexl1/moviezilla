@@ -60,7 +60,9 @@ export function parseLocation(loc = window.location) {
     m = path.match(MEDIA_RE);
     if (m) {
       return {
-        ...empty('home'),
+        // Tab follows the title type (navbar lights up Movies/Shows even
+        // on reload or a shared link — same as in-app selectMedia).
+        ...empty(m[1] === 'tv' ? 'tv' : 'movie'),
         media: { id: Number(m[2]), media_type: m[1] },
         play: q.get('play') === '1',
       };

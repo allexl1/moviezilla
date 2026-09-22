@@ -1,5 +1,6 @@
 import { Shuffle } from 'lucide-react';
-import Select from './ui/Select';
+import Picker from './Picker';
+import ProviderPicker from './ProviderPicker';
 import { COUNTRIES, LANGUAGES } from '../services/tmdb';
 
 // Full year range (TMDB has no year-list endpoint, so generate it):
@@ -52,73 +53,81 @@ export default function FilterBar({
 }) {
   return (
     <div className="w-full flex flex-col gap-3 py-1">
-      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar px-1 py-1 lg:justify-end">
+      {/* Headroom above the row lives inside the scroller (pt-8/-mt-8 net
+          zero) so hover tooltips never clip against the overflow edge. */}
+      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar px-1 pt-8 -mt-8 pb-1 lg:justify-end">
         {onRandom && (
-          <button
-            onClick={onRandom}
-            className="cine-icon-btn flex-shrink-0"
-            title="Surprise me"
-            aria-label="Random title"
-          >
-            <Shuffle className="w-4 h-4" />
-          </button>
+          <span className="relative inline-flex flex-shrink-0">
+            <button
+              onClick={onRandom}
+              className="cine-icon-btn"
+              aria-label="Random pick"
+            >
+              <Shuffle className="w-4 h-4" />
+            </button>
+            <span className="cine-tip" aria-hidden="true">Random pick</span>
+          </span>
         )}
         {extra && <div className="flex-shrink-0">{extra}</div>}
 
-        <Select
+        <Picker
           value={selectedGenre}
           onChange={onSelectGenre}
-          label="Genre"
-          className="cine-select--genre"
+          ariaLabel="Genre"
+          menuLabel="Genres"
+          placeholder="Genre"
           options={(genres.length ? genres : [{ id: '', name: 'All Genres' }]).map((g) => ({
             value: g.id,
             label: g.name === 'All Genres' ? 'Genre' : g.name,
           }))}
         />
 
-        <Select
+        <Picker
           value={selectedYear}
           onChange={onSelectYear}
-          label="Year"
+          ariaLabel="Year"
+          menuLabel="Years"
+          placeholder="Year"
           options={YEARS.map((y) => ({
             value: y,
             label: y === 'All Years' ? 'Year' : y,
           }))}
         />
 
-        <Select
+        <Picker
           value={selectedSort}
           onChange={onSelectSort}
-          label="Sort"
+          ariaLabel="Sort"
+          menuLabel="Sort by"
+          placeholder="Sort"
           options={sorts.map((s) => ({ value: s.id, label: s.name }))}
         />
 
-        <Select
+        <ProviderPicker
           value={selectedProvider}
           onChange={onSelectProvider}
-          label="Provider"
-          options={[{ id: '', name: 'All Providers' }]
-            .concat(providers.filter((p) => p.id !== ''))
-            .map((p) => ({
-              value: p.id,
-              label: p.id === '' ? 'Provider' : p.name,
-            }))}
+          options={[{ id: '', name: 'All Providers' }].concat((providers || []).filter((p) => p.id !== ''))}
+          placeholder="Provider"
         />
 
-        <Select
+        <Picker
           value={selectedCountry}
           onChange={onSelectCountry}
-          label="Country"
+          ariaLabel="Country"
+          menuLabel="Countries"
+          placeholder="Country"
           options={COUNTRIES.map((c) => ({
             value: c.id,
             label: c.id === '' ? 'Country' : c.name,
           }))}
         />
 
-        <Select
+        <Picker
           value={selectedLanguage}
           onChange={onSelectLanguage}
-          label="Language"
+          ariaLabel="Language"
+          menuLabel="Languages"
+          placeholder="Language"
           options={LANGUAGES.map((l) => ({
             value: l.id,
             label: l.id === '' ? 'Language' : l.name,

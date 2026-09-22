@@ -10,6 +10,9 @@ import RowRail from './RowRail';
 // Module scope: survives detail open/close.
 const rtCache = new Map();
 const RT_TTL = 24 * 60 * 60 * 1000;
+// Misses (flaky backends, quota blips) re-try soon — a transient 404 must
+// not hide the score for a day.
+const RT_MISS_TTL = 10 * 60 * 1000;
 const RT_CACHE_MAX = 120;
 function rtCacheSet(key, value) {
   if (rtCache.has(key)) rtCache.delete(key);
@@ -55,6 +58,23 @@ function certificationOf(details, mediaType) {
     return null;
   }
 }
+
+// US certification → plain-English explainer for the hover tip.
+const CERT_TIPS = {
+  G: 'Rated G — all ages admitted',
+  PG: 'Rated PG — parental guidance suggested',
+  'PG-13': 'Rated PG-13 — 13 and older recommended',
+  R: 'Rated R — 17 and older without a parent or guardian',
+  'NC-17': 'Rated NC-17 — adults only',
+  'TV-Y': 'TV-Y — all children',
+  'TV-Y7': 'TV-Y7 — 7 and older',
+  'TV-G': 'TV-G — all audiences',
+  'TV-PG': 'TV-PG — parental guidance suggested',
+  'TV-14': 'TV-14 — 14 and older',
+  'TV-MA': 'TV-MA — mature audiences',
+  NR: 'Not rated',
+  UR: 'Unrated',
+};
 
 export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether, onSelectPerson }) {
   const [details, setDetails] = useState(null);
@@ -149,26 +169,30 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     let isMounted = true;
     const t = details?.title || details?.name || media?.title || media?.name;
     const y = (details?.release_date || details?.first_air_date || '').slice(0, 4);
-    if (!t) return;
-    const ck = `${t}|${y}`;
+    // Exact match when TMDB carried the IMDb ID (OMDb primary backend).
+    const imdbId = imdbIdOf(details, mediaType);
+    if (!t && !imdbId) return;
+    const ck = `${t}|${y}|${imdbId || ''}`;
     const hit = rtCache.get(ck);
-    if (hit && Date.now() - hit.at < RT_TTL) {
+    if (hit && Date.now() - hit.at < (hit.ttl || RT_TTL)) {
       if (hit.data) setRt(hit.data);
       else setRt(null);
       return;
     }
     setRt(null);
-    fetch(`/api/rt?title=${encodeURIComponent(t)}&year=${encodeURIComponent(y)}`, {
+    const qs = new URLSearchParams({ title: t || '', year: y || '' });
+    if (imdbId) qs.set('imdb', imdbId);
+    fetch(`/api/rt?${qs.toString()}`, {
       signal: AbortSignal.timeout(8000),
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const good = d && (d.critic != null || d.audience != null) ? d : null;
-        rtCacheSet(ck, { at: Date.now(), data: good });
+        rtCacheSet(ck, { at: Date.now(), data: good, ttl: good ? RT_TTL : RT_MISS_TTL });
         if (isMounted && good) setRt(good);
       })
       .catch(() => {
-        rtCacheSet(ck, { at: Date.now(), data: null });
+        rtCacheSet(ck, { at: Date.now(), data: null, ttl: RT_MISS_TTL });
       });
     return () => {
       isMounted = false;
@@ -178,6 +202,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const title = details?.title || details?.name || media?.title || media?.name;
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
   const rating = (details?.vote_average || media?.vote_average || 0).toFixed(1);
+  const voteCount = details?.vote_count || media?.vote_count || null;
   const releaseYear = (details?.release_date || details?.first_air_date || media?.release_date || media?.first_air_date || '').split('-')[0];
   const runtimeMins = details?.runtime || (details?.episode_run_time && details.episode_run_time[0]) || null;
   const runtime = formatRuntime(runtimeMins);
@@ -251,8 +276,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         <div className="cine-detail-bg-shade" />
       </div>
       {/* Hero: still backdrop. Trailers play here only when the user picks
-          one below — never autoplayed, so no player chrome or mute dance. */}
-      <div className="relative w-full h-[86vh] min-h-[600px] overflow-hidden bg-black">
+          one below — never autoplayed, so no player chrome or mute dance.
+          No bg fill (home parity): the melt-base + ghost own the tone. */}
+      <div className="relative w-full h-[86vh] min-h-[600px] overflow-hidden">
         {/* Melt base: the SAME backdrop, blurred, living under the sharp
             image. The sharp layer dissolves into it (mask), and the page
             ghost below is the same blur — so there is no boundary line,
@@ -264,7 +290,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <iframe
             key={heroVideo}
             src={`https://www.youtube-nocookie.com/embed/${heroVideo}?autoplay=1&rel=0&modestbranding=1&controls=1&playsinline=1&iv_load_policy=3`}
-            title="Trailer"
+            
             className="cine-trailer-cover border-0"
             allow="autoplay; encrypted-media; fullscreen"
             allowFullScreen
@@ -273,16 +299,13 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <img src={backdrop} alt={title} className="w-full h-full object-cover object-center cine-detail-melt-img" />
         )}
         <div className="absolute inset-0 cine-detail-hero-scrim pointer-events-none" />
-        {/* Side readability shade: masked out at the bottom edge like the
-            main scrim, so the left side melts exactly like the right. */}
-        <div className="cine-detail-side-shade" />
 
         {/* Back to the still backdrop */}
         {heroVideo && (
           <button
             onClick={() => setHeroVideo(null)}
             className="cine-icon-btn absolute top-24 right-8 md:right-14 z-20"
-            title="Close trailer"
+            
             aria-label="Close trailer"
           >
             <X className="w-4 h-4" />
@@ -312,7 +335,8 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={() => onPlay(media, details)}
-              className="cine-btn cine-btn-primary cine-btn-shimmer cine-cta"
+              className="cine-btn cine-btn-white cine-cta"
+              aria-label="Play"
             >
               <Play className="w-[18px] h-[18px]" fill="currentColor" />
               <span>Play</span>
@@ -324,21 +348,25 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 setIsWatchlist(!isWatchlist);
                 onToast?.(added ? 'Added to Watchlist' : 'Removed from Watchlist');
               }}
-              className="cine-btn-circle"
-              title={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
+              className="cine-btn-circle cine-has-tip"
+
               aria-label={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
             >
               {isWatchlist ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+              <span className="cine-tip" aria-hidden="true">
+                {isWatchlist ? 'Remove from Watchlist' : 'Add to Watchlist'}
+              </span>
             </button>
 
             {onWatchTogether && (
               <button
                 onClick={() => onWatchTogether(media, details)}
-                className="cine-btn-circle"
-                title="Watch together (create room)"
+                className="cine-btn-circle cine-has-tip"
+
                 aria-label="Watch together in a room"
               >
                 <Users className="w-5 h-5" />
+                <span className="cine-tip" aria-hidden="true">Watch together</span>
               </button>
             )}
 
@@ -348,28 +376,43 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             {releaseYear && <span>{releaseYear}</span>}
             {runtime && <span className="text-white/70">{runtime}</span>}
             {cert && (
-              <span className="cine-chip cine-chip--solid text-xs font-bold text-white/85">
+              <span className="cine-chip cine-chip--solid text-xs font-bold text-white/85 cine-has-tip">
                 {cert}
+                <span className="cine-tip" aria-hidden="true">
+                  {CERT_TIPS[cert] || `Rated ${cert}`}
+                </span>
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[var(--cine-accent)] font-bold">
+            <span className="inline-flex items-center gap-1 text-[var(--cine-accent)] font-bold cine-has-tip">
               <Star className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
               {rating}
+              <span className="cine-tip" aria-hidden="true">
+                TMDB score {rating}{voteCount ? ` from ${voteCount.toLocaleString()} votes` : ''}
+              </span>
             </span>
             {imdb != null && (
-              <span className="cine-imdb-tag" title="IMDb rating">
+              <span className="cine-imdb-tag cine-has-tip" >
                 <span className="cine-imdb-logo">IMDb</span>
                 {imdb.toFixed(1)}
+                <span className="cine-tip" aria-hidden="true">
+                  IMDb {imdb.toFixed(1)} — matched by IMDb ID
+                </span>
               </span>
             )}
             {rt?.critic != null && (
-              <span className="cine-chip cine-chip--accent" title="Rotten Tomatoes critics">
+              <span className="cine-chip cine-chip--accent cine-has-tip" >
                 🍅 {rt.critic}%
+                <span className="cine-tip" aria-hidden="true">
+                  Rotten Tomatoes Tomatometer — critics
+                </span>
               </span>
             )}
             {rt?.audience != null && (
-              <span className="cine-chip cine-chip--neutral" title="Rotten Tomatoes audience">
+              <span className="cine-chip cine-chip--neutral cine-has-tip" >
                 🍿 {rt.audience}%
+                <span className="cine-tip" aria-hidden="true">
+                  Rotten Tomatoes Popcornmeter — audience
+                </span>
               </span>
             )}
           </div>
@@ -383,7 +426,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   <button
                     onClick={() => onSelectPerson?.(d.id)}
                     className="inline-flex items-center gap-0.5 text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
-                    title={`Open ${d.name}'s profile`}
+                    aria-label={`Open ${d.name}'s profile`}
                   >
                     {d.name}
                     <ChevronRight className="w-3.5 h-3.5 text-white/40" />
@@ -402,7 +445,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   <button
                     onClick={() => onSelectPerson?.(c.id)}
                     className="inline-flex items-center gap-0.5 text-white/85 font-medium hover:text-white hover:underline transition cursor-pointer"
-                    title={`Open ${c.name}'s profile`}
+                    aria-label={`Open ${c.name}'s profile`}
                   >
                     {c.name}
                     <ChevronRight className="w-3.5 h-3.5 text-white/40" />
@@ -470,42 +513,33 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <span className="text-white/90 font-semibold">{releaseDate}</span>
               </div>
             )}
-            {revenue && (
-              <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-white/[0.07]">
+            {revenue && budget ? (
+              <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
+                <span className="text-white/45 font-medium">Box Office / Budget</span>
+                <span className="text-white/90 font-semibold">{revenue} / {budget}</span>
+              </div>
+            ) : revenue ? (
+              <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
                 <span className="text-white/45 font-medium">Box Office</span>
                 <span className="text-white/90 font-semibold">{revenue}</span>
               </div>
-            )}
-            {budget && (
-              <div className="flex items-center justify-between px-4 py-3 text-xs">
+            ) : budget ? (
+              <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
                 <span className="text-white/45 font-medium">Budget</span>
                 <span className="text-white/90 font-semibold">{budget}</span>
               </div>
+            ) : null}
+            {studios.length > 0 && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs">
+                <span className="text-white/45 font-medium flex-shrink-0">
+                  Studio{studios.length > 1 ? 's' : ''}
+                </span>
+                <span className="text-white/90 font-semibold text-right leading-snug">
+                  {studios.map((s) => s.name).join(' · ')}
+                </span>
+              </div>
             )}
           </div>
-          {studios.length > 0 && (
-            <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 px-1">
-              {studios.map((s) => (
-                s.logo_path ? (
-                  <img
-                    key={s.id || s.name}
-                    src={tmdb.getImageUrl(s.logo_path, 'w300')}
-                    alt={s.name}
-                    title={s.name}
-                    loading="lazy"
-                    className="h-7 w-auto max-w-32 object-contain opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition"
-                  />
-                ) : (
-                  <span
-                    key={s.id || s.name}
-                    className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50"
-                  >
-                    {s.name}
-                  </span>
-                )
-              ))}
-            </div>
-          )}
           </div>
         )}
       </div>
@@ -547,8 +581,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
         {(revenue || budget) && (
           <section className="xl:hidden flex flex-wrap items-center gap-2 text-xs">
-            {revenue && <span className="cine-chip cine-chip--neutral">Box Office: {revenue}</span>}
-            {budget && <span className="cine-chip cine-chip--neutral">Budget: {budget}</span>}
+            <span className="cine-chip cine-chip--neutral">
+              {revenue && budget ? `Box Office: ${revenue} / ${budget}` : revenue ? `Box Office: ${revenue}` : `Budget: ${budget}`}
+            </span>
           </section>
         )}
 
@@ -563,7 +598,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             </div>
             <div className="flex flex-wrap gap-2.5">
               {awards.map((a, i) => (
-                <div key={`${a.label}_${a.year}_${i}`} className="cine-award" title={a.work || a.label}>
+                <div key={`${a.label}_${a.year}_${i}`} className="cine-award" >
                   <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="min-w-0">
                     <span className="block text-xs font-bold text-white">{a.label}</span>
@@ -586,7 +621,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <div
                   key={actor.id}
                   onClick={() => onSelectPerson?.(actor.id)}
-                  title={actor.name}
+                  
                   className="cine-cast-card flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
                 >
                   <div className="cine-cast-avatar w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">

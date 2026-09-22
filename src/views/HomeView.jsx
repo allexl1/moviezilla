@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Play, Plus, Info, Star, CalendarDays, Clapperboard } from 'lucide-react';
+import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
 import RowRail from '../components/RowRail';
-import Select from '../components/ui/Select';
+import ProviderPicker from '../components/ProviderPicker';
 import { SkelRail } from '../components/ui';
 
 // Home snapshot: remounts (detail closed, tab revisited) hydrate instantly
@@ -237,6 +237,13 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
     ? Math.floor(heroSaved.currentTime)
     : 0;
 
+  // Hero watchlist toggle: icon + labels follow the real state, live across
+  // tabs. Derived during render (never set in an effect) + a version bump
+  // on watchlist events to re-render — same pattern as WatchlistView.
+  const [, setWlVersion] = useState(0);
+  useEffect(() => storage.subscribeWatchlist(() => setWlVersion((v) => v + 1)), []);
+  const heroInWL = heroItem?.id ? storage.isInWatchlist(heroItem.id) : false;
+
   // Rotate spotlight; pause while an overlay covers Home.
   useEffect(() => {
     if (overlaid || heroItems.length < 2) return;
@@ -364,20 +371,22 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 <button
                   onClick={() => {
                     const added = storage.toggleWatchlist(heroItem);
-                    onToast(added ? 'Added to Watchlist' : 'Removed from Watchlist');
+                    onToast(added ? 'Added to Watch Later' : 'Removed from Watch Later');
                   }}
-                  title="Add to Watchlist"
-                  aria-label="Add to Watchlist"
+                  aria-label={heroInWL ? 'Remove from Watch Later' : 'Add to Watch Later'}
                 >
-                  <Plus className="w-5 h-5" />
+                  {heroInWL ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                  <span className="cine-duo-tip" aria-hidden="true">
+                    {heroInWL ? 'Remove from Watch Later' : 'Add to Watch Later'}
+                  </span>
                 </button>
                 <span className="cine-duo-divider" />
                 <button
                   onClick={() => onSelectMedia(heroItem)}
-                  title="Details"
                   aria-label="Details"
                 >
                   <Info className="w-5 h-5" />
+                  <span className="cine-duo-tip" aria-hidden="true">Details</span>
                 </button>
               </div>
             </div>
@@ -389,7 +398,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 <button
                   key={item.id}
                   onClick={() => setHeroIndex(i)}
-                  title={item.title || item.name}
+                  
                   aria-label={`Show ${item.title || item.name}`}
                   aria-current={i === heroIndex}
                   className={`cine-hero-dot ${i === heroIndex ? 'is-active' : ''}`}
@@ -448,7 +457,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                       }
                     )
                   }
-                  className="cine-cw-card group"
+                  className="cine-cw-card cine-cw-card--overlay group"
                 >
                   <div className="cine-cw-thumb">
                     <img
@@ -456,6 +465,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
+                    <div className="cine-cw-shade" aria-hidden="true" />
 
                     <div className="cine-cw-play">
                       <div className="cine-cw-play-btn">
@@ -464,16 +474,18 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                     </div>
                   </div>
 
-                  <h4 className="cine-cw-title">
-                    {item.title}
-                  </h4>
+                  <div className="cine-cw-caption">
+                    <h4 className="cine-cw-title">
+                      {item.title}
+                    </h4>
 
-                  <p className="cine-cw-meta">
-                    {item.type === 'tv'
-                      ? `Season ${item.season} • Episode ${item.episode}`
-                      : 'Movie'}{' '}
-                    • {progressLabel(item)}
-                  </p>
+                    <p className="cine-cw-meta">
+                      {item.type === 'tv'
+                        ? `Season ${item.season} • Episode ${item.episode}`
+                        : 'Movie'}{' '}
+                      • {progressLabel(item)}
+                    </p>
+                  </div>
 
                   <div className="cine-cw-progress">
                     <div
@@ -565,26 +577,16 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
               mediaType="movie"
             />
             <RowRail
-              titleNode={
-                <div className="flex items-center gap-2">
-                  <h2 className="cine-section-title">Movies on</h2>
-                  <div className="w-44">
-                    <Select
-                      value={homeProvider}
-                      onChange={setHomeProvider}
-                      label="Provider"
-                      options={PROVIDERS.filter((p) => p.id !== '').map((p) => ({
-                        value: p.id,
-                        label: p.name,
-                      }))}
-                    />
-                  </div>
-                </div>
-              }
-              title="Movies on provider"
+              title={`Movies on ${PROVIDERS.find((p) => p.id === homeProvider)?.name || ''}`}
               items={providerMovies}
               onSelect={onSelectMedia}
               mediaType="movie"
+              titleNode={
+                <div className="flex items-center gap-2">
+                  <h2 className="cine-section-title">Movies on</h2>
+                  <ProviderPicker value={homeProvider} onChange={setHomeProvider} />
+                </div>
+              }
             />
             <RowRail title="Anime Spotlight" items={animeSpotlight} onSelect={onSelectMedia} mediaType="tv" />
           </div>

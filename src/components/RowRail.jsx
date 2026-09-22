@@ -9,7 +9,7 @@ import Card from './ui/Card';
  * `expandable`: adds a "Show all N" toggle that swaps the rail for a full
  * grid — caps become progressive disclosure instead of a hard wall.
  */
-export default function RowRail({ title, titleNode, items = [], onSelect, mediaType, action, showRating = false, expandable = false }) {
+export default function RowRail({ title, titleNode, items = [], onSelect, mediaType, action, showRating = false, showRole = false, captioned = false, expandable = false, cardSize = 'default' }) {
   const [expanded, setExpanded] = useState(false);
   // TMDB combined credits repeat ids (same title, multiple characters).
   // Dedupe first: duplicate sibling keys mis-associate component state
@@ -30,7 +30,8 @@ export default function RowRail({ title, titleNode, items = [], onSelect, mediaT
         media={media}
         onClick={(m) => onSelect?.({ ...m, media_type: m.media_type || mediaType || 'movie' })}
         showRating={showRating}
-        posterOnly
+        showRole={showRole}
+        posterOnly={!captioned}
         size={size}
       />
     ));
@@ -56,15 +57,13 @@ export default function RowRail({ title, titleNode, items = [], onSelect, mediaT
             {action.label}
             <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
           </button>
-        ) : (
-          <span className="text-xs text-white/60">{unique.length} titles</span>
-        )}
+        ) : null}
       </div>
 
       {expanded ? (
         <div className="cine-grid">{cards('fluid')}</div>
       ) : (
-        <div className="cine-rail no-scrollbar -mx-1 px-1">{cards('default')}</div>
+        <div className="cine-rail no-scrollbar -mx-1 px-1">{cards(cardSize)}</div>
       )}
     </section>
   );

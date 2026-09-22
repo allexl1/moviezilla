@@ -271,8 +271,14 @@ export const tmdb = {
     }
 
     // Rating sorts need a vote floor or obscure single-vote titles win.
+    // Unfiltered Top Rated must clear real consensus (TMDB's own list
+    // runs thousands deep); filtered views keep a light floor so niche
+    // combos (year + genre) don't empty out. Per-title IMDb re-sorting
+    // for 100+ grid items is not an option (100+ fetches per page), and
+    // RT has no free list source — this floor is the honest lever.
     if (String(sort).startsWith('vote_average')) {
-      params['vote_count.gte'] = 50;
+      const filtered = genre || (year && year !== 'All Years') || provider || country || language;
+      params['vote_count.gte'] = filtered ? 50 : 250;
     }
     // Date sorts need a small vote floor too: pure newest-first pages are
     // 20/20 zero-vote day-0 releases, which the UI hides as unrated.
@@ -338,7 +344,8 @@ export const tmdb = {
     }
 
     if (String(sort).startsWith('vote_average')) {
-      params['vote_count.gte'] = 50;
+      const filtered = genre || (year && year !== 'All Years') || provider || country || language;
+      params['vote_count.gte'] = filtered ? 50 : 250;
     }
     if (/release_date|first_air_date/.test(String(sort))) {
       params['vote_count.gte'] = 5;

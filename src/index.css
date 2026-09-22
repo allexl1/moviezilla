@@ -201,6 +201,14 @@ select:focus-visible,
   box-shadow: var(--cine-focus-ring);
 }
 
+/* Bare inputs live inside glass pills whose container already brightens on
+   focus-within — a second ring around the inner input reads as a broken
+   nested box (very visible on autofocus in Safari). Container carries it. */
+.cine-glass-panel input:focus-visible,
+.mat-row input:focus-visible {
+  box-shadow: none;
+}
+
 /* ─── Glass Surface Primitives ──────────────────────────────────────────── */
 
 /* Aurora background canvas — layered liquid mesh (cinejoy parity:
@@ -358,9 +366,30 @@ select:focus-visible,
   pointer-events: none;
 }
 
-.mat-row > *:not(.cine-row-wash) {
+.mat-row > *:not(.cine-row-wash):not(.cine-row-progress) {
   position: relative;
   z-index: 1;
+}
+
+/* Resume progress along the row base (Watchlist history). Same accent
+   language as Continue Watching cards. */
+.cine-row-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 var(--cine-radius-lg) var(--cine-radius-lg);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cine-row-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--cine-accent);
+  border-radius: inherit;
 }
 
 /* Bigger letterspaced group caps (Watchlist history). */
@@ -398,6 +427,51 @@ select:focus-visible,
 @keyframes cine-skel {
   0% { background-position: 180% 0; }
   100% { background-position: -20% 0; }
+}
+
+/* Infinity loading mark — the infinite-scroll signature. Marching dash
+   = active, dim static = idle "more below". Killed by max-power's global
+   animation:none and by reduced-motion below, same as skeletons. */
+.cine-infinity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cine-accent);
+}
+
+.cine-infinity svg {
+  width: 3.5rem;
+  height: 1.75rem;
+  overflow: visible;
+}
+
+.cine-infinity path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 12 8;
+  animation: cine-inf-dash 1.1s linear infinite;
+}
+
+.cine-infinity--idle {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.cine-infinity--idle path {
+  animation: none;
+  stroke-dasharray: none;
+}
+
+@keyframes cine-inf-dash {
+  to { stroke-dashoffset: -40; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-infinity path {
+    animation: none;
+    stroke-dasharray: none;
+  }
 }
 
 /* ─── Glass Button (Primary Action) ─────────────────────────────────────── */
@@ -779,6 +853,16 @@ a.cine-pill {
   font-size: 11px;
 }
 
+/* Value pill: the button displays a SELECTION (provider, choice), not an
+   option — values read near-white, options stay dim. */
+.cine-pill--value {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.cine-pill--value:hover {
+  color: #fff;
+}
+
 /* Selected pill: the navbar's own white active language. */
 .cine-pill--active {
   background: var(--cine-white);
@@ -801,11 +885,13 @@ a.cine-pill {
 .cine-react {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+  padding: 0.3rem 0.6rem;
   border-radius: var(--cine-radius-full);
   font-size: 12px;
   font-weight: var(--cine-font-bold);
+  line-height: 1;
   color: rgba(255, 255, 255, 0.8);
   background:
     linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
@@ -834,6 +920,206 @@ a.cine-pill {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     0 0 16px rgba(255, 255, 255, 0.08);
+}
+
+/* Reaction chip glyph: the PNG carries its own transparent padding, so
+   the image is a true block — no inline baseline wobble inside the chip. */
+.cine-react img {
+  display: block;
+}
+
+/* ─── Room chat extras (replies, edits, tombstones, jump pill) ─────────
+   Same tokens as the thread: white mine-bubbles, glass theirs. */
+
+/* Selectable message copy (T11): bubbles + names opt INTO selection
+   explicitly — nothing in the room may ever opt out again. */
+.cine-msg-copy,
+.cine-msg-copy .msg-text {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* Quoted reply inside a bubble (tap = jump to the original). */
+.cine-reply-quote {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.35rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.55rem;
+  border-radius: 0.65rem;
+  border-left: 2px solid var(--cine-accent);
+  background: rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.cine-reply-quote-name {
+  display: block;
+  font-size: 11px;
+  font-weight: var(--cine-font-bold);
+  line-height: 1.3;
+}
+
+.cine-reply-quote-text {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Reply strip above the composer. */
+.cine-reply-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.45rem 0.45rem 0.45rem 0.65rem;
+  border-radius: var(--cine-radius-lg);
+  border-left: 2px solid var(--cine-accent);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cine-reply-strip-name {
+  font-size: 11px;
+  font-weight: var(--cine-font-bold);
+  line-height: 1.3;
+}
+
+.cine-reply-strip-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Delete tombstone: dim italic, keeps scroll stable. */
+.cine-msg-deleted {
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.25rem 0.25rem;
+}
+
+/* GIF bubble: padded like a text bubble (Telegram rule) — the raw
+   edge-to-edge image was the cramped look. Mine = white, theirs = glass. */
+.cine-gif-bubble {
+  position: relative;
+  display: block;
+  padding: 5px;
+  border-radius: 1.125rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cine-gif-bubble--mine {
+  background: var(--cine-white);
+  border-color: transparent;
+  border-bottom-right-radius: 0.375rem;
+}
+
+.cine-gif-bubble:not(.cine-gif-bubble--mine) {
+  border-bottom-left-radius: 0.375rem;
+}
+
+.cine-gif-img {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 0.8rem;
+  object-fit: cover;
+}
+
+.cine-gif-time {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  border-radius: 0.375rem;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0.15rem 0.4rem;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* Inline edit box. */
+.cine-msg-edit {
+  min-width: min(220px, 60vw);
+}
+
+/* Autogrowing composer (shares .cine-input metrics). */
+.cine-chat-textarea {
+  resize: none;
+  overflow-y: auto;
+  max-height: 110px;
+  line-height: 22px;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+/* Message … menu rows (B6): icon + label, danger last. */
+.cine-msg-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--cine-radius-lg);
+  font-size: 12px;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.88);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-msg-menu-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.cine-msg-menu-item--danger {
+  color: #ff8a8a;
+}
+
+.cine-msg-menu-item--danger:hover {
+  background: rgba(255, 90, 90, 0.12);
+}
+
+/* New-messages pill: floats above the composer while scrolled up. */
+.cine-chat-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 0.75rem;
+  translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 2rem;
+  padding: 0 0.9rem;
+  border-radius: var(--cine-radius-full);
+  font-size: 12px;
+  font-weight: var(--cine-font-bold);
+  color: #0a0a0e;
+  background: var(--cine-white);
+  border: 1px solid transparent;
+  box-shadow: var(--cine-shadow-2), 0 0 16px rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  z-index: 5;
+  transition: transform var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-chat-jump:hover {
+  transform: scale(1.04);
+}
+
+.cine-chat-jump:active {
+  transform: scale(0.97);
 }
 
 /* ─── Static icon disc — glass without button affordance ───────────────
@@ -902,6 +1188,13 @@ a.cine-pill {
   color: rgba(255, 255, 255, 0.92);
   letter-spacing: 0.01em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Page sections (Movies/Shows shelves): one step up from home rails. */
+.cine-section-title--lg {
+  font-size: 1.375rem;
+  font-weight: var(--cine-font-extrabold);
+  letter-spacing: -0.01em;
 }
 
 /* ─── Main Layout Container ───────────────────────────────────────────────
@@ -1194,11 +1487,150 @@ a.cine-pill {
   background: rgba(255, 255, 255, 0.1);
 }
 
+@media (hover: hover) {
+  /* Joined segments never translate — lifting one half off its shared pill
+     reads as detaching. Motion system: standalone controls lift, joined
+     segments brighten, tooltips fade. Same everywhere. */
+  .cine-duo-btn button:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Hover label: icon-only halves get a name on hover (touch never sees it —
+   the actions themselves are the affordance there). */
+.cine-duo-btn button {
+  position: relative;
+}
+
+.cine-duo-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  translate: -50% 4px;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--cine-radius-full);
+  background: rgba(10, 10, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: var(--cine-font-semibold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, translate 0.18s var(--cine-ease-out);
+}
+
+@media (hover: hover) {
+  .cine-duo-btn button:hover .cine-duo-tip {
+    opacity: 1;
+    translate: -50% 0;
+  }
+  /* Rows clip upward (mat-row is overflow-hidden): row action tips drop
+     below the button instead of vanishing into the row above. */
+  .cine-duo-tip--below {
+    bottom: auto;
+    top: calc(100% + 10px);
+    translate: -50% -4px;
+  }
+  .cine-duo-btn button:hover .cine-duo-tip--below {
+    translate: -50% 0;
+  }
+}
+
+/* Rows clip (.mat-row is overflow-hidden for the wash layer), so a row
+   action's tip is sliced whether it opens up or down. While a row action
+   is hovered the row opens up and rises above its siblings, so the
+   below-tip reads whole. Wash spill is hover-momentary only. */
+@media (hover: hover) {
+  .mat-row:has(.cine-duo-btn button:hover, .cine-icon-btn:hover) {
+    overflow: visible;
+    z-index: 30;
+  }
+}
+
+/* Tip anchor: any icon-only control or badge carrying a .cine-tip /
+   .cine-duo-tip child. Real class (not a utility) so it wins. */
+.cine-has-tip {
+  position: relative;
+}
+
+@media (hover: none) {
+  .cine-duo-tip {
+    display: none;
+  }
+}
+
+/* Generic hover label — same duo-tip language for any icon-only control
+   (FilterBar shuffle, etc.). Parent must be relative; keep clear of
+   overflow scrollers (FilterBar reserves headroom for exactly this). */
+.cine-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  translate: -50% 4px;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--cine-radius-full);
+  background: rgba(10, 10, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: var(--cine-font-semibold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, translate 0.18s var(--cine-ease-out);
+  z-index: 5;
+}
+
+@media (hover: hover) {
+  *:hover > .cine-tip {
+    opacity: 1;
+    translate: -50% 0;
+  }
+  /* Drop-below variant: controls hugging the viewport top (room header)
+     can't open upward — the tip would paint off-screen. Same motion. */
+  .cine-tip--below {
+    bottom: auto;
+    top: calc(100% + 10px);
+    translate: -50% -4px;
+  }
+  *:hover > .cine-tip--below {
+    translate: -50% 0;
+  }
+}
+
+@media (hover: none) {
+  .cine-tip {
+    display: none;
+  }
+}
+
 .cine-duo-divider {
   width: 1px;
   height: 1.25rem;
   background: rgba(255, 255, 255, 0.16);
   flex-shrink: 0;
+}
+
+/* Compact duo for list-row action pairs (history ✓|✕, rooms copy|delete).
+   Same glass + divider language as the hero duo, row scale. Pairs become
+   duos; singleton actions stay icon circles. */
+.cine-duo-btn--sm {
+  height: 2.25rem;
+}
+
+.cine-duo-btn--sm button {
+  padding: 0 0.8rem;
+}
+
+.cine-duo-btn--sm button:first-child {
+  padding-left: 1rem;
+}
+
+.cine-duo-btn--sm button:last-child {
+  padding-right: 1rem;
 }
 
 /* Title-logo treatment */
@@ -1330,10 +1762,14 @@ a.cine-pill {
 
 /* Rails sit on near-black ambient: poster drop shadows merge into a muddy
    slab under the row (very visible in Safari). Kill shadow + border here —
-   artwork edge + radius carry separation. Grids keep theirs. */
+   artwork edge + radius carry separation. Grids keep theirs.
+   background-clip matters: with a transparent border, the default
+   border-box clip paints the dark placeholder UNDER the border = black
+   ring (Safari antialiasing makes it loud). */
 .cine-rail .cine-card-poster {
   box-shadow: none;
   border-color: transparent;
+  background-clip: padding-box;
 }
 
 .cine-rail .cine-card:hover .cine-card-poster {
@@ -1352,6 +1788,16 @@ a.cine-pill {
 .cine-card-year {
   font-size: 0.75rem;
   color: var(--cine-text-quaternary);
+}
+
+/* Person credit role ("as Ana", "Director"): sits between title and year,
+   same quiet voice as the year, truncated like everything else. */
+.cine-card-role {
+  font-size: 0.75rem;
+  color: var(--cine-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Horizontal Scroll Rail ────────────────────────────────────────────── */
@@ -1478,6 +1924,66 @@ a.cine-pill {
   transition: width 0.3s ease;
 }
 
+/* ─── Continue Watching card (overlay cinema) ───────────────────────────
+   Meta rides over the art on a bottom gradient, progress pins to the
+   card base, play goes big white on hover (touch taps the card). */
+.cine-cw-card--overlay {
+  width: 340px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.cine-cw-card--overlay .cine-cw-thumb {
+  margin-bottom: 0;
+  border-radius: 0;
+  aspect-ratio: 16/10;
+}
+
+.cine-cw-card--overlay .cine-cw-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 35%, rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
+.cine-cw-card--overlay .cine-cw-caption {
+  position: absolute;
+  left: 0.875rem;
+  right: 0.875rem;
+  bottom: 0.625rem;
+}
+
+.cine-cw-card--overlay .cine-cw-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 0;
+  height: 3px;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.cine-cw-card--overlay .cine-cw-play {
+  background: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+}
+
+.cine-cw-card--overlay:hover .cine-cw-play {
+  opacity: 1;
+}
+
+.cine-cw-card--overlay .cine-cw-play-btn {
+  width: 52px;
+  height: 52px;
+  background: var(--cine-white);
+  color: #0a0a0e;
+  border-color: transparent;
+}
+
 /* ─── Provider Pills ────────────────────────────────────────────────────── */
 .cine-provider-pill {
   height: 52px;
@@ -1523,8 +2029,32 @@ a.cine-pill {
   }
 }
 
+/* ─── Logo tile — identical glass to the navbar pill ────────────────────
+   Consistency law: the mark and the nav are one material, same tokens,
+   same opacity. If the nav recipe changes, this follows. */
+.cine-logo-tile {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--cine-font-black);
+  font-size: 1.25rem;
+  color: var(--cine-white);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
 /* Floating Glass Pill Navigation */
 .cine-nav-pill-box {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -1558,6 +2088,18 @@ header .cine-nav-pill-box {
    unlayered padding actually wins. */
 nav .cine-nav-pill-box {
   max-width: calc(100vw - 2rem);
+  /* Five tabs + three icons overflow 390px viewports: the strip scrolls
+     (no visible scrollbar) instead of clipping Settings/Account away. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+nav .cine-nav-pill-box::-webkit-scrollbar {
+  display: none;
+}
+
+nav .cine-nav-tabs {
+  gap: 0.125rem;
 }
 
 nav .cine-nav-btn {
@@ -1567,6 +2109,8 @@ nav .cine-nav-btn {
 }
 
 .cine-nav-btn {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -1588,13 +2132,43 @@ nav .cine-nav-btn {
 }
 
 .cine-nav-btn.is-active {
-  background: var(--cine-white);
+  /* The sliding thumb carries the white surface — the button itself goes
+     clear so there is exactly one pill, gliding, never blinking. */
+  background: transparent;
   color: var(--cine-bg);
   /* No font change on active on purpose: the medium→black jump resized
      the pill on every tab switch. Pill + icon carry the active state. */
-  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+  box-shadow: none;
 }
 
+/* Sliding active thumb: measured FLIP behind the active tab. */
+.cine-nav-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.cine-nav-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 9999px;
+  background: var(--cine-white);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+  transition: transform 0.38s var(--cine-ease-out), width 0.38s var(--cine-ease-out);
+  will-change: transform, width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-nav-thumb {
+    transition: none;
+  }
+}
+
+/* Navbar icon buttons: plain SVGs by design (no discs — the pill is the
+   glass here, the icons stay quiet chrome inside it). */
 .cine-nav-icon-btn {
   width: 40px;
   height: 40px;
@@ -1706,11 +2280,11 @@ body.mz-refract .cine-chip--glass {
 .cine-select {
   appearance: none;
   -webkit-appearance: none;
-  /* One fixed width for every filter pill — native selects size to their
-     longest option, which made Genre (and Shows filters) wider than the
-     rest. Uniform width + ellipsis: no pill ever shouts over the content. */
-  width: 10rem;
-  min-width: 10rem;
+  /* Pill hugs its value (max-capped + ellipsis): fixed widths left every
+     pill half-empty and swimming. Width shifts slightly on change — normal
+     for filter controls everywhere. */
+  width: auto;
+  min-width: 0;
   max-width: 10rem;
   text-overflow: ellipsis;
   height: 2.25rem;
@@ -2285,33 +2859,25 @@ img.cine-detail-melt-img {
 }
 
 .cine-detail-melt-img {
-  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 42%);
-  mask-image: linear-gradient(0deg, transparent 0%, #000 42%);
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
+  /* Same crop anchor as home (center top): the ghost samples the same
+     rows the sharp frame shows, so no tone step at any scroll offset. */
+  object-position: center top;
 }
 
 /* Bottom scrim that feeds the melt: transparent AT the hero edge (the
    melt-base beneath already carries the ghost's exact tone — any black
-   here would double-darken and redraw the edge line). Peaks behind the
-   text block, gone by the upper hero. Masked like home so the fade holds
-   on the full width, not just where there is no side shading. */
+   here would double-darken and redraw the edge line). Identical to the
+   home scrim (darkness peaks behind the copy, left shade included), so
+   both pages melt exactly alike. Masked like home so the fade holds on
+   the full width. */
 .cine-detail-hero-scrim {
   -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   background:
-    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.55) 10%, rgba(5, 5, 5, 0.85) 28%, rgba(5, 5, 5, 0.35) 55%, transparent 85%);
-}
-
-/* Side readability shade. Lives in plain CSS (not Tailwind arbitrary
-   properties — those silently fail to generate and the unmasked shade
-   re-draws the edge on the left half, which is exactly the home/detail
-   difference). Masked out at the bottom edge like every other scrim. */
-.cine-detail-side-shade {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(5, 5, 5, 0.8) 0%, transparent 55%);
-  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
-  mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
+    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
+    linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 .cine-detail-bg {
   position: fixed;
@@ -2326,10 +2892,9 @@ img.cine-detail-melt-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Center, matching .cine-detail-melt-base + the sharp hero frame: the
-     ghost must sample the same crop or the boundary compares two different
-     pictures. (Home already matches at center top on both layers.) */
-  object-position: center;
+  /* Center top, matching home on both layers: the ghost must sample the
+     same crop or the boundary compares two different pictures. */
+  object-position: center top;
   /* Same uniform-ghost rule as home: no viewport gradient, so the match
      holds at every scroll offset instead of exactly one. Same luminous
      tone as home so both pages melt identically. */
@@ -2347,10 +2912,74 @@ img.cine-detail-melt-img {
   background:
     linear-gradient(0deg,
       rgba(5, 5, 5, 0.92) 0%,
-      rgba(5, 5, 5, 0.75) 12%,
-      rgba(5, 5, 5, 0.4) 28%,
-      transparent 48%),
+      rgba(5, 5, 5, 0.72) 12%,
+      rgba(5, 5, 5, 0.32) 26%,
+      transparent 44%),
     linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
+}
+
+/* ─── Segmented filter (joined track, sliding white thumb) ────────────
+   For 2–4 mutually exclusive views of the same list (reference pattern).
+   Same FLIP-thumb language as the navbar; 5+ options still use pills. */
+.cine-seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 4px;
+  border-radius: var(--cine-radius-full);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.42);
+}
+
+.cine-seg-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: var(--cine-radius-full);
+  background: var(--cine-white);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+  transition: transform 0.32s var(--cine-ease-out), width 0.32s var(--cine-ease-out);
+  will-change: transform, width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-seg-thumb {
+    transition: none;
+  }
+}
+
+.cine-seg-btn {
+  position: relative;
+  z-index: 1;
+  padding: 8px 18px;
+  border-radius: var(--cine-radius-full);
+  font-size: 0.75rem;
+  font-weight: var(--cine-font-bold);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.6);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-seg-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.cine-seg-btn.is-active {
+  color: #0a0a0e;
 }
 
 /* ─── Award chip (gold honours — Wikidata) ──────────────────────────────── */
@@ -2432,12 +3061,19 @@ img.cine-detail-melt-img {
   letter-spacing: 0.02em;
 }
 
-/* ─── Nav Scrolled State (blur handoff) ─────────────────────────────────── */
+/* ─── Nav Scrolled State (blur handoff) ───────────────────────────────────
+   Scroll-edge per Apple: denser, never flatter. Same translucency family
+   as the resting pill (and the MZ tile) with extra blur + saturation so
+   content melting underneath stays legible — the glass keeps bending
+   light instead of going an opaque dark slab. */
 .cine-nav-pill-box.is-scrolled {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
-    rgba(8, 8, 12, 0.78);
-  border-color: rgba(255, 255, 255, 0.16);
+    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(10, 10, 14, 0.62);
+  border-color: rgba(255, 255, 255, 0.14);
+  border-top-color: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
 }
 /* ─── Power saving (thermal) ──────────────────────────────────────────────
    Body classes only — no visual redesign. `mz-paused` freezes ambient

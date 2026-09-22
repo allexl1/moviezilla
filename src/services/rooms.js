@@ -95,11 +95,41 @@ function rowToRoom(row) {
     episode: row.episode ?? 1,
     server: row.server || 'vidy',
     state: row.state || 'live',
+    // Explicit playback life: a fresh room is NOT started (nobody pressed
+    // play). Run once in Supabase SQL:
+    //   alter table public.rooms add column if not exists
+    //     started boolean not null default true;
+    // Null = pre-migration row: the UI decides (creator flag → presence
+    // inference → old behavior), never crashes.
+    started: row.started ?? null,
     position: row.position ?? 0,
     hostDevice: row.host_device,
     grants: row.grants || {},
     updatedAt: row.updated_at,
   };
+}
+
+// Pre-migration device flag (T1): rooms this device created or swapped
+// while the `started` column didn't exist yet are known-unstarted here.
+// Cleared on the first real play. The SQL migration makes it obsolete.
+function localUnstarted(code) {
+  try {
+    return localStorage.getItem(`mz_unstarted_${code}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function localRoomUnstarted(code) {
+  return localUnstarted(code);
+}
+
+export function clearLocalUnstarted(code) {
+  try {
+    localStorage.removeItem(`mz_unstarted_${code}`);
+  } catch {
+    // ignore
+  }
 }
 
 export async function createRoom({ title, media, season = 1, episode = 1, server = 'vidy' }) {
@@ -109,32 +139,51 @@ export async function createRoom({ title, media, season = 1, episode = 1, server
   // Retry on code collision (PK conflict).
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = makeCode();
-    const { data, error } = await sb
+    // Fresh rooms start un-started (T1): the host really hasn't pressed
+    // play. Pre-migration schemas lack the column — fall back to the
+    // legacy insert (behaves as before) instead of failing creation.
+    let payload = {
+      code,
+      title: (title || media?.title || media?.name || 'Untitled room').slice(0, 80),
+      media: {
+        kind: media?.kind || 'tmdb',
+        id: media?.id,
+        type: media?.media_type || media?.type || (media?.first_air_date ? 'tv' : 'movie'),
+        title: media?.title || media?.name || '',
+        poster: media?.poster_path || media?.poster || '',
+        youtubeId: media?.youtubeId || null,
+      },
+      season,
+      episode,
+      server,
+      state: 'live',
+      started: false,
+      position: 0,
+      host_device: device,
+      grants: {},
+    };
+    let { data, error } = await sb
       .from('rooms')
-      .insert({
-        code,
-        title: (title || media?.title || media?.name || 'Untitled room').slice(0, 80),
-        media: {
-          kind: media?.kind || 'tmdb',
-          id: media?.id,
-          type: media?.media_type || media?.type || (media?.first_air_date ? 'tv' : 'movie'),
-          title: media?.title || media?.name || '',
-          poster: media?.poster_path || media?.poster || '',
-          youtubeId: media?.youtubeId || null,
-        },
-        season,
-        episode,
-        server,
-        state: 'live',
-        position: 0,
-        host_device: device,
-        grants: {},
-      })
+      .insert(payload)
       .select()
       .single();
+    if (error && /started/i.test(error.message || '')) {
+      const legacy = { ...payload };
+      delete legacy.started;
+      ({ data, error } = await sb.from('rooms').insert(legacy).select().single());
+    }
     if (!error) {
       const room = rowToRoom(data);
       rememberRoom(room.code, room.title);
+      // Pre-migration the row can't say un-started — this device knows.
+      if (room.started !== false) {
+        try {
+          localStorage.setItem(`mz_unstarted_${room.code}`, '1');
+        } catch {
+          // ignore
+        }
+        room.started = false;
+      }
       return room;
     }
     if (error.code !== '23505') throw new Error(error.message || 'Could not create room.');
@@ -177,6 +226,11 @@ export async function patchRoom(code, patch) {
   if (p.grants && typeof p.grants === 'object' && !Array.isArray(p.grants)) {
     out.grants = p.grants;
   }
+  // Explicit playback life (T1): false until someone really presses play.
+  // No-op on schemas predating the column — callers degrade to broadcast.
+  if (typeof p.started === 'boolean') {
+    out.started = p.started;
+  }
   if (typeof p.host_device === 'string' && p.host_device.length > 0 && p.host_device.length <= 64) {
     out.host_device = p.host_device;
   }
@@ -208,12 +262,21 @@ export async function patchRoom(code, patch) {
     }).filter(Boolean);
   }
   if (Object.keys(out).length === 0) throw new Error('Nothing to update.');
-  const { data, error } = await sb
-    .from('rooms')
-    .update({ ...out, updated_at: new Date().toISOString() })
-    .eq('code', clean)
-    .select()
-    .single();
+  const runUpdate = (body) =>
+    sb
+      .from('rooms')
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .eq('code', clean)
+      .select()
+      .single();
+  let { data, error } = await runUpdate(out);
+  // Pre-migration schemas lack `started`: retry without it so media swaps
+  // and positions still persist (the lifecycle degrades to broadcast).
+  if (error && out.started !== undefined && /started/i.test(error.message || '')) {
+    const rest = { ...out };
+    delete rest.started;
+    ({ data, error } = await runUpdate(rest));
+  }
   if (error) throw new Error(error.message || 'Room update failed.');
   return rowToRoom(data);
 }
@@ -227,14 +290,40 @@ export async function deleteRoom(code) {
 }
 
 // Live channel per room: broadcast (actions/chat, self excluded) +
-// presence (who's here). Returns { send, close }.
+// presence (who's here + their playback state). Returns { send, close,
+// update }. `update` re-tracks presence meta (pos/paused/started) so the
+// People tab can show everyone's state — call it on discrete transitions
+// only (pause/play/seek/swap), never per tick.
 export function openRoomChannel({ code, name, onEvent, onPresence }) {
   const sb = getSupabase();
   if (!sb) throw new Error('Rooms not configured.');
   const device = myDeviceId();
+  // Last tracked presence body: update() merges into it so the name and
+  // earlier meta survive (re-subscribes reset it with the fresh name).
+  // Updates before SUBSCRIBED would vanish — they wait in pendingMeta and
+  // flush on subscribe (the room-load report always races the handshake).
+  let tracked = { device, name: name || 'Guest' };
+  let pendingMeta = null;
+  let liveChannel = null;
+  const applyPresence = (state) => {
+    try {
+      const members = Object.entries(state).map(([deviceId, metas]) => ({
+        device: deviceId,
+        name: metas?.[0]?.name || 'Guest',
+        // Playback state of that device (T14): absent = unknown.
+        pos: metas?.[0]?.pos ?? null,
+        paused: metas?.[0]?.paused ?? null,
+        watching: metas?.[0]?.watching ?? null,
+      }));
+      onPresence?.(members);
+    } catch (err) {
+      console.error('[rooms] presence failed:', err);
+    }
+  };
   const channel = sb.channel(`room:${code}`, {
     config: { broadcast: { self: false }, presence: { key: device } },
   });
+  liveChannel = channel;
   channel
     .on('broadcast', { event: '*' }, ({ event, payload }) => {
       try {
@@ -245,19 +334,16 @@ export function openRoomChannel({ code, name, onEvent, onPresence }) {
     })
     .on('presence', { event: 'sync' }, () => {
       try {
-        const state = channel.presenceState();
-        const members = Object.entries(state).map(([deviceId, metas]) => ({
-          device: deviceId,
-          name: metas?.[0]?.name || 'Guest',
-        }));
-        onPresence?.(members);
+        applyPresence(channel.presenceState());
       } catch (err) {
         console.error('[rooms] presence failed:', err);
       }
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({ device, name: name || 'Guest' });
+        tracked = { device, name: name || 'Guest', ...(pendingMeta || {}) };
+        pendingMeta = null;
+        await channel.track(tracked);
       }
     });
   return {
@@ -265,6 +351,21 @@ export function openRoomChannel({ code, name, onEvent, onPresence }) {
       // Message kind must be 'broadcast' — `type` collision meant nothing
       // was ever routed (chat/seeks silently lost). Event name rides along.
       channel.send({ type: 'broadcast', event: type, payload });
+    },
+    // Merge playback meta into my presence (throttled by the caller).
+    update(patch) {
+      tracked = { ...tracked, ...(patch || {}) };
+      pendingMeta = { ...(pendingMeta || {}), ...(patch || {}) };
+      try {
+        const r = liveChannel?.track(tracked);
+        if (r?.catch) {
+          r.catch(() => {
+            // pre-subscribe: the SUBSCRIBED flush carries pendingMeta
+          });
+        }
+      } catch {
+        // presence unavailable — states just read stale
+      }
     },
     async close() {
       try {

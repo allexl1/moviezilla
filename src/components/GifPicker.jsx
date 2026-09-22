@@ -48,8 +48,8 @@ export default function GifPicker({ onPick, onClose }) {
   }, [query]);
 
   return (
-    <div className="absolute bottom-full mb-2 right-0 w-72 max-w-[75vw] rounded-2xl cine-glass-panel overflow-hidden z-30">
-      <div className="flex items-center gap-2 p-2 border-b border-[var(--cine-glass-border)]">
+    <div className="absolute bottom-full mb-2 right-0 w-80 sm:w-[340px] max-w-[86vw] rounded-2xl cine-glass-panel overflow-hidden z-30">
+      <div className="flex items-center gap-2 p-2.5 border-b border-[var(--cine-glass-border)]">
         <Search className="w-3.5 h-3.5 text-white/50 flex-shrink-0" />
         <input
           value={query}
@@ -57,7 +57,7 @@ export default function GifPicker({ onPick, onClose }) {
           placeholder="Search GIFs…"
           aria-label="Search GIFs"
           autoFocus
-          className="flex-1 min-w-0 bg-transparent text-xs text-white placeholder-white/30 focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-white/30 focus:outline-none"
         />
         <button
           onClick={onClose}
@@ -67,12 +67,15 @@ export default function GifPicker({ onPick, onClose }) {
           <X className="w-3 h-3" />
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-1 p-2 max-h-56 overflow-y-auto">
+      {/* Whole-gif cells: object-contain letterboxes instead of cropping —
+          Klipy previews are mixed aspects, and cover-cut "half a GIF" was
+          the complaint. Fixed row height keeps the grid aligned. */}
+      <div className="grid grid-cols-2 gap-1.5 p-2.5 max-h-80 overflow-y-auto">
         {loading && (
-          <p className="col-span-3 text-center text-[11px] text-white/50 py-6">Loading GIFs…</p>
+          <p className="col-span-2 text-center text-[11px] text-white/50 py-6">Loading GIFs…</p>
         )}
         {!loading && error && (
-          <p className="col-span-3 text-center text-[11px] text-white/50 py-6">{error}</p>
+          <p className="col-span-2 text-center text-[11px] text-white/50 py-6">{error}</p>
         )}
         {!loading &&
           !error &&
@@ -80,16 +83,16 @@ export default function GifPicker({ onPick, onClose }) {
             <button
               key={g.id}
               onClick={() => onPick(g)}
-              title={g.title || 'GIF'}
+
               aria-label={`Send GIF${g.title ? `: ${g.title}` : ''}`}
-              className="rounded-lg overflow-hidden hover:ring-2 hover:ring-white/60 transition cursor-pointer aspect-square bg-white/5"
+              className="rounded-xl overflow-hidden hover:ring-2 hover:ring-white/60 transition cursor-pointer h-28 bg-black/50"
             >
               <img
                 src={g.preview}
                 alt=""
                 loading="lazy"
                 decoding="async"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
               />
             </button>
           ))}

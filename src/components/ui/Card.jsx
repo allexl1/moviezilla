@@ -5,7 +5,7 @@ import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
  * Shared MediaCard component — replaces all ad-hoc card implementations.
  * Used in: home grid, discovery pages, search results, "More Like This", etc.
  */
-export default function Card({ media, onClick, showRating = true, size = 'default', posterOnly = false }) {
+export default function Card({ media, onClick, showRating = true, showRole = false, size = 'default', posterOnly = false }) {
   const title = media?.title || media?.name || 'Untitled';
   // Fluid grid cards render up to ~210px wide — w500 keeps them crisp on
   // retina; rails stay on lighter w342, lg keeps w780.
@@ -13,6 +13,8 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
   const poster = tmdb.getImageUrl(media?.poster_path, posterSize);
   const rating = media?.vote_average ? media.vote_average.toFixed(1) : null;
   const year = (media?.release_date || media?.first_air_date || '').split('-')[0];
+  // Person credits: whose story it is on that title ("as Ana", "Director").
+  const role = showRole ? media?.character || media?.job || null : null;
 
   const sizeClasses = {
     sm: 'w-32',
@@ -32,7 +34,7 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
       }}
       role="button"
       tabIndex={0}
-      title={title}
+      
       aria-label={`View ${title}`}
       className={`cine-card cine-card-in flex-shrink-0 ${sizeClasses[size] || sizeClasses.default}`}
     >
@@ -77,6 +79,7 @@ export default function Card({ media, onClick, showRating = true, size = 'defaul
       {!posterOnly && (
         <>
           <h4 className="cine-card-title">{title}</h4>
+          {role && <p className="cine-card-role">{role}</p>}
           {year && <p className="cine-card-year">{year}</p>}
         </>
       )}

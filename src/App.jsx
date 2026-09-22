@@ -54,6 +54,9 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(() => parseLocationSafe().media);
   const [selectedPerson, setSelectedPerson] = useState(() => parseLocationSafe().personId);
+  // Person → Back restores the title you came from (detail stashes it in
+  // selectPerson; search/direct person links leave it null → tab fallback).
+  const [personReturn, setPersonReturn] = useState(null);
   const [activePlayer, setActivePlayer] = useState(null);
   const [activeRoomCode, setActiveRoomCode] = useState(() => parseLocationSafe().roomCode);
   const [roomDraft, setRoomDraft] = useState(null);
@@ -91,6 +94,8 @@ export default function App() {
       setActiveTab(p.tab);
       setSelectedMedia(p.media);
       setSelectedPerson(p.personId);
+      // Browser arrived at a title directly: no in-app return to restore.
+      if (p.media) setPersonReturn(null);
       setActiveRoomCode(p.roomCode);
       if (!p.play) {
         setActivePlayer(null);
@@ -203,13 +208,18 @@ export default function App() {
 
   // Any navigation away from playback resets ?play=1: a stale player over
   // a new screen is a desync (wrong title, wrong URL, back-button ghosts).
+  // Opening a title also syncs the navbar tab to its type (a show picked
+  // from Home/Search/Watchlist lights up Shows, not Home).
   const selectMedia = (item) => {
     setActivePlayer(null);
     setSelectedPerson(null);
+    setPersonReturn(null);
     setSelectedMedia(item);
+    if (item) setActiveTab(resolveMediaType(item) === 'tv' ? 'tv' : 'movie');
   };
   const selectPerson = (id) => {
     setActivePlayer(null);
+    setPersonReturn(selectedMedia);
     setSelectedMedia(null);
     setSelectedPerson(id);
   };
@@ -217,6 +227,7 @@ export default function App() {
     setActivePlayer(null);
     setSelectedMedia(null);
     setSelectedPerson(null);
+    setPersonReturn(null);
     setActiveRoomCode(null);
     setRoomDraft(null);
     setActiveTab('home');
@@ -324,7 +335,7 @@ export default function App() {
   const overlaid = isSearchOpen || isSettingsOpen || isAccountOpen || Boolean(activePlayer);
 
   return (
-    <div className="relative min-h-screen bg-[var(--cine-bg-deep)] text-white select-none">
+    <div className="relative min-h-screen bg-[var(--cine-bg-deep)] text-white">
       {/* Contextual Ambient Aurora Mesh Canvas */}
       <div
         className={`cine-aurora-canvas ${
@@ -355,8 +366,17 @@ export default function App() {
         isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
         onBack={() => {
           setActivePlayer(null);
+          // Person opened from a title goes back TO that title (not Home).
+          if (selectedPerson && personReturn) {
+            setSelectedPerson(null);
+            setSelectedMedia(personReturn);
+            setActiveTab(resolveMediaType(personReturn) === 'tv' ? 'tv' : 'movie');
+            setPersonReturn(null);
+            return;
+          }
           setSelectedMedia(null);
           setSelectedPerson(null);
+          setPersonReturn(null);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -443,7 +463,6 @@ export default function App() {
             <WatchlistView
               onSelectMedia={(item) => selectMedia(item)}
               onResume={(media, fallback) => playMedia(media, fallback)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
               letterboxdUser={letterboxdUser}
               onToast={showToast}
               onSaveLetterboxd={handleSaveLetterboxd}
@@ -472,8 +491,6 @@ export default function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        currentUsername={letterboxdUser}
-        onSaveLetterboxd={handleSaveLetterboxd}
       />
 
       <AccountModal

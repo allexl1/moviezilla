@@ -5,6 +5,7 @@ import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
+import GridLoader from '../components/GridLoader';
 import Card from '../components/ui/Card';
 import { SkelGrid } from '../components/ui';
 
@@ -97,7 +98,7 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
               <button
                 onClick={() => setShowAiring((v) => !v)}
                 aria-pressed={showAiring}
-                title="Show only series airing right now"
+                aria-label="Show only series airing right now"
                 className={`cine-pill${showAiring ? ' cine-pill--active' : ''}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${showAiring ? 'bg-black' : 'bg-[var(--cine-accent)]'}`} />
@@ -121,13 +122,9 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
         hasMore={upcomingHasMore}
       />
       <>
+        <section className="space-y-3">
         <div className="cine-section-head">
-          <h2 className="cine-section-title">{showAiring ? 'On The Air' : 'Released Series'}</h2>
-          <span className="text-xs text-white/60">
-            {showAiring
-              ? `${onAirToday.length} titles • airing now`
-              : `${releasedItems.length} titles • available now`}
-          </span>
+          <h2 className="cine-section-title cine-section-title--lg">{showAiring ? 'On The Air' : 'Released Series'}</h2>
         </div>
         {(showAiring ? onAirLoading && onAirToday.length === 0 : catalogLoading && releasedItems.length === 0) ? (
           <SkelGrid count={12} />
@@ -151,18 +148,13 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
             )}
           </>
         )}
+        </section>
       </>
-      {(showAiring ? onAirHasMore : !showAiring && page < totalPages) && (showAiring ? onAirToday.length > 0 : totalCount > 0) && (
-        <div className="flex justify-center py-10">
-          <button
-            onClick={showAiring ? loadMoreOnAir : nextPage}
-            disabled={showAiring ? onAirLoadingMore : loadingMore}
-            className="cine-control-btn disabled:opacity-50"
-          >
-            {(showAiring ? onAirLoadingMore : loadingMore) ? 'Loading…' : 'Load more'}
-          </button>
-        </div>
-      )}
+      <GridLoader
+        hasMore={showAiring ? onAirHasMore && onAirToday.length > 0 : !showAiring && page < totalPages && totalCount > 0}
+        loading={showAiring ? onAirLoadingMore : loadingMore}
+        onMore={showAiring ? loadMoreOnAir : nextPage}
+      />
       {catalogError && (
         <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
           <span>{catalogError}</span>

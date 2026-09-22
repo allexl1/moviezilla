@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, LogIn, Users, Trash2, X, Copy, Check, MonitorPlay, Search, Link2, Clapperboard, ArrowLeft } from 'lucide-react';
+import { Users, Trash2, X, Copy, Check, MonitorPlay, Search, Link2, Clapperboard, ArrowLeft } from 'lucide-react';
 import { parseYouTubeId, fetchYouTubeMeta } from './YouTubeRoomPlayer';
 import { isRoomsConfigured } from '../services/supabase';
 import {
@@ -16,6 +16,7 @@ import {
 } from '../services/rooms';
 import { tmdb } from '../services/tmdb';
 import Input from './ui/Input';
+import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
 import Row from './ui/Row';
 import RowRail from './RowRail';
@@ -27,7 +28,8 @@ function NickRow({ nickname, isAccount, setNicknameState, onToast }) {
   if (nickname) {
     return (
       <div className="flex items-center gap-2">
-        <span className="cine-chip cine-chip--accent">{nickname}</span>
+        <span className="text-[11px] font-semibold text-white/45">Nickname:</span>
+        <span className="cine-chip cine-chip--neutral">{nickname}</span>
         {isAccount ? (
           <span className="text-[11px] font-medium text-white/40">From your account</span>
         ) : (
@@ -83,9 +85,6 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
   const { displayName: acctName } = useAccount();
   const [deviceNick, setDeviceNick] = useState(() => myNickname());
   const nickname = acctName || deviceNick;
-  const [title, setTitle] = useState(
-    () => draftMedia?.title || draftMedia?.name || ''
-  );
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -101,6 +100,10 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
   const [ytLoading, setYtLoading] = useState(false);
   const [trending, setTrending] = useState([]);
   const device = myDeviceId();
+  // Create confirmation: every tap that would instantly open a room
+  // (trending rail, search result, YouTube link) first shows what you're
+  // about to watch. Accidental taps no longer strand you in a room.
+  const [pending, setPending] = useState(null);
 
   // Lobby filler: trending titles, tap = instant room (no pick screen).
   useEffect(() => {
@@ -116,10 +119,6 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
       )
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    setTitle(draftMedia?.title || draftMedia?.name || '');
-  }, [draftMedia]);
 
   // Title search (debounced, poster-only, top 6).
   useEffect(() => {
@@ -226,7 +225,9 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               poster_path: picked.poster_path || '',
             };
       const room = await createRoom({
-        title: title.trim() || picked.title || `${nickname}'s room`,
+        // Room name is automatic (title, else host) — no name field clutters
+        // the lobby.
+        title: picked.title || `${nickname}'s room`,
         media,
         season: 1,
         episode: 1,
@@ -312,18 +313,21 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">Rooms</h1>
           <p className="text-sm text-white/60 mt-1">Watch together, in sync, with chat</p>
         </div>
-        <NickRow nickname={nickname} isAccount={Boolean(acctName)} setNicknameState={setDeviceNick} onToast={onToast} />
+        {/* Nickname is device-only identity: hidden when the account
+            already names this user. */}
+        {!acctName && (
+          <NickRow nickname={nickname} isAccount={false} setNicknameState={setDeviceNick} onToast={onToast} />
+        )}
       </div>
 
       {error && <p className="text-xs text-red-400/90">{error}</p>}
 
       {step === 'pick' ? (
-        <section className="rounded-3xl cine-glass-panel p-6 sm:p-10 space-y-7 w-full max-w-3xl mx-auto">
-          <div className="flex items-center gap-4">
+        <section className="rounded-3xl cine-glass-panel p-6 sm:p-8 space-y-6 w-full max-w-xl mx-auto">          <div className="flex items-center gap-4">
             <button
               onClick={() => setStep('main')}
               className="cine-icon-btn"
-              title="Back"
+              
               aria-label="Back to rooms"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -352,7 +356,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
                   key={`${r.media_type}_${r.id}`}
                   disabled={busy}
                   onClick={() =>
-                    doCreate({
+                    setPending({
                       kind: 'tmdb',
                       id: r.id,
                       media_type: r.media_type,
@@ -409,10 +413,10 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               </div>
               <button
                 onClick={() =>
-                  doCreate({ kind: 'youtube', youtubeId: ytMeta.id, title: ytMeta.title, thumb: ytMeta.thumb })
+                  setPending({ kind: 'youtube', youtubeId: ytMeta.id, title: ytMeta.title, thumb: ytMeta.thumb })
                 }
                 disabled={busy}
-                className="cine-btn cine-btn-primary h-10 px-5 text-sm flex-shrink-0 disabled:opacity-50"
+                className="cine-btn cine-btn-white h-10 px-5 text-sm flex-shrink-0 disabled:opacity-50"
               >
                 {busy ? 'Creating…' : 'Create'}
               </button>
@@ -421,17 +425,30 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         </section>
       ) : (
         <>
-        <div className="grid gap-4 md:grid-cols-2">
-        {/* Create */}
-        <section className="rounded-3xl cine-glass-panel p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="cine-disc w-10 h-10">
-              <Plus className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Create a room</h2>
-              <p className="text-[11px] text-white/60">Get a 6-letter code to share</p>
-            </div>
+        {/* Lobby order: trending strip first, one centered action panel,
+            then My rooms — nothing important below the fold. */}
+        {trending.length > 0 && (
+          <RowRail
+            title="Trending now — start a room"
+            cardSize="sm"
+            items={trending}
+            onSelect={(m) =>
+              setPending({
+                kind: 'tmdb',
+                id: m.id,
+                media_type: m.media_type || 'movie',
+                title: m.title || m.name,
+                poster_path: m.poster_path,
+              })
+            }
+          />
+        )}
+        {/* One centered action: create first (white primary), join below.
+            No room-name field — rooms take the title's name automatically. */}
+        <section className="rounded-3xl cine-glass-panel p-6 sm:p-8 space-y-5 max-w-xl w-full mx-auto">
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-extrabold text-white tracking-tight">Start watching together</h2>
+            <p className="text-xs text-white/60">One tap to create — or join with a code</p>
           </div>
           {draftMedia && (
             <div className="flex items-center gap-3 mat-row p-2.5">
@@ -450,74 +467,48 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               </div>
             </div>
           )}
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Room name (optional)"
-            aria-label="Room name"
-          />
           <button
             onClick={handleCreateBtn}
             disabled={busy}
-            className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm w-full disabled:opacity-50"
+            className="cine-btn cine-btn-white h-12 px-8 text-[15px] w-full disabled:opacity-50"
           >
-            <MonitorPlay className="w-4 h-4" />
-            {busy ? 'Creating…' : draftMedia ? 'Create room' : 'Continue'}
+            <MonitorPlay className="w-[18px] h-[18px]" />
+            {busy ? 'Creating…' : draftMedia ? 'Create room' : 'New room'}
           </button>
-        </section>
-
-        {/* Join */}
-        <section className="rounded-3xl cine-glass-panel p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="cine-disc w-10 h-10">
-              <LogIn className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white">Join a room</h2>
-              <p className="text-[11px] text-white/60">Enter the host's code</p>
-            </div>
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">or join</span>
+            <div className="h-px flex-1 bg-white/10" />
           </div>
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-            placeholder="ABC123"
-            aria-label="Room code"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleJoin();
-            }}
-          />
-          <button onClick={handleJoin} disabled={busy} className="cine-control-btn w-full disabled:opacity-50">
-            {busy ? 'Joining…' : 'Join room'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="flex-1 min-w-0">
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                placeholder="ABC123"
+                aria-label="Room code"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleJoin();
+                }}
+              />
+            </div>
+            <button
+              onClick={handleJoin}
+              disabled={busy}
+              className="cine-control-btn h-12 px-8 text-[15px] flex-shrink-0 disabled:opacity-50"
+            >
+              {busy ? 'Joining…' : 'Join'}
+            </button>
+          </div>
         </section>
-        </div>
         </>
       )}
 
-      {/* Instant rooms from what's trending — one tap, no pick screen. */}
-      {step === 'main' && trending.length > 0 && (
-        <RowRail
-          title="Trending now — start a room"
-          items={trending}
-          onSelect={(m) =>
-            doCreate({
-              kind: 'tmdb',
-              id: m.id,
-              media_type: m.media_type || 'movie',
-              title: m.title || m.name,
-              poster_path: m.poster_path,
-            })
-          }
-        />
-      )}
-
-      {/* My rooms — hidden while empty (and off the pick screen) so the
-          page stays about one action, not three. */}
+      {/* My rooms — right under the action, never below the fold filler. */}
       {step === 'main' && rooms.length > 0 && (
       <section className="space-y-3">
         <div className="cine-section-head">
-          <h2 className="cine-section-title">My rooms</h2>
-          <span className="text-xs text-white/60">{rooms.length} saved</span>
+          <h2 className="cine-section-title cine-section-title--lg">My rooms</h2>
         </div>
           <div className="space-y-2">
             {rooms.map((r) => (
@@ -528,28 +519,29 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
                 meta={`${r.code} • ${r.owned ? 'Host' : 'Guest'}`}
                 onClick={() => onEnter(r.code)}
                 right={
-                  <div className="flex items-center gap-2">
+                  <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for room ${r.code}`}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         copyCode(r.code);
                       }}
-                      className="cine-icon-btn cine-icon-btn--sm"
-                      title="Copy invite link"
                       aria-label={`Copy invite link ${r.code}`}
                     >
                       {copied === r.code ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Copy invite</span>
                     </button>
+                    <span className="cine-duo-divider" aria-hidden="true" />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(r);
                       }}
-                      className="cine-icon-btn cine-icon-btn--sm"
-                      title={r.owned ? 'Delete room for everyone' : 'Remove from list'}
                       aria-label={r.owned ? `Delete room ${r.code}` : `Remove room ${r.code}`}
                     >
                       {r.owned ? <Trash2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                      <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">
+                        {r.owned ? 'Delete for everyone' : 'Remove'}
+                      </span>
                     </button>
                   </div>
                 }
@@ -558,6 +550,56 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
           </div>
       </section>
       )}
+
+      <Modal
+        isOpen={Boolean(pending)}
+        onClose={() => setPending(null)}
+        maxWidth="max-w-sm"
+        label="Confirm room"
+      >
+        {pending && (
+          <div className="p-6 sm:p-8 space-y-5 text-center">
+            <div className="w-20 h-28 rounded-2xl overflow-hidden bg-black/50 mx-auto">
+              <img
+                src={
+                  pending.poster_path
+                    ? tmdb.getImageUrl(pending.poster_path, 'w185')
+                    : pending.thumb || ''
+                }
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div>
+              <h2 className="text-lg font-extrabold text-white tracking-tight">
+                Create a room to watch “{pending.title || 'this title'}”?
+              </h2>
+              <p className="text-xs text-white/60 mt-1">
+                Everyone with the code joins at the start.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPending(null)}
+                className="cine-control-btn flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const p = pending;
+                  setPending(null);
+                  doCreate(p);
+                }}
+                disabled={busy}
+                className="cine-btn cine-btn-white h-11 px-6 text-sm flex-1 disabled:opacity-50"
+              >
+                {busy ? 'Creating…' : 'Create room'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

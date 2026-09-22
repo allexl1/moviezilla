@@ -84,7 +84,7 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
                     if (!off) handleSelect(s.id);
                   }}
                   disabled={off}
-                  title={off ? 'Not available for this title' : s.name}
+                  aria-label={off ? 'Not available for this title' : s.name}
                   className={`mat-row w-full flex items-center justify-between gap-3 px-5 py-3.5 text-left text-sm transition ${
                     off ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
                   } ${

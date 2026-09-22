@@ -41,7 +41,7 @@ export default class ErrorBoundary extends React.Component {
                     this.setState({ error: null });
                     onHome();
                   }}
-                  className="cine-btn cine-btn-primary h-9 px-5 text-xs"
+                  className="cine-btn cine-btn-white h-11 px-5 text-xs"
                 >
                   {homeLabel}
                 </button>

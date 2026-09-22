@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ListVideo, X, Check, Pencil, History, Clapperboard } from 'lucide-react';
+import { ListVideo, X, Check, Play, History, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
 import { storage, progressLabel, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
-import Select from './ui/Select';
+import Picker from './Picker';
 import Row from './ui/Row';
 import SegmentedControl from './ui/SegmentedControl';
 import EmptyState from './ui/EmptyState';
@@ -64,7 +64,7 @@ const VIEW_OPTIONS = [
   { id: 'watched', name: 'Watched' },
 ];
 
-export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings, letterboxdUser, onToast, onSaveLetterboxd }) {
+export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser, onToast, onSaveLetterboxd }) {
   const [view, setView] = useState('history');
   const [whenFilter, setWhenFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -238,7 +238,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     const ids = new Set();
     history.forEach((h) => (h.genres || []).forEach((g) => ids.add(String(g))));
     watchlist.forEach((w) => (w.genre_ids || []).forEach((g) => ids.add(String(g))));
-    return [{ value: '', label: 'All Genres' }].concat(
+    return [{ value: '', label: 'Genre' }].concat(
       [...ids]
         .filter((id) => GENRE_NAME[id])
         .sort((a, b) => GENRE_NAME[a].localeCompare(GENRE_NAME[b]))
@@ -262,20 +262,27 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
     return [...groups.entries()];
   })();
 
-  const myList = (() => {
-    const local = watchlist.filter((w) => {
-      const t = w.media_type || (w.first_air_date ? 'tv' : 'movie');
-      return matchType(t) && matchGenre(w.genre_ids);
-    });
-    // Letterboxd RSS items carry no genre/type metadata — show them unless
-    // the user is filtering by something they can't match. Locally hidden
-    // (dismissed) ids stay gone.
+  const myList = watchlist.filter((w) => {
+    const t = w.media_type || (w.first_air_date ? 'tv' : 'movie');
+    return matchType(t) && matchGenre(w.genre_ids);
+  });
+
+  // Letterboxd lives INSIDE Watch Later as its own group (history-style
+  // heads), never as a separate menu and never mixed into the local rows:
+  // remote rows carry no genre/type metadata, so they can't be filtered
+  // honestly — the group simply shows all synced titles.
+  const letterboxdVisible = (() => {
+    if (!letterboxdUser) return [];
     const hidden = new Set(storage.getHiddenLetterboxd());
-    const remote = !genreFilter
-      ? (letterboxdList || []).filter((r) => !hidden.has(r.id) && matchType('movie'))
-      : [];
-    return [...local, ...remote];
+    return (letterboxdList || []).filter((r) => !hidden.has(r.id));
   })();
+
+  // Group separator (All / Mine / Letterboxd) — only when both sides have
+  // something to separate.
+  const [lbFilter, setLbFilter] = useState('all');
+  const showLbGroups = letterboxdUser && myList.length > 0 && letterboxdVisible.length > 0;
+  const showMine = !showLbGroups || lbFilter !== 'letterboxd';
+  const showRemote = letterboxdUser && (!showLbGroups || lbFilter !== 'mine') && letterboxdVisible.length > 0;
 
   // Progress strings come straight from storage.progressLabel so every
   // row in the app agrees.
@@ -336,7 +343,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="cine-chip cine-chip--accent">
+                <span className="cine-chip cine-chip--neutral">
                   Letterboxd: {letterboxdUser}
                 </span>
                 <button
@@ -344,10 +351,8 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                     setLbDraft(letterboxdUser);
                     setEditingLb(true);
                   }}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
-                  title="Change Letterboxd username"
+                  className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
                 >
-                  <Pencil className="w-3 h-3" />
                   Change
                 </button>
               </div>
@@ -356,95 +361,136 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               <p className="text-[11px] text-red-400/90">{letterboxdError}</p>
             )}
           </div>
-        ) : (
-          <div className="cine-glass-panel rounded-3xl p-5 self-start lg:self-auto max-w-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="cine-btn-circle flex-shrink-0" aria-hidden="true">
-                <Clapperboard className="w-5 h-5" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-bold text-white">Letterboxd sync</span>
-                <span className="block text-xs text-white/60 leading-relaxed">
-                  Pull your watchlist and diary into rows with posters.
-                </span>
-              </span>
+        ) : editingLb ? (
+          <div className="self-start lg:self-auto flex flex-col items-start lg:items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-44">
+              <input
+                value={lbDraft}
+                onChange={(e) => setLbDraft(e.target.value)}
+                placeholder="letterboxd username"
+                aria-label="Letterboxd username"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveLbUser();
+                  if (e.key === 'Escape') setEditingLb(false);
+                }}
+                className="cine-input"
+              />
+              </div>
+              <button onClick={handleSaveLbUser} className="cine-control-btn px-4 h-10" aria-label="Save username">
+                <Check className="w-4 h-4" />
+              </button>
+              <button onClick={() => setEditingLb(false)} className="cine-icon-btn cine-icon-btn--sm" aria-label="Cancel">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
+            {letterboxdError && (
+              <p className="text-[11px] text-red-400/90">{letterboxdError}</p>
+            )}
+          </div>
+        ) : (
+          <div className="mat-row self-start lg:self-auto flex items-center gap-3 pl-3 pr-2 py-2 max-w-sm">
+            <span className="cine-disc cine-disc--dim w-9 h-9" aria-hidden="true">
+              <Clapperboard className="w-4 h-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-bold text-white">Letterboxd sync</span>
+              <span className="block text-[11px] text-white/55 truncate">Watchlist + diary with posters</span>
+            </span>
             <button
-              onClick={onOpenSettings}
-              className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm w-full"
+              onClick={() => {
+                setLbDraft('');
+                setEditingLb(true);
+              }}
+              className="cine-pill cine-pill--sm flex-shrink-0"
             >
-              Connect Letterboxd
+              Connect
             </button>
           </div>
         )}
       </div>
 
-      {/* View switch — the primary control (large, own block). Filters below
-          are subordinate (compact) and contextual per view. */}
-      <div className="space-y-2">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-white/50">Library</h3>
+      {/* One control block: the segment picks the library, the row below
+          filters it. No eyebrows, no repeated headings — the active segment
+          already says where you are. */}
+      <div className="flex flex-col gap-3">
         <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={setView} size="lg" />
-      </div>
-
-      {/* Filters — only the ones that apply to the current view.
-          History gets When (week/month/year ranges); every view keeps
-          Type + Genre so the two groups never blur together. */}
-      <div className="space-y-2">
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-white/50">Filters</h3>
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+        {/* One filter row (Netflix My List pattern): compact dropdowns, no
+            labeled pill groups. History keeps When; every view keeps Type
+            + Genre. */}
+        <div className="flex flex-wrap items-center gap-2.5">
           {view === 'history' && (
-            <SegmentedControl label="When" options={WHEN_FILTERS} value={whenFilter} onChange={setWhenFilter} />
+            <Picker
+              value={whenFilter}
+              onChange={setWhenFilter}
+              ariaLabel="Filter by time"
+              menuLabel="Time ranges"
+              placeholder="When"
+              options={WHEN_FILTERS}
+            />
           )}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <SegmentedControl label="Type" options={TYPE_FILTERS} value={typeFilter} onChange={setTypeFilter} />
-            <Select value={genreFilter} onChange={setGenreFilter} options={genreOptions} label="Filter by genre" />
-          </div>
+          <Picker
+            value={typeFilter}
+            onChange={setTypeFilter}
+            ariaLabel="Filter by type"
+            menuLabel="Types"
+            placeholder="Type"
+            options={TYPE_FILTERS}
+          />
+          <Picker
+            value={genreFilter}
+            onChange={setGenreFilter}
+            ariaLabel="Filter by genre"
+            menuLabel="Genres"
+            placeholder="Genre"
+            options={genreOptions}
+          />
         </div>
       </div>
 
       {view === 'watchlater' && (
       <>
-      {/* Watch Later — Continue Watching lives on Home + History only. */}
-      <section className="space-y-3">
-        <div className="cine-section-head">
-          <h2 className="cine-section-title">Watch Later</h2>
-          <span className="text-xs text-white/60">{myList.length} titles</span>
-        </div>
+      {/* Watch Later — local and Letterboxd rows stay in their own groups
+          (history-style heads), never mixed: remote rows carry no
+          genre/type metadata. A separator appears only when both sides
+          have something to separate. */}
+      <section className="space-y-6">
+        {showLbGroups && (
+          <SegmentedControl
+            label="Show"
+            options={[
+              { id: 'all', name: 'All' },
+              { id: 'mine', name: 'Watchlist' },
+              { id: 'letterboxd', name: 'Letterboxd' },
+            ]}
+            value={lbFilter}
+            onChange={setLbFilter}
+          />
+        )}
         {resolvingId && (
           <p className="text-xs text-white/60">Looking up title on TMDB…</p>
         )}
         {!resolvingId && resolveError && (
           <p className="text-xs text-red-400/90">{resolveError}</p>
         )}
-        {myList.length === 0 ? (
-          <EmptyState
-            icon={<ListVideo className="w-5 h-5" />}
-            title="Nothing saved yet"
-            description="Tap + on any title to park it here for later."
-          />
-        ) : (
-          <div className="cine-grid">
+        {showMine && myList.length > 0 && (
+          <div className="space-y-3">
+            {showLbGroups && <h4 className="cine-group-head">Watchlist • {myList.length}</h4>}
+            <div className="cine-grid">
             {myList.map((item) => {
               const key = `${item.id}_${item.title}`;
               const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
               const prog = progressByKey.get(`${mediaType}_${item.id}`);
               const badge = prog
                 ? prog.percent >= WATCHED_PCT ? 'Watched' : `${prog.percent}% watched`
-                : item.source === 'letterboxd' ? 'Letterboxd' : 'To Watch';
-              const isLocal = item.source !== 'letterboxd';
+                : 'To Watch';
               return (
               <div key={key} className="relative">
                 <Card
-                  media={{
-                    ...item,
-                    poster_path:
-                      (item.source === 'letterboxd' && lbArt[item.id]) ||
-                      item.poster_path,
-                  }}
+                  media={item}
                   size="fluid"
-                  onClick={(m) =>
-                    m.source === 'letterboxd' ? handleLetterboxdSelect(m) : onSelectMedia(m)
-                  }
+                  onClick={(m) => onSelectMedia(m)}
                   showRating={false}
                 />
                 <span className="cine-chip cine-chip--solid absolute left-2 top-2">
@@ -453,14 +499,9 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (isLocal) {
-                      handleRemoveWatchlist(item.id, item.title || item.name);
-                    } else {
-                      handleHideLetterboxd(item);
-                    }
+                    handleRemoveWatchlist(item.id, item.title || item.name);
                   }}
                   className="cine-icon-btn cine-icon-btn--sm absolute right-2 top-2"
-                  title={`Remove "${item.title || item.name}"`}
                   aria-label={`Remove "${item.title || item.name}" from Watch Later`}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -468,7 +509,48 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
               </div>
               );
             })}
+            </div>
           </div>
+        )}
+        {showRemote && (
+          <div className="space-y-3">
+            {showLbGroups && <h4 className="cine-group-head">Letterboxd • {letterboxdVisible.length}</h4>}
+            <div className="cine-grid">
+              {letterboxdVisible.map((item) => (
+                <div key={item.id} className="relative">
+                  <Card
+                    media={{
+                      ...item,
+                      poster_path: lbArt[item.id] || item.poster_path,
+                    }}
+                    size="fluid"
+                    onClick={(m) => handleLetterboxdSelect(m)}
+                    showRating={false}
+                  />
+                  <span className="cine-chip cine-chip--solid absolute left-2 top-2">
+                    Letterboxd
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleHideLetterboxd(item);
+                    }}
+                    className="cine-icon-btn cine-icon-btn--sm absolute right-2 top-2"
+                    aria-label={`Hide "${item.title}" from Letterboxd`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(showMine && myList.length > 0) || showRemote ? null : (
+          <EmptyState
+            icon={<ListVideo className="w-5 h-5" />}
+            title="Nothing saved yet"
+            description="Tap + on any title to park it here for later."
+          />
         )}
       </section>
       </>
@@ -476,10 +558,11 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
       {view === 'watched' && (
       <section className="space-y-3">
-        <div className="cine-section-head">
-          <h2 className="cine-section-title">Watched</h2>
-          <span className="text-xs text-white/60">{watchedItems.length} titles</span>
-        </div>
+        {watchedItems.length > 0 && (
+          <div className="flex justify-end">
+            <span className="text-xs text-white/40">{watchedItems.length} titles</span>
+          </div>
+        )}
         {watchedItems.length === 0 ? (
           <EmptyState
             icon={<Check className="w-5 h-5" />}
@@ -490,15 +573,21 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         <div className="space-y-2 cine-history-group">
           {watchedItems.map((h) => {
             const { media, fallback } = resumePayload(h);
+            const posterUrl = tmdb.getImageUrl(h.poster, 'w185');
             return (
               <Row
                 key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
-                poster={tmdb.getImageUrl(h.poster, 'w185')}
+                poster={posterUrl}
                 title={h.title}
                 meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${groupLabel(h.updatedAt)}`}
                 onClick={() => onResume(media, fallback)}
-                thumbClassName="w-16 h-24"
+                thumbClassName="w-20 h-28"
                 titleClassName="text-sm md:text-base font-semibold text-white truncate"
+                overlay={(
+                  <span className="cine-cw-play-btn">
+                    <Play className="w-3 h-3" fill="currentColor" />
+                  </span>
+                )}
                 right={
                   <div className="flex items-center gap-2">
                     <span className="cine-chip cine-chip--accent">
@@ -511,7 +600,7 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
                         handleRemoveHistory(h);
                       }}
                       className="cine-icon-btn cine-icon-btn--sm"
-                      title={`Remove "${h.title}"`}
+                      
                       aria-label={`Remove "${h.title}" from history`}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -528,9 +617,6 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
 
       {view === 'history' && (
       <section className="space-y-6">
-        <div className="cine-section-head">
-          <h2 className="cine-section-title">History</h2>
-        </div>
         {historyGroups.length === 0 && (
           <EmptyState
             icon={<History className="w-5 h-5" />}
@@ -540,49 +626,68 @@ export default function WatchlistView({ onSelectMedia, onResume, onOpenSettings,
         )}
         {historyGroups.map(([label, items]) => (
           <div key={label} className="space-y-2 cine-history-group">
-            <h4 className="cine-group-head">{label}</h4>
+            <h4 className="cine-group-head">{label} • {items.length}</h4>
             <div className="space-y-2">
               {items.map((h) => {
                 const { media, fallback } = resumePayload(h);
                 const watched = h.percent >= WATCHED_PCT;
+                const posterUrl = tmdb.getImageUrl(h.poster, 'w185');
                 return (
                   <Row
                     key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
-                    poster={tmdb.getImageUrl(h.poster, 'w185')}
+                    poster={posterUrl}
                     title={h.title}
                     meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${progressLabel(h)}`}
                     onClick={() => onResume(media, fallback)}
-                    thumbClassName="w-16 h-24"
+                    thumbClassName="w-20 h-28"
                     titleClassName="text-sm md:text-base font-semibold text-white truncate"
+                    progress={watched ? undefined : h.percent}
+                    overlay={(
+                      <span className="cine-cw-play-btn">
+                        <Play className="w-3 h-3" fill="currentColor" />
+                      </span>
+                    )}
                     right={
                       <div className="flex items-center gap-2">
                         <span className="cine-chip cine-chip--neutral">
                           {watched ? 'Watched' : h.type === 'tv' ? 'Show' : 'Movie'}
                         </span>
-                        {!watched && (
+                        {!watched ? (
+                          <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for ${h.title}`}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkWatched(h);
+                              }}
+                              aria-label={`Mark "${h.title}" as watched`}
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Mark watched</span>
+                            </button>
+                            <span className="cine-duo-divider" aria-hidden="true" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveHistory(h);
+                              }}
+                              aria-label={`Remove "${h.title}" from history`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Remove</span>
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleMarkWatched(h);
+                              handleRemoveHistory(h);
                             }}
                             className="cine-icon-btn cine-icon-btn--sm"
-                            title={`Mark "${h.title}" watched`}
-                            aria-label={`Mark "${h.title}" as watched`}
+                            aria-label={`Remove "${h.title}" from history`}
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveHistory(h);
-                          }}
-                          className="cine-icon-btn cine-icon-btn--sm"
-                          title={`Remove "${h.title}"`}
-                          aria-label={`Remove "${h.title}" from history`}
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     }
                   />

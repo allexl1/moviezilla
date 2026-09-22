@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Clapperboard, Play, Trash2, Zap, Download } from 'lucide-react';
+import { X, Play, Trash2, Zap, Download } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
-import Input from './ui/Input';
 import Select from './ui/Select';
 
 const SERVERS = [
@@ -60,8 +59,7 @@ function SettingRow({ icon, title, desc, control, danger = false }) {
   );
 }
 
-export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, currentUsername }) {
-  const [username, setUsername] = useState(currentUsername || '');
+export default function SettingsModal({ isOpen, onClose }) {
   const [defaultServer, setDefaultServer] = useState(() => storage.getPreferredServer('vidy'));
   const [accent, setAccent] = useState(() => {
     try {
@@ -78,10 +76,6 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
       return 'off';
     }
   });
-
-  useEffect(() => {
-    if (isOpen) setUsername(currentUsername || '');
-  }, [isOpen, currentUsername]);
 
   // One-tap PWA install: the closest thing to "fullscreen without the
   // Fullscreen API". Standalone mode has no browser chrome, so ad popups
@@ -122,7 +116,6 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
   };
 
   const handleSave = () => {
-    localStorage.setItem('mz_letterboxd_user', username.trim());
     storage.setPreferredServer(defaultServer);
     try {
       localStorage.setItem('mz_low_power', powerMode === 'max' ? '2' : powerMode === 'low' ? '1' : '0');
@@ -131,7 +124,6 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
     } catch {
       // Storage unavailable — preference simply doesn't persist.
     }
-    if (onSaveLetterboxd) onSaveLetterboxd(username.trim());
     onClose();
   };
 
@@ -157,25 +149,12 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
           <h2 className="text-xl font-bold text-white tracking-tight">Settings</h2>
           <p className="text-xs text-white/45 mt-0.5">Preferences & sync</p>
         </div>
-        <button onClick={onClose} className="cine-icon-btn" title="Close">
+        <button onClick={onClose} className="cine-icon-btn" aria-label="Close">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       <div className="divide-y divide-white/[0.07]">
-        <SettingRow
-          icon={<Clapperboard className="w-4 h-4" />}
-          title="Letterboxd Sync"
-          desc="Syncs your public Letterboxd watchlist into My List."
-          control={
-            <Input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="username"
-            />
-          }
-        />
-
         <SettingRow
           icon={<Play className="w-4 h-4" fill="currentColor" />}
           title="Default Server"
@@ -214,7 +193,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
                   key={a.value}
                   role="radio"
                   aria-checked={accent.toLowerCase() === a.value}
-                  title={a.name}
+                  
                   aria-label={`${a.name} accent`}
                   onClick={() => {
                     setAccent(a.value);
@@ -272,7 +251,7 @@ export default function SettingsModal({ isOpen, onClose, onSaveLetterboxd, curre
       <div className="pt-5 mt-1 border-t border-[var(--cine-glass-border)] flex justify-end">
         <button
           onClick={handleSave}
-          className="cine-btn cine-btn-primary cine-btn-shimmer h-11 px-6 text-sm"
+          className="cine-btn cine-btn-white h-11 px-6 text-sm"
         >
           Save Changes
         </button>

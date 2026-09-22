@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Play, CalendarDays } from 'lucide-react';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
+import { InfinityMark } from './GridLoader';
 
 /**
  * UpcomingRail — 16:9 backdrop shelf for unreleased/airing titles.
@@ -46,7 +47,7 @@ export default function UpcomingRail({
     return (
       <section className="space-y-3" aria-hidden="true">
         <div className="cine-section-head">
-          <h2 className="cine-section-title">{title}</h2>
+          <h2 className="cine-section-title cine-section-title--lg">{title}</h2>
         </div>
         <div className="cine-rail no-scrollbar -mx-1 px-1 flex flex-nowrap overflow-x-auto">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -74,8 +75,7 @@ export default function UpcomingRail({
   return (
     <section className="space-y-3">
       <div className="cine-section-head">
-        <h2 className="cine-section-title">{title}</h2>
-        <span className="text-xs text-white/60">{items.length} titles • one line, scroll →</span>
+        <h2 className="cine-section-title cine-section-title--lg">{title}</h2>
       </div>
 
       {/* Single horizontal line only: no wrap, snap scroll, fixed 16:9 cards. */}
@@ -89,7 +89,7 @@ export default function UpcomingRail({
               key={`${title}_${media.media_type || mediaType}_${media.id}`}
               onClick={() => onSelect?.({ ...media, media_type: media.media_type || mediaType })}
               className="cine-soon-card group flex-shrink-0"
-              title={year ? `${name} — ${verb} ${year}` : name}
+              
               aria-label={year ? `View ${name}, ${verb} ${year}` : `View ${name}`}
             >
               <img
@@ -121,18 +121,14 @@ export default function UpcomingRail({
         })}
         {/* Infinite-scroll sentinel: while more pages exist it sits at the
             end and fires onLoadMore ~500px before arrival; while a page is
-            in flight it shows a card-geometry spinner instead of a gap. */}
+            in flight the infinity mark holds the spot instead of a gap. */}
         {hasMore && (
           <div
             ref={sentinelRef}
             aria-hidden="true"
-            className="flex-shrink-0 w-24 self-stretch flex items-center justify-center"
+            className="flex-shrink-0 w-40 self-stretch flex items-center justify-center"
           >
-            {loadingMore && (
-              <span className="relative block w-40 aspect-video rounded-2xl overflow-hidden border border-[var(--cine-glass-border)]">
-                <span className="skel absolute inset-0" />
-              </span>
-            )}
+            {loadingMore && <InfinityMark label={`Loading more ${title}`} />}
           </div>
         )}
       </div>

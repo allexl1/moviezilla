@@ -5,6 +5,7 @@ import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
 import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
+import GridLoader from '../components/GridLoader';
 import Card from '../components/ui/Card';
 import { SkelGrid } from '../components/ui';
 
@@ -110,11 +111,9 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
         </div>
       )}
       <>
+        <section className="space-y-3">
         <div className="cine-section-head">
-          <h2 className="cine-section-title">Released Movies</h2>
-          <span className="text-xs text-white/60">
-            {releasedItems.length} titles • available now
-          </span>
+          <h2 className="cine-section-title cine-section-title--lg">Released Movies</h2>
         </div>
         {catalogLoading && releasedItems.length === 0 ? (
           <SkelGrid count={12} />
@@ -138,18 +137,13 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
             )}
           </>
         )}
+        </section>
       </>
-      {page < totalPages && totalCount > 0 && (
-        <div className="flex justify-center py-10">
-          <button
-            onClick={nextPage}
-            disabled={loadingMore}
-            className="cine-control-btn disabled:opacity-50"
-          >
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </button>
-        </div>
-      )}
+      <GridLoader
+        hasMore={page < totalPages && totalCount > 0}
+        loading={loadingMore}
+        onMore={nextPage}
+      />
       {catalogError && (
         <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
           <span>{catalogError}</span>

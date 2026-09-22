@@ -94,7 +94,7 @@ export default function Modal({
           <button
             onClick={onClose}
             className="cine-icon-btn absolute top-4 right-4 z-30"
-            title="Close"
+            
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />

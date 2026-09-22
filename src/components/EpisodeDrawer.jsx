@@ -106,7 +106,7 @@ export default function EpisodeDrawer({
               <button
                 onClick={() => setActiveSeason(currentSeason)}
                 className="cine-pill cine-pill--sm"
-                title={`Jump to season ${currentSeason}, episode ${currentEpisode}`}
+                
                 aria-label="Jump to current episode"
               >
                 <Crosshair className="w-3 h-3" />
@@ -117,7 +117,7 @@ export default function EpisodeDrawer({
           <button
             onClick={onClose}
             className="cine-icon-btn"
-            title="Close episode list"
+            
             aria-label="Close episode list"
           >
             <X className="w-4 h-4" />
