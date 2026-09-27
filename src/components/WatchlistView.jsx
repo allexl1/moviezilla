@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ListVideo, X, Check, Play, History, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
-import { storage, progressLabel, WATCHED_PCT } from '../services/storage';
+import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
 import Picker from './Picker';
@@ -253,7 +253,9 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
   const historyGroups = (() => {
     const groups = new Map();
     history
-      .filter((h) => matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter))
+      // Watched titles live in the Watched tab only — History is the
+      // unfinished lane (tapping ✓ moves the row out immediately).
+      .filter((h) => h.percent < WATCHED_PCT && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter))
       .forEach((h) => {
         const label = groupLabel(h.updatedAt);
         if (!groups.has(label)) groups.set(label, []);
@@ -482,9 +484,17 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
               const key = `${item.id}_${item.title}`;
               const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
               const prog = progressByKey.get(`${mediaType}_${item.id}`);
-              const badge = prog
-                ? prog.percent >= WATCHED_PCT ? 'Watched' : `${prog.percent}% watched`
-                : 'To Watch';
+              // Clock-only rows (duration unknown) badge the position,
+              // not a dishonest "0% watched".
+              const badge = !prog
+                ? 'To Watch'
+                : prog.percent >= WATCHED_PCT
+                  ? 'Watched'
+                  : prog.duration > 0
+                    ? `${prog.percent}% watched`
+                    : prog.currentTime > 0
+                      ? `${formatClock(prog.currentTime)} in`
+                      : 'To Watch';
               return (
               <div key={key} className="relative">
                 <Card
@@ -560,7 +570,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
       <section className="space-y-3">
         {watchedItems.length > 0 && (
           <div className="flex justify-end">
-            <span className="text-xs text-white/40">{watchedItems.length} titles</span>
+            <span className="text-xs text-white/40">{watchedItems.length} title{watchedItems.length === 1 ? '' : 's'}</span>
           </div>
         )}
         {watchedItems.length === 0 ? (
@@ -629,8 +639,9 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
             <h4 className="cine-group-head">{label} • {items.length}</h4>
             <div className="space-y-2">
               {items.map((h) => {
+                // History holds unfinished titles only (Watched lives in
+                // its own tab) — no watched branch needed below.
                 const { media, fallback } = resumePayload(h);
-                const watched = h.percent >= WATCHED_PCT;
                 const posterUrl = tmdb.getImageUrl(h.poster, 'w185');
                 return (
                   <Row
@@ -641,7 +652,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                     onClick={() => onResume(media, fallback)}
                     thumbClassName="w-20 h-28"
                     titleClassName="text-sm md:text-base font-semibold text-white truncate"
-                    progress={watched ? undefined : h.percent}
+                    progress={h.percent}
                     overlay={(
                       <span className="cine-cw-play-btn">
                         <Play className="w-3 h-3" fill="currentColor" />
@@ -650,44 +661,31 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                     right={
                       <div className="flex items-center gap-2">
                         <span className="cine-chip cine-chip--neutral">
-                          {watched ? 'Watched' : h.type === 'tv' ? 'Show' : 'Movie'}
+                          {h.type === 'tv' ? 'Show' : 'Movie'}
                         </span>
-                        {!watched ? (
-                          <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for ${h.title}`}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMarkWatched(h);
-                              }}
-                              aria-label={`Mark "${h.title}" as watched`}
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Mark watched</span>
-                            </button>
-                            <span className="cine-duo-divider" aria-hidden="true" />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveHistory(h);
-                              }}
-                              aria-label={`Remove "${h.title}" from history`}
-                            >
-                              <X className="w-3.5 h-3.5" />
-                              <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Remove</span>
-                            </button>
-                          </div>
-                        ) : (
+                        <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for ${h.title}`}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkWatched(h);
+                            }}
+                            aria-label={`Mark "${h.title}" as watched`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Mark watched</span>
+                          </button>
+                          <span className="cine-duo-divider" aria-hidden="true" />
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRemoveHistory(h);
                             }}
-                            className="cine-icon-btn cine-icon-btn--sm"
                             aria-label={`Remove "${h.title}" from history`}
                           >
                             <X className="w-3.5 h-3.5" />
+                            <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Remove</span>
                           </button>
-                        )}
+                        </div>
                       </div>
                     }
                   />

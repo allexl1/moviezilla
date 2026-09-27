@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
@@ -43,6 +43,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
   const [trendingDay, setTrendingDay] = useState([]);
   const [homeProvider, setHomeProvider] = useState('8');
   const [providerMovies, setProviderMovies] = useState([]);
+  // Hero waits for the first FRESH rails flight: cached trending would
+  // flash last session's #1 (stale spotlight) before the newest takes
+  // over. Rows below still hydrate instantly; only the hero skeletons.
+  const [heroReady, setHeroReady] = useState(false);
 
   const [continueWatching, setContinueWatching] = useState([]);
 
@@ -168,8 +172,12 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
         setNowPlaying(rails.now);
         setTrendingDay(rails.day);
         saveHome({ rails });
+        setHeroReady(true);
       } catch (err) {
         console.error('Failed to load home rails:', err);
+        // Offline/failed: fall back to whatever cache painted instead of
+        // skeleton-locking the hero forever.
+        setHeroReady(true);
       }
     }
 
@@ -220,6 +228,12 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
     .slice(0, 6);
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroLogo, setHeroLogo] = useState(null);
+  // Crossfade: hold the previous spotlight one beat so the new backdrop
+  // dissolves OVER it instead of hard-cutting (2026 motion parity).
+  // Cleared ~950ms after every slide change; reduced-motion kills both
+  // layers' animations via the shared guard in index.css.
+  const [prevHeroItem, setPrevHeroItem] = useState(null);
+  const lastHeroRef = useRef(null);
 
   useEffect(() => {
     setHeroIndex(0);
@@ -228,6 +242,20 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
 
   const heroItem = heroItems[heroIndex] || featuredItem || items[0] || null;
   const heroMediaType = heroItem ? resolveMediaType(heroItem) : 'movie';
+
+  // Track slide identity: a new id parks the old item underneath until
+  // the dissolve finishes. Same-id data refreshes (silent 10-min
+  // refetch) must NOT retrigger — only a real slide change holds.
+  useEffect(() => {
+    if (!heroItem) return;
+    if (lastHeroRef.current && lastHeroRef.current.id !== heroItem.id) {
+      setPrevHeroItem(lastHeroRef.current);
+      const t = setTimeout(() => setPrevHeroItem(null), 950);
+      lastHeroRef.current = heroItem;
+      return () => clearTimeout(t);
+    }
+    lastHeroRef.current = heroItem;
+  }, [heroItem?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Hero resume: one dominant Play language. If this title has a real
   // position (30s+, not watched), the CTA reads "Resume • 12:34" —
@@ -244,22 +272,27 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
   useEffect(() => storage.subscribeWatchlist(() => setWlVersion((v) => v + 1)), []);
   const heroInWL = heroItem?.id ? storage.isInWatchlist(heroItem.id) : false;
 
-  // Rotate spotlight; pause while an overlay covers Home.
+  // Rotate spotlight; pause while an overlay covers Home. Gated on
+  // heroReady: the mount timer must not fire during the skeleton and
+  // pile a rotation onto the fresh hero (double-change flash).
   useEffect(() => {
-    if (overlaid || heroItems.length < 2) return;
+    if (overlaid || !heroReady || heroItems.length < 2) return;
     const timer = setTimeout(() => {
       setHeroIndex((i) => (i + 1) % heroItems.length);
     }, 8000);
     return () => clearTimeout(timer);
-  }, [overlaid, heroIndex, heroItems.length]);
+  }, [overlaid, heroReady, heroIndex, heroItems.length]);
 
-  // Title logo for the spotlight treatment.
+  // Title logo for the spotlight treatment. Stamped with the item id:
+  // the copy remounts per slide while the logo fetch lags one flight,
+  // and without the stamp a pre-effect paint would flash the OLD
+  // slide's logo over the NEW slide's title and overview.
   useEffect(() => {
     if (!heroItem?.id) return;
     let isMounted = true;
     setHeroLogo(null);
     tmdb.getLogos(heroMediaType, heroItem.id).then((logo) => {
-      if (isMounted && logo?.file_path) setHeroLogo(logo.file_path);
+      if (isMounted && logo?.file_path) setHeroLogo({ id: heroItem.id, path: logo.file_path });
     });
     return () => {
       isMounted = false;
@@ -284,7 +317,13 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
         </div>
       )}
 
-      {heroItem && (
+      {!heroReady && (
+        <section className="cine-hero" aria-hidden="true">
+          <div className="skel absolute inset-x-6 md:inset-x-14 top-24 bottom-16 rounded-3xl" />
+        </section>
+      )}
+
+      {heroItem && heroReady && (
         <>
         <section className="cine-hero">
           <div className="cine-hero-media" aria-hidden="true">
@@ -299,6 +338,19 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
               aria-hidden="true"
               className="cine-home-melt-base"
             />
+            {prevHeroItem && (
+              <img
+                key={`prev-${prevHeroItem.id}`}
+                src={tmdb.getImageUrl(
+                  prevHeroItem.backdrop_path,
+                  'w1280',
+                  prevHeroItem.backdrop_fallback
+                )}
+                alt=""
+                aria-hidden="true"
+                className="cine-hero-prev"
+              />
+            )}
             <img
               key={heroItem.id}
               src={tmdb.getImageUrl(
@@ -313,10 +365,10 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
             <div className="cine-hero-scrim" />
           </div>
 
-          <div className="cine-hero-content">
-            {heroLogo ? (
+          <div key={`copy-${heroItem.id}`} className="cine-hero-content cine-hero-copy">
+            {heroLogo && heroLogo.id === heroItem.id && heroLogo.path ? (
               <img
-                src={tmdb.getImageUrl(heroLogo, 'w500')}
+                src={tmdb.getImageUrl(heroLogo.path, 'w500')}
                 alt={heroItem.title || heroItem.name}
                 className="cine-hero-logo"
               />
@@ -405,6 +457,28 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 />
               ))}
             </div>
+          )}
+
+          {/* Edge steppers: thin white chevrons, vertically centered at
+              the screen edges (manual poster switching — taps restart
+              the 8s rotation via the heroIndex dep, same as dots). */}
+          {heroItems.length > 1 && (
+            <>
+              <button
+                onClick={() => setHeroIndex((i) => (i - 1 + heroItems.length) % heroItems.length)}
+                className="cine-hero-step cine-hero-step--prev"
+                aria-label="Previous spotlight"
+              >
+                <ChevronLeft className="w-10 h-10" strokeWidth={1} />
+              </button>
+              <button
+                onClick={() => setHeroIndex((i) => (i + 1) % heroItems.length)}
+                className="cine-hero-step cine-hero-step--next"
+                aria-label="Next spotlight"
+              >
+                <ChevronRight className="w-10 h-10" strokeWidth={1} />
+              </button>
+            </>
           )}
         </section>
         {/* Melt tail: laps 40px over the hero bottom and crossfades down

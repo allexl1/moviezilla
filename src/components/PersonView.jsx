@@ -33,6 +33,13 @@ function SegFilter({ options, value, onChange, label }) {
     };
     measure();
     window.addEventListener('resize', measure);
+    // Font load/swap changes button widths without resizing: re-measure
+    // when webfonts settle (same as the navbar thumb).
+    try {
+      document.fonts?.ready?.then(() => measure());
+    } catch {
+      // ignore
+    }
     return () => window.removeEventListener('resize', measure);
   }, [value, options.length]);
   return (
@@ -76,10 +83,11 @@ export default function PersonView({ personId, onSelectMedia }) {
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [honoursExpanded, setHonoursExpanded] = useState(false);
   const [awards, setAwards] = useState([]);
   const [zoom, setZoom] = useState(null);
-  // Career slice: All • Movies • Shows • Directing (white-active pills,
-  // same language as the nav — 4 options max, never a 5+ segment).
+  // Career slice: All + only non-empty slices (white-active pills, same
+  // language as the nav — 4 options max, never a 5+ segment).
   const [careerFilter, setCareerFilter] = useState('all');
 
   useEffect(() => {
@@ -87,6 +95,10 @@ export default function PersonView({ personId, onSelectMedia }) {
     setLoading(true);
     setFailed(false);
     setExpanded(false);
+    setHonoursExpanded(false);
+    // A new person always opens on All: a stale Directing slice from the
+    // last profile would otherwise greet them with an empty view.
+    setCareerFilter('all');
     tmdb
       .getPersonDetails(personId)
       .then((data) => {
@@ -139,7 +151,7 @@ export default function PersonView({ personId, onSelectMedia }) {
 
   if (loading) {
     return (
-      <div className="relative min-h-screen text-white pb-24 bg-[#0e0e12]" aria-hidden="true">
+      <div className="relative min-h-screen text-white pb-24 bg-[#161a23]" aria-hidden="true">
         <div className="max-w-[1560px] mx-auto px-6 md:px-14 pt-28 md:pt-32 space-y-10">
           <div className="flex flex-col sm:flex-row gap-6">
             <div className="skel w-40 md:w-52 aspect-[2/3] rounded-3xl flex-shrink-0" />
@@ -191,8 +203,9 @@ export default function PersonView({ personId, onSelectMedia }) {
   const haveIds = new Set(castPool.map((x) => `${x.media_type}_${x.id}`));
   const crewOnly = crewPool.filter((x) => !haveIds.has(`${x.media_type}_${x.id}`));
   const pool = [...castPool, ...crewOnly];
-  // Known For: popularity-ranked top 6 (IMDb orientation cue).
-  const knownFor = [...pool]
+  // Known For: popularity-ranked top 6 of ACTING work (IMDb orientation
+  // cue — same acting-only rule as the Movies/Shows slices).
+  const knownFor = [...castPool]
     .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))
     .slice(0, 6);
   // Career: everything newest-first (the story: breakout, peak, now).
@@ -210,49 +223,73 @@ export default function PersonView({ personId, onSelectMedia }) {
   const bio = person.biography || '';
   const photos = (person.images?.profiles || []).filter((p) => p.file_path).slice(0, 10);
 
-  // Career slice filter.
+  // Career slice filter. Empty slices never render an option: no
+  // Directing pill when they never directed, no Movies/Shows pill when
+  // the career has none of that type — a filter must never open an
+  // empty view. Movies/Shows are ACTING only (cast credits); directing
+  // lives exclusively in Directing, even for titles of that type.
   const crewKeys = new Set(crewOnly.map((x) => `${x.media_type}_${x.id}`));
-  const careerShown = career.filter((x) => {
-    if (careerFilter === 'movie') return x.media_type === 'movie';
-    if (careerFilter === 'tv') return x.media_type === 'tv';
-    if (careerFilter === 'director') return crewKeys.has(`${x.media_type}_${x.id}`);
-    return true;
-  });
+  const castKeys = new Set(castPool.map((x) => `${x.media_type}_${x.id}`));
+  const isActing = (x) => castKeys.has(`${x.media_type}_${x.id}`);
+  const careerCounts = { movie: 0, tv: 0, director: 0 };
+  for (const x of career) {
+    if (x.media_type === 'movie' && isActing(x)) careerCounts.movie += 1;
+    if (x.media_type === 'tv' && isActing(x)) careerCounts.tv += 1;
+    if (crewKeys.has(`${x.media_type}_${x.id}`)) careerCounts.director += 1;
+  }
   const CAREER_FILTERS = [
     { id: 'all', label: 'All' },
-    { id: 'movie', label: 'Movies' },
-    { id: 'tv', label: 'Shows' },
-    { id: 'director', label: 'Directing' },
+    ...(careerCounts.movie > 0 ? [{ id: 'movie', label: 'Movies' }] : []),
+    ...(careerCounts.tv > 0 ? [{ id: 'tv', label: 'Shows' }] : []),
+    ...(careerCounts.director > 0 ? [{ id: 'director', label: 'Directing' }] : []),
   ];
+  // Stale value guard (e.g. Directing persisted into a profile without
+  // any): fall back to All instead of an empty view.
+  const effectiveFilter = CAREER_FILTERS.some((f) => f.id === careerFilter) ? careerFilter : 'all';
+  const careerShown = career.filter((x) => {
+    if (effectiveFilter === 'movie') return x.media_type === 'movie' && isActing(x);
+    if (effectiveFilter === 'tv') return x.media_type === 'tv' && isActing(x);
+    if (effectiveFilter === 'director') return crewKeys.has(`${x.media_type}_${x.id}`);
+    return true;
+  });
 
   // Honours glory line: group free-text labels by award family. Says
   // "honours" — never "wins": the source doesn't distinguish, and we
-  // don't guess with gold paint.
+  // don't guess with gold paint. Counts singularize honestly (1 Oscar,
+  // not 1 Oscars).
   const AWARD_FAMILIES = [
-    [/academy/i, 'Oscars'],
-    [/golden globe/i, 'Globes'],
-    [/emmy/i, 'Emmys'],
-    [/bafta/i, 'BAFTAs'],
-    [/grammy/i, 'Grammys'],
-    [/screen actors guild/i, 'SAG Awards'],
+    [/academy/i, 'Oscar', 'Oscars'],
+    [/golden globe/i, 'Globe', 'Globes'],
+    [/emmy/i, 'Emmy', 'Emmys'],
+    [/bafta/i, 'BAFTA', 'BAFTAs'],
+    [/grammy/i, 'Grammy', 'Grammys'],
+    [/screen actors guild/i, 'SAG Award', 'SAG Awards'],
   ];
   const famCounts = new Map();
   for (const a of awards) {
-    const fam = AWARD_FAMILIES.find(([re]) => re.test(a?.label || ''))?.[1];
-    if (fam) famCounts.set(fam, (famCounts.get(fam) || 0) + 1);
+    const fam = AWARD_FAMILIES.find(([re]) => re.test(a?.label || ''));
+    if (fam) famCounts.set(fam[1], (famCounts.get(fam[1]) || 0) + 1);
   }
+  const famName = (one) => AWARD_FAMILIES.find(([, s]) => s === one)?.[2] || `${one}s`;
   const glory = [
-    ...[...famCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
-      .map(([name, c]) => `${c} ${name}`),
+    ...[...famCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([one, c]) => `${c} ${c === 1 ? one : famName(one)}`),
     `${awards.length} honour${awards.length === 1 ? '' : 's'}`,
   ].join(' • ');
   const awardsSorted = [...awards].sort(
     (a, b) => (parseInt(b.year, 10) || -1) - (parseInt(a.year, 10) || -1)
   );
+  // Honours progressive disclosure: glory + first rows stay visible, the
+  // rest opens on tap (Robin Williams has 23 — nobody scrolls 23 gold
+  // rows to reach Known For).
+  const HONOURS_VISIBLE = 4;
+  const honoursShown = honoursExpanded ? awardsSorted : awardsSorted.slice(0, HONOURS_VISIBLE);
 
   return (
-    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 bg-[#0e0e12]">
-      {/* Flat frozen gray, side-anchored identity (reference rule): no
+    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 bg-[#161a23]">
+      {/* Light frozen slate, side-anchored identity (reference rule): no
           photographic layers anywhere, no dead half-screen, bio rides the
           right column at full measure. */}
       <div className="relative z-10 max-w-[1560px] mx-auto px-6 md:px-14 pt-28 md:pt-32 space-y-10">
@@ -294,6 +331,7 @@ export default function PersonView({ personId, onSelectMedia }) {
                 <span className="cine-chip cine-chip--solid">
                   <Cake className="w-3 h-3" />
                   {formatDate(person.birthday)} – {formatDate(person.deathday)}
+                  {age != null && <span className="text-white/60">({age})</span>}
                 </span>
               )}
               {person.place_of_birth && (
@@ -412,7 +450,7 @@ export default function PersonView({ personId, onSelectMedia }) {
             </div>
             <p className="text-xs font-semibold text-white/60">{glory}</p>
             <div className="space-y-2">
-              {awardsSorted.map((a, i) => (
+              {honoursShown.map((a, i) => (
                 <div key={`${a.label}_${a.year}_${i}`} className="mat-row flex items-center gap-3 px-4 py-3">
                   <span className="text-[11px] font-bold tabular-nums text-white/40 w-10 flex-shrink-0">
                     {a.year || '—'}
@@ -427,6 +465,15 @@ export default function PersonView({ personId, onSelectMedia }) {
                 </div>
               ))}
             </div>
+            {awards.length > HONOURS_VISIBLE && (
+              <button
+                onClick={() => setHonoursExpanded((e) => !e)}
+                aria-expanded={honoursExpanded}
+                className="text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
+              >
+                {honoursExpanded ? 'Show less' : `Show all ${awards.length}`}
+              </button>
+            )}
           </section>
         )}
 
@@ -447,17 +494,20 @@ export default function PersonView({ personId, onSelectMedia }) {
             three-way split. */}
         {career.length > 0 && (
           <RowRail
+            // Remount per slice: a reused rail DOM keeps the previous
+            // slice's scrollLeft, which reads as the rail "going right"
+            // into empty space on short lists. Fresh DOM = anchored left.
+            key={effectiveFilter}
             title="Career"
-            titleNode={
-              <>
-                <h2 className="cine-section-title">Career</h2>
+            filterNode={
+              CAREER_FILTERS.length > 1 ? (
                 <SegFilter
                   label="Filter career"
                   options={CAREER_FILTERS}
-                  value={careerFilter}
+                  value={effectiveFilter}
                   onChange={setCareerFilter}
                 />
-              </>
+              ) : null
             }
             items={careerShown}
             onSelect={onSelectMedia}

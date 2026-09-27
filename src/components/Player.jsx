@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw } from 'lucide-react';
-import { storage } from '../services/storage';
+import { storage, WATCHED_PCT } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
@@ -95,12 +95,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const getInitialPlayback = () => {
     const saved = mediaId ? storage.getProgress(isTv ? 'tv' : 'movie', mediaId) : null;
     const slot = mediaId ? storage.getServerProgress(isTv ? 'tv' : 'movie', mediaId, preferredServer) : null;
+    // Finished titles restart at 0: a stale per-server slot must never
+    // resurrect and replay the credits (or un-mark Watched on heartbeat).
+    // Season/episode stay where they finished — the picker owns those.
+    const watched = (saved?.percent || 0) >= WATCHED_PCT;
     return {
       season: saved?.season || 1,
       episode: saved?.episode || 1,
       // Strict slot only: another server's seconds (or legacy top-level
       // once slots exist) must never leak in here.
-      time: slot?.currentTime ?? 0,
+      time: watched ? 0 : (slot?.currentTime ?? 0),
     };
   };
 
@@ -230,13 +234,24 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     // Peek rule: a brand-new title needs 5 real seconds (or provider
     // playback evidence) before it earns a history row at all.
     if (!prev && pos.time < 5 && !pmSeenRef.current) return;
+    // Runtime-anchored completion: silent providers (wall-clock only, no
+    // duration, no ended event) can otherwise NEVER reach Watched — the
+    // title sits in Continue Watching forever. The TMDB runtime is the
+    // honest yardstick: past 95% of it, the watch counts as finished.
+    const runtimeSec = Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60);
+    let saveTime = pos.time;
+    let saveDur = pos.duration;
+    if (runtimeSec > 60 && pos.time >= runtimeSec * 0.95) {
+      saveTime = runtimeSec;
+      saveDur = runtimeSec;
+    }
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
       season: currentSeason,
       episode: currentEpisode,
-      currentTime: pos.time,
-      duration: pos.duration,
+      currentTime: saveTime,
+      duration: saveDur,
       server,
       ...buildMeta(),
     });
@@ -615,9 +630,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             onProviderPlayRef.current?.();
           }
           const t = Number(time);
-          if (t > 0) {
+          const isEnd = type === 'ended' || type === 'complete';
+          if (t > 0 || isEnd) {
             const est = estimatedPosition().time;
-            if (!convergedRef.current) {
+            if (!convergedRef.current && !isEnd) {
               if (type === 'seeked' || t >= est - 30 || Date.now() > convergeUntilRef.current) {
                 convergedRef.current = true;
               } else {
@@ -633,12 +649,23 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               stalledRef.current = false;
               setStalled(false);
             }
-            // Ended: snap to the end (marks Watched via percent) and hold —
-            // there is no more video to accrue.
-            if (type === 'ended' || type === 'complete') {
-              const end = Number(dur) > 0 ? Number(dur) : t;
-              playbackRef.current = { currentTime: end, duration: Number(dur) || 0 };
-              wallBaseRef.current = end;
+            // Ended snaps to 100% even when the provider never sent a
+            // duration (silent servers, wall-clock titles): the event IS
+            // the evidence. Bare 'ended' with no time at all marks via
+            // the known duration, the title runtime, or 1/1 — same as a
+            // manual Mark-watched, never a 0/0 that misses completion.
+            let saveT = t;
+            let saveDur = Number(dur) || 0;
+            if (isEnd) {
+              const runtimeSec = Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60);
+              const d = Number(dur) > 0
+                ? Number(dur)
+                : (playbackRef.current.duration > 0 ? playbackRef.current.duration : (runtimeSec > 0 ? runtimeSec : 1));
+              const done = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
+              saveT = done;
+              saveDur = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
+              playbackRef.current = { currentTime: done, duration: saveDur };
+              wallBaseRef.current = done;
               pausedProvRef.current = true;
             } else {
               playbackRef.current = { currentTime: t, duration: Number(dur) || 0 };
@@ -653,15 +680,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             // the full-map stringify (was: every provider tick, ~1/sec).
             const now = Date.now();
             const ls = saveThrottleRef.current;
-            if (Math.abs(t - ls.sec) >= 3 || now - ls.at >= 8000) {
-              saveThrottleRef.current = { sec: t, at: now };
+            if (Math.abs(saveT - ls.sec) >= 3 || now - ls.at >= 8000) {
+              saveThrottleRef.current = { sec: saveT, at: now };
               storage.saveProgress({
                 mediaId,
                 type: isTv ? 'tv' : 'movie',
                 season: currentSeason,
                 episode: currentEpisode,
-                currentTime: t,
-                duration: Number(dur) || 0,
+                currentTime: saveT,
+                duration: saveDur,
                 server,
                 ...buildMeta(),
               });
@@ -687,6 +714,28 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const handleSelectEpisode = (seasonNum, episodeNum) => {
     // Stamp the old episode's position before switching.
     saveNowRef.current();
+    // The new episode takes over the top-level immediately: finishing
+    // S1E1 (100%) must not shadow a started S1E2, and a quick peek must
+    // not vanish behind the old row. Per-episode memory decides the
+    // resume second below (fresh episode → 0, visited → its own time).
+    // Same-episode re-picks skip the stamp (it would wipe a real position
+    // with a 0).
+    if (seasonNum !== currentSeason || episodeNum !== currentEpisode) {
+      try {
+        const meta = buildMeta();
+        storage.switchEpisode({
+          mediaId,
+          type: 'tv',
+          season: seasonNum,
+          episode: episodeNum,
+          title: meta.title,
+          poster: meta.poster,
+          genres: meta.genres,
+        });
+      } catch {
+        // never block switching for a stamp
+      }
+    }
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
     // Resume the target episode where IT stopped (per-episode memory) —

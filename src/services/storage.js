@@ -12,6 +12,24 @@ export const WATCHED_PCT = 95;
 export const MIN_CONTINUE_PCT = 2;
 export const MIN_CONTINUE_SEC = 30;
 export const MAX_EPISODES_KEPT = 10;
+// Series with real watch history behind them (finished episodes, or
+// several deeply-watched ones) surface in Continue Watching after just a
+// few seconds: opening S3E8 of a show you already watched for 2 seasons
+// is never an accident. Fresh/unknown titles keep the 30s anti-clutter
+// gate so stray taps don't spam the rail.
+export const ESTABLISHED_EPISODES = 2;
+export const ESTABLISHED_EP_SEC = 300;
+export const ESTABLISHED_CONTINUE_SEC = 5;
+
+export function tvEstablished(entry) {
+  if (!entry || entry.type !== 'tv') return false;
+  let deep = 0;
+  for (const e of Object.values(entry.episodes || {})) {
+    if ((e?.percent || 0) >= WATCHED_PCT) return true;
+    if ((e?.currentTime || 0) >= ESTABLISHED_EP_SEC) deep += 1;
+  }
+  return deep >= ESTABLISHED_EPISODES;
+}
 
 function safeGet(key, fallback = {}) {
   try {
@@ -200,6 +218,34 @@ export const storage = {
     dispatchAccountDirty('progress');
   },
 
+  // Explicit episode switch: the new episode takes over the top-level
+  // immediately (S1E1/100% must not shadow a started S1E2, and a quick
+  // peek must not vanish). Position 0 with fresh clocks — per-episode
+  // memory and the old episode's slots survive untouched underneath.
+  switchEpisode({ mediaId, type, season = 1, episode = 1, title = '', poster = '', genres = [] }) {
+    if (!mediaId) return;
+    const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const key = `${type}_${mediaId}`;
+    const prev = allProgress[key] || {};
+    allProgress[key] = {
+      mediaId,
+      type,
+      season,
+      episode,
+      currentTime: 0,
+      duration: 0,
+      percent: 0,
+      title: title || prev.title || '',
+      poster: poster || prev.poster || '',
+      genres: genres?.length ? genres : prev.genres || [],
+      episodes: prev.episodes,
+      servers: undefined,
+      updatedAt: Date.now(),
+    };
+    safeSet(STORAGE_KEYS.PROGRESS, allProgress);
+    dispatchAccountDirty('progress');
+  },
+
   // Raw entries for the sync engine (merge/push work on whole entries).
   getProgressEntries() {
     return Object.values(safeGet(STORAGE_KEYS.PROGRESS, {}));
@@ -269,15 +315,18 @@ export const storage = {
 
   // Get all partially watched items sorted by most recent. Anything with
   // 30s+ on the clock counts — percent-gating alone hid short watches of
-  // long titles once providers started reporting real durations.
+  // long titles once providers started reporting real durations. Series
+  // with established history (2 finished/deep seasons behind them) count
+  // from 5s: the next episode of your show always belongs on the rail.
   getAllContinueWatching() {
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     return Object.values(allProgress)
-      .filter(
-        (item) =>
-          (item.percent > MIN_CONTINUE_PCT && item.percent < WATCHED_PCT) ||
-          (item.percent < WATCHED_PCT && (item.currentTime || 0) >= MIN_CONTINUE_SEC)
-      )
+      .filter((item) => {
+        if (item.percent >= WATCHED_PCT) return false;
+        if (item.percent > MIN_CONTINUE_PCT) return true;
+        const gate = item.type === 'tv' && tvEstablished(item) ? ESTABLISHED_CONTINUE_SEC : MIN_CONTINUE_SEC;
+        return (item.currentTime || 0) >= gate;
+      })
       .sort((a, b) => b.updatedAt - a.updatedAt);
   },
 

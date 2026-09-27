@@ -98,7 +98,7 @@ export default function EpisodeDrawer({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight">Episodes</h3>
-              <p className="text-[11px] text-white/60">Season {activeSeason} • {episodes.length} episodes</p>
+              <p className="text-[11px] text-white/60">Season {activeSeason}{loading ? ' • …' : ` • ${episodes.length} episode${episodes.length === 1 ? '' : 's'}`}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">

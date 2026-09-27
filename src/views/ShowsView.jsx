@@ -39,7 +39,9 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
     hasMore: upcomingHasMore,
     loading: upcomingLoading,
     loadingMore: upcomingLoadingMore,
+    error: upcomingError,
     loadMore: loadMoreUpcoming,
+    retry: retryUpcoming,
   } = usePagedRail('shows-upcoming', fetchUpcomingSeriesPage, pickUpcomingSeries);
   // On Air mini-toggle: swaps the Released grid for what's airing right
   // now. Fetched lazily on first toggle, then cached like everything else.
@@ -155,6 +157,17 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
         loading={showAiring ? onAirLoadingMore : loadingMore}
         onMore={showAiring ? loadMoreOnAir : nextPage}
       />
+      {upcomingSeries.length === 0 && upcomingError && (
+        <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
+          <span>Couldn't load Coming Soon. Check your connection or API key.</span>
+          <button
+            onClick={retryUpcoming}
+            className="cine-control-btn"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {catalogError && (
         <div className="flex items-center justify-center gap-3 py-6 text-xs text-white/60">
           <span>{catalogError}</span>

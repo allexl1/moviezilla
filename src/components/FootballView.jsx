@@ -225,7 +225,7 @@ export default function FootballView({ onToast }) {
                 <h2 className="cine-section-title inline-flex items-center gap-2">
                   <Radio className="w-4 h-4 text-red-400" /> Live now
                 </h2>
-                <span className="text-xs text-white/60">{live.length} matches</span>
+                <span className="text-xs text-white/60">{live.length} match{live.length === 1 ? '' : 'es'}</span>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {live.map((m) => (
@@ -238,7 +238,7 @@ export default function FootballView({ onToast }) {
           <section className="space-y-3">
             <div className="cine-section-head">
               <h2 className="cine-section-title">Upcoming</h2>
-              <span className="text-xs text-white/60">{upcoming.length} matches</span>
+              <span className="text-xs text-white/60">{upcoming.length} match{upcoming.length === 1 ? '' : 'es'}</span>
             </div>
             {upcoming.length === 0 && live.length === 0 ? (
               <EmptyState

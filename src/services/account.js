@@ -421,8 +421,13 @@ async function mergeFromServer() {
 
   // Progress: newer updated_at wins per key. Server wins preserve the
   // device's per-server/per-episode refinements (slots stay local).
+  // A pending Clear-history wipes the board: server rows must not
+  // resurrect locally first (the flush below deletes them remotely).
+  const skipProgress = storage.getProgressClearFlag();
+  let progressApplied = false;
   let localNewer = false;
   for (const r of list.filter((x) => x.status === 'history' || x.status === 'watched')) {
+    if (skipProgress) continue;
     const key = `${r.media_type}_${r.tmdb_id}`;
     const serverTs = tsOf(r.updated_at);
     const tomb = tombs.prog[key] || 0;
@@ -442,8 +447,19 @@ async function mergeFromServer() {
         poster: r.poster || '',
         updatedAt: serverTs,
       });
+      progressApplied = true;
     } else if ((local.updatedAt || 0) > serverTs) {
       localNewer = true;
+    }
+  }
+  // Merged progress must re-render open shelves: applyServerProgress is
+  // silent by design (hot paths), so the merge announces once here.
+  // mz:watchlist is the shared bust signal (WatchlistView + HomeView).
+  if (progressApplied) {
+    try {
+      window.dispatchEvent(new CustomEvent('mz:watchlist'));
+    } catch {
+      // non-browser: subscribers simply never fire
     }
   }
   if (localNewer) scheduleFlush(1500);

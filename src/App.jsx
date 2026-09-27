@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { tmdb } from './services/tmdb';
-import { storage, formatClock } from './services/storage';
+import { storage, formatClock, WATCHED_PCT } from './services/storage';
 import { resolveMediaType, defaultSortFor } from './services/catalog';
 import { parseLocation, parseLocationSafe, buildLocation } from './services/routing';
 import Navbar from './components/Navbar';
@@ -54,9 +54,15 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(() => parseLocationSafe().media);
   const [selectedPerson, setSelectedPerson] = useState(() => parseLocationSafe().personId);
-  // Person → Back restores the title you came from (detail stashes it in
-  // selectPerson; search/direct person links leave it null → tab fallback).
-  const [personReturn, setPersonReturn] = useState(null);
+  // Back-stack: every Person↔Media hop pushes the context you came from,
+  // so Back restores the real page (Heath Ledger → movie → Back returns
+  // to Heath Ledger, not /movies). Tab switches, home and rooms clear it
+  // (new root). Capped at 20.
+  const [backStack, setBackStack] = useState([]);
+  const pushBack = (entry) => {
+    if (!entry) return;
+    setBackStack((s) => [...s, entry].slice(-20));
+  };
   const [activePlayer, setActivePlayer] = useState(null);
   const [activeRoomCode, setActiveRoomCode] = useState(() => parseLocationSafe().roomCode);
   const [roomDraft, setRoomDraft] = useState(null);
@@ -74,6 +80,19 @@ export default function App() {
   // of pushing, so Back never reopens a just-closed player (back-loop).
   // Opening the player pushes, so Back closes it.
   const prevPlay = useRef(false);
+  // Previous room flag: same contract as the player — leaving a room
+  // replaces, so Back can't rejoin a room you just left.
+  const prevRoom = useRef(null);
+  // Previous route (tab|media|person|room): a player-close that coincides
+  // with real navigation (another title from Search, a tab switch) must
+  // PUSH — replacing would eat the new page's history entry and Back
+  // would skip it. Pure closes (same route) still replace.
+  const prevRoute = useRef(null);
+  // Tab-root playback origin (?from=): set when play starts with no
+  // detail open (Watchlist/Home resume). Closing then returns to the
+  // origin tab instead of stranding a phantom detail. Detail playback
+  // carries none — close stays on the detail.
+  const [playerFrom, setPlayerFrom] = useState(() => parseLocationSafe().from);
   useEffect(() => {
     const r = parseLocationSafe();
     // Legacy ?room= links canonicalize to /room/CODE (resolvable forever).
@@ -84,18 +103,36 @@ export default function App() {
         // ignore
       }
     }
+    if (r.from) setPlayerFrom(r.from);
     if (r.media && r.play && !autoPlayed.current) {
       autoPlayed.current = true;
       playMedia({ id: r.media.id, media_type: r.media.media_type });
     }
     const onPop = () => {
       const p = parseLocation();
-      if (!p.play) autoPlayed.current = false;
+      if (!p.play) {
+        autoPlayed.current = false;
+        setPlayerFrom(null);
+      } else if (p.from) {
+        setPlayerFrom(p.from);
+      }
       setActiveTab(p.tab);
       setSelectedMedia(p.media);
       setSelectedPerson(p.personId);
-      // Browser arrived at a title directly: no in-app return to restore.
-      if (p.media) setPersonReturn(null);
+      // A draft lobby card dies when the browser leaves rooms context —
+      // otherwise a stale "Room opens on this title" resurfaces later.
+      if (p.tab !== 'rooms' || p.roomCode) setRoomDraft(null);
+      // Browser already went back: drop the matching stack top so the
+      // in-app Back doesn't restore a page we're already on. A tab-level
+      // arrival clears the chain (new root).
+      setBackStack((prev) => {
+        if (!prev.length) return prev;
+        const top = prev[prev.length - 1];
+        if (p.media && top.kind === 'media' && top.media.id === p.media.id) return prev.slice(0, -1);
+        if (p.personId && top.kind === 'person' && top.id === p.personId) return prev.slice(0, -1);
+        if (!p.media && !p.personId && !p.roomCode) return [];
+        return prev;
+      });
       setActiveRoomCode(p.roomCode);
       if (!p.play) {
         setActivePlayer(null);
@@ -112,14 +149,16 @@ export default function App() {
   }, []);
 
   // Mirror nav state to the URL. Pushes (back-button-able), except the very
-  // first run which replaces junk/unknown paths canonically, and player
-  // closes which replace so Back can't reopen a dismissed player.
+  // first run which replaces junk/unknown paths canonically, pure player
+  // closes and pure room leaves which replace (Back must not resurrect
+  // dismissed UI), and navigations coinciding with a close which push.
   // Home-hero Play has no selectedMedia, so the player media backs the URL
   // (?play=1 would otherwise desync to '/' and lose its history entry).
   useEffect(() => {
     if (skipMirrorOnce.current) {
       skipMirrorOnce.current = false;
       prevPlay.current = Boolean(activePlayer);
+      prevRoom.current = activeRoomCode;
       return;
     }
     const mediaForUrl = selectedPerson ? null : selectedMedia || activePlayer?.media || null;
@@ -129,7 +168,15 @@ export default function App() {
       personId: selectedPerson,
       play: Boolean(activePlayer),
       roomCode: activeRoomCode,
+      // Origin shelf for tab-root playback (Watchlist/Home resume,
+      // incl. its reloads) — detail playback carries none (close stays
+      // on the detail). playerFrom is only ever set with no detail
+      // open, and cleared on any detail/tab navigation or close.
+      from: activePlayer && playerFrom ? playerFrom : null,
     });
+    const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${activeRoomCode ?? ''}`;
+    const routeChanged = prevRoute.current !== null && prevRoute.current !== routeId;
+    prevRoute.current = routeId;
     try {
       const cur = window.location.pathname + window.location.search;
       if (url !== cur) {
@@ -145,7 +192,9 @@ export default function App() {
           if (!awaitingAutoplay) {
             window.history.replaceState({}, '', url);
           }
-        } else if (prevPlay.current && !activePlayer) {
+        } else if (prevPlay.current && !activePlayer && !routeChanged) {
+          window.history.replaceState({}, '', url);
+        } else if (prevRoom.current && !activeRoomCode && !routeChanged) {
           window.history.replaceState({}, '', url);
         } else {
           window.history.pushState({}, '', url);
@@ -157,7 +206,8 @@ export default function App() {
       // ignore
     }
     prevPlay.current = Boolean(activePlayer);
-  }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode]);
+    prevRoom.current = activeRoomCode;
+  }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode, playerFrom]);
 
   // Route changes reset scroll (state-router keeps DOM scroll otherwise).
   // Player toggles excluded — the page underneath must not jump.
@@ -202,7 +252,8 @@ export default function App() {
   }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode]);
 
   const leaveRoom = () => {
-    // URL follows via the mirror effect (→ /rooms).
+    // URL follows via the mirror effect (replaces → /rooms, so Back
+    // can't rejoin the room just left).
     setActiveRoomCode(null);
   };
 
@@ -212,22 +263,55 @@ export default function App() {
   // from Home/Search/Watchlist lights up Shows, not Home).
   const selectMedia = (item) => {
     setActivePlayer(null);
+    setPlayerFrom(null);
+    // Same-title re-tap (double-click) is a no-op: without this the
+    // current page lands on the stack and one Back appears stuck.
+    if (
+      item && selectedMedia && !selectedPerson &&
+      selectedMedia.id === item.id &&
+      resolveMediaType(selectedMedia) === resolveMediaType(item)
+    ) {
+      return;
+    }
+    // Tab roots push too: opening from Watchlist/Movies (which flips the
+    // tab to the title type) must Back-return to the shelf, not the grid.
+    if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
+    else if (selectedPerson) pushBack({ kind: 'person', id: selectedPerson });
+    else pushBack({ kind: 'tab', tab: activeTab });
     setSelectedPerson(null);
-    setPersonReturn(null);
     setSelectedMedia(item);
     if (item) setActiveTab(resolveMediaType(item) === 'tv' ? 'tv' : 'movie');
   };
   const selectPerson = (id) => {
     setActivePlayer(null);
-    setPersonReturn(selectedMedia);
+    setPlayerFrom(null);
+    if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
+    else if (selectedPerson && selectedPerson !== id) pushBack({ kind: 'person', id: selectedPerson });
+    else if (!selectedMedia && !selectedPerson) pushBack({ kind: 'tab', tab: activeTab });
     setSelectedMedia(null);
     setSelectedPerson(id);
   };
-  const goHome = () => {
+  // Tab-root navigation contract (navbar, logo, home rails): new root —
+  // player off, detail gone, stack + draft cleared, filters reset.
+  const openTab = (tab) => {
     setActivePlayer(null);
+    setPlayerFrom(null);
     setSelectedMedia(null);
     setSelectedPerson(null);
-    setPersonReturn(null);
+    setBackStack([]);
+    setRoomDraft(null);
+    // Tabs and the logo work from inside a room too (RoomView held
+    // render precedence while the tab changed invisibly underneath).
+    setActiveRoomCode(null);
+    setActiveTab(tab);
+    setFilters({ ...DEFAULT_FILTERS, sort: defaultSortFor(tab) });
+  };
+  const goHome = () => {
+    setActivePlayer(null);
+    setPlayerFrom(null);
+    setSelectedMedia(null);
+    setSelectedPerson(null);
+    setBackStack([]);
     setActiveRoomCode(null);
     setRoomDraft(null);
     setActiveTab('home');
@@ -282,6 +366,12 @@ export default function App() {
   async function playMedia(media, fallbackDetails = null) {
     if (!media?.id) return;
 
+    // Tab-root playback (Watchlist/Home resume, hero Play) stamps its
+    // origin shelf: the URL carries ?from= and closing the player
+    // returns there instead of a phantom detail. Detail playback
+    // carries none — close stays on the detail.
+    if (!selectedMedia && !selectedPerson) setPlayerFrom(activeTab);
+
     const mediaType =
       (media.media_type === 'tv' || media.media_type === 'movie') ? media.media_type :
       (media.type === 'tv' || media.type === 'movie') ? media.type :
@@ -290,11 +380,12 @@ export default function App() {
       (media?.first_air_date || fallbackDetails?.first_air_date || fallbackDetails?.number_of_seasons) ? 'tv' : 'movie';
 
     // "Resuming from 17:41" — makes the history system feel true. Only
-    // when there's a real position worth announcing (30s+).
+    // when there's a real position worth announcing (30s+, not watched:
+    // a finished film must never toast "Resuming from 1:30:00").
     const announceResume = () => {
       try {
         const saved = storage.getProgress(mediaType, media.id);
-        if (saved && saved.currentTime >= 30) {
+        if (saved && saved.currentTime >= 30 && (saved.percent || 0) < WATCHED_PCT) {
           showToast(`Resuming from ${formatClock(saved.currentTime)}`);
         }
       } catch {
@@ -332,6 +423,20 @@ export default function App() {
     }
   }
 
+  // Player close: tab-root playback (?from=) returns to its origin
+  // shelf instead of stranding a phantom detail (reload or resume
+  // flows). Detail playback carries no origin — close stays put.
+  const closePlayer = () => {
+    if (playerFrom) {
+      const t = playerFrom;
+      setPlayerFrom(null);
+      setSelectedMedia(null);
+      setSelectedPerson(null);
+      setActiveTab(t);
+    }
+    setActivePlayer(null);
+  };
+
   const overlaid = isSearchOpen || isSettingsOpen || isAccountOpen || Boolean(activePlayer);
 
   return (
@@ -356,27 +461,41 @@ export default function App() {
           if (tab === 'search') {
             setIsSearchOpen(true);
           } else {
-            setActivePlayer(null);
-            setSelectedMedia(null);
-            setSelectedPerson(null);
-            setActiveTab(tab);
-            setFilters({ ...DEFAULT_FILTERS, sort: defaultSortFor(tab) });
+            openTab(tab);
           }
         }}
         isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
         onBack={() => {
-          setActivePlayer(null);
-          // Person opened from a title goes back TO that title (not Home).
-          if (selectedPerson && personReturn) {
-            setSelectedPerson(null);
-            setSelectedMedia(personReturn);
-            setActiveTab(resolveMediaType(personReturn) === 'tv' ? 'tv' : 'movie');
-            setPersonReturn(null);
+          // Player open: Back only closes it (browser-Back parity) —
+          // never pops the stack underneath, or the detail gets skipped.
+          // Tab-root playback returns to its origin shelf (?from=).
+          if (activePlayer) {
+            closePlayer();
+            return;
+          }
+          // Pop the back-stack: Person opened from a title goes back TO
+          // that title, a title opened from a person back TO the person,
+          // a title opened from a tab back TO the tab (not the flipped
+          // grid). Empty stack → clear as before.
+          const top = backStack[backStack.length - 1];
+          if (top) {
+            setBackStack((s) => s.slice(0, -1));
+            if (top.kind === 'media') {
+              setSelectedPerson(null);
+              setSelectedMedia(top.media);
+              setActiveTab(resolveMediaType(top.media) === 'tv' ? 'tv' : 'movie');
+            } else if (top.kind === 'person') {
+              setSelectedMedia(null);
+              setSelectedPerson(top.id);
+            } else {
+              setSelectedMedia(null);
+              setSelectedPerson(null);
+              setActiveTab(top.tab);
+            }
             return;
           }
           setSelectedMedia(null);
           setSelectedPerson(null);
-          setPersonReturn(null);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -410,12 +529,14 @@ export default function App() {
             media={selectedMedia}
             mediaType={selectedMediaType}
             onToast={showToast}
-            onPlay={(media, details) =>
+            onPlay={(media, details) => {
+              // Detail playback: no origin shelf (close stays put).
+              setPlayerFrom(null);
               setActivePlayer({
                 media: { ...media, media_type: resolveMediaType(media) },
                 details,
-              })
-            }
+              });
+            }}
             onSelectMedia={(item) => selectMedia(item)}
             onSelectPerson={(id) => {
               selectPerson(id);
@@ -423,6 +544,8 @@ export default function App() {
             onWatchTogether={(media) => {
               setActivePlayer(null);
               setSelectedMedia(null);
+              setSelectedPerson(null);
+              setBackStack([]);
               setRoomDraft(media);
               setActiveTab('rooms');
             }}
@@ -433,10 +556,10 @@ export default function App() {
             onPlay={playMedia}
             onToast={showToast}
             onOpenTopRated={() => {
+              openTab('movie');
               patchFilters({ sort: 'vote_average.desc' });
-              setActiveTab('movie');
             }}
-            onOpenTab={setActiveTab}
+            onOpenTab={openTab}
             overlaid={overlaid}
             playerSignal={activePlayer}
           />
@@ -479,6 +602,7 @@ export default function App() {
               onEnter={(code) => {
                 setRoomDraft(null);
                 setActivePlayer(null);
+                setBackStack([]);
                 setActiveRoomCode(code);
               }}
               onToast={showToast}
@@ -506,12 +630,12 @@ export default function App() {
       />
 
       {activePlayer && (
-        <ErrorBoundary onHome={() => setActivePlayer(null)} homeLabel="Close player">
+        <ErrorBoundary onHome={closePlayer} homeLabel="Close player">
         <Player
           key={`${activePlayer.media?.media_type || 'media'}_${activePlayer.media?.id}`}
           media={activePlayer.media}
           details={activePlayer.details}
-          onClose={() => setActivePlayer(null)}
+          onClose={closePlayer}
         />
         </ErrorBoundary>
       )}

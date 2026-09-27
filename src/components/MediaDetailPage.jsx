@@ -90,6 +90,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [imdb, setImdb] = useState(null);
   const [rt, setRt] = useState(null);
   const [awards, setAwards] = useState([]);
+  const [honoursExpanded, setHonoursExpanded] = useState(false);
 
   const mediaId = media?.id;
 
@@ -101,6 +102,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       setHeroVideo(null);
       setLogo(null);
       setExpanded(false);
+      setHonoursExpanded(false);
       try {
         const [data, titleLogo] = await Promise.all([
           tmdb.getMediaDetails(mediaType, mediaId),
@@ -477,11 +479,11 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <div className="rounded-2xl cine-glass-panel overflow-hidden">
             {seasonsCount && (
               <div className="flex items-center justify-between px-4 py-3 text-xs border-b border-[var(--cine-glass-border)]">
-                <span className="text-white/60 font-medium">Seasons</span>
+                <span className="text-white/60 font-medium">Season{seasonsCount > 1 ? 's' : ''}</span>
                 <span className="text-white/90 font-semibold">
                   {seasonsCount}
                   {episodesCount && (
-                    <span className="text-white/60 font-normal"> · {episodesCount} episodes</span>
+                    <span className="text-white/60 font-normal"> · {episodesCount} episode{episodesCount === 1 ? '' : 's'}</span>
                   )}
                 </span>
               </div>
@@ -587,7 +589,8 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           </section>
         )}
 
-        {/* Honours — gold strip, silent when the title has none indexed. */}
+        {/* Honours — gold strip, progressive disclosure (same as person
+            pages), silent when the title has none indexed. */}
         {awards.length > 0 && (
           <section className="space-y-3">
             <div className="cine-section-head">
@@ -597,7 +600,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               </h3>
             </div>
             <div className="flex flex-wrap gap-2.5">
-              {awards.map((a, i) => (
+              {(honoursExpanded ? awards : awards.slice(0, 6)).map((a, i) => (
                 <div key={`${a.label}_${a.year}_${i}`} className="cine-award" >
                   <Trophy className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="min-w-0">
@@ -609,6 +612,15 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 </div>
               ))}
             </div>
+            {awards.length > 6 && (
+              <button
+                onClick={() => setHonoursExpanded((e) => !e)}
+                aria-expanded={honoursExpanded}
+                className="text-xs font-semibold text-white/50 hover:text-white transition cursor-pointer"
+              >
+                {honoursExpanded ? 'Show less' : `Show all ${awards.length}`}
+              </button>
+            )}
           </section>
         )}
 

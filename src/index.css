@@ -1182,6 +1182,61 @@ a.cine-pill {
   margin-bottom: var(--cine-space-4);
 }
 
+/* Three-zone variant (RowRail only): title | filter | action. The center
+   filter stays pixel-fixed in the middle whether or not an action
+   button exists — plain space-between flex shoved it right whenever
+   Show-all was absent (the career jump). Empty zones collapse to zero
+   width, so plain title-only rails look exactly as before. */
+.cine-section-head--zones {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  column-gap: 1rem;
+}
+
+.cine-sh-zone--left {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.cine-sh-zone--center {
+  justify-self: center;
+}
+
+.cine-sh-zone--right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* Small screens: title + action share the first row, the filter gets
+   its own centered row — three zones can't fit 390px side by side. */
+@media (max-width: 640px) {
+  .cine-section-head--zones {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title action"
+      "filter filter";
+    row-gap: 0.75rem;
+  }
+
+  .cine-sh-zone--left {
+    grid-area: title;
+  }
+
+  .cine-sh-zone--center {
+    grid-area: filter;
+  }
+
+  .cine-sh-zone--right {
+    grid-area: action;
+  }
+}
+
 .cine-section-title {
   font-size: 1.05rem;
   font-weight: var(--cine-font-semibold);
@@ -1647,6 +1702,31 @@ a.cine-pill {
   animation: cine-hero-in 0.9s var(--cine-ease-out) both;
 }
 
+/* Previous spotlight, held one beat under the incoming frame so the
+   swap dissolves instead of hard-cutting. Same crop anchor as the
+   sharp layer; explicit z below .cine-hero-fade (z-1), above the
+   melt-base. Opacity-only — never any filter here (GPU-hot). */
+.cine-hero-prev {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+/* Spotlight copy follows the slide with a short rise (keyed per slide
+   in JSX, so it replays exactly when the poster does). */
+.cine-hero-copy {
+  animation: cine-hero-copy-in 0.6s var(--cine-ease-out) both;
+}
+
+@keyframes cine-hero-copy-in {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* Slow dissolve for the dim frozen ghost (must not touch filter). */
 .cine-ghost-fade {
   animation: cine-fade-in 1.2s ease-out both;
@@ -1688,6 +1768,45 @@ a.cine-pill {
 .cine-hero-dot.is-active {
   width: 1.75rem;
   background: var(--cine-white);
+}
+
+/* Spotlight edge steppers: thin white chevrons pinned to the screen
+   edges, vertically centered (manual poster switching — taps restart
+   the 8s rotation via the heroIndex dep, same as dots). Bare glyphs,
+   generous hit area, no chrome of their own. */
+.cine-hero-step {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 0.75rem;
+  color: rgba(255, 255, 255, 0.75);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color var(--cine-duration-base) var(--cine-ease-out), transform var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-hero-step--prev {
+  left: 0.25rem;
+}
+
+.cine-hero-step--next {
+  right: 0.25rem;
+}
+
+.cine-hero-step:hover {
+  color: var(--cine-white);
+  transform: translateY(-50%) scale(1.08);
+}
+
+@media (max-width: 768px) {
+  .cine-hero-step {
+    padding: 1.25rem 0.25rem;
+  }
 }
 
 /* Tighten the spotlight frame on phones so copy and controls keep margin. */
@@ -2496,6 +2615,10 @@ input[type='range'].cine-range {
   .cine-aurora-canvas::before,
   .cine-aurora-canvas::after,
   .cine-card-in,
+  .cine-hero-fade,
+  .cine-hero-prev,
+  .cine-hero-copy,
+  .cine-ghost-fade,
   .skel,
   .cine-btn-shimmer:hover::before {
     animation: none;

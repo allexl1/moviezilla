@@ -102,7 +102,11 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
     onClose();
   };
 
-  const choosePerson = (id) => {
+  const choosePerson = (id, name) => {
+    // People count as searches too (actors were silently dropped from
+    // recents — only title picks recorded the query).
+    if (name?.trim()) storage.addSearchHistory(name.trim());
+    else if (query.trim()) storage.addSearchHistory(query.trim());
     onSelectPerson?.(id);
     onClose();
   };
@@ -118,7 +122,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
     } else if (e.key === 'Enter' && activeIdx >= 0 && navItems[activeIdx]) {
       e.preventDefault();
       const target = navItems[activeIdx];
-      if (target.kind === 'person') choosePerson(target.id);
+      if (target.kind === 'person') choosePerson(target.id, target.data?.name);
       else chooseMedia(target.data);
     }
   };
@@ -187,7 +191,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                   {history.map((term) => (
                     <span
                       key={term}
-                      className="cine-chip cine-chip--glass pr-1.5"
+                      className="cine-pill cine-pill--sm cine-pill--value"
                     >
                       <button
                         onClick={() => setQuery(term)}
@@ -275,7 +279,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                 poster={tmdb.getImageUrl(p.profile_path, 'w185', FALLBACK_PROFILE)}
                 title={p.name}
                 meta={deptName(p.known_for_department)}
-                  onClick={() => choosePerson(p.id)}
+                  onClick={() => choosePerson(p.id, p.name)}
                 />
               </div>
             ))}
