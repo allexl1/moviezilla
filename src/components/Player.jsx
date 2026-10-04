@@ -117,11 +117,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const [showChrome, setShowChrome] = useState(true);
   // Bumped to force the server dropdown shut (only one popover at a time).
   const [serverSignal, setServerSignal] = useState(0);
-  // Stall recovery: some providers die after a seek (black frame, no
-  // timeupdates) and never come back. 30s of silence after real playback
-  // surfaces a glass Reload pill instead of a dead screen.
-  const [stalled, setStalled] = useState(false);
-  const stalledRef = useRef(false);
 
   const containerRef = useRef(null);
   const floatEndRef = useRef(null);
@@ -316,8 +311,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     rearmConvergence();
     rebuildEmbed(server, currentSeason, currentEpisode, t);
     setKey((prev) => prev + 1);
-    stalledRef.current = false;
-    setStalled(false);
     poke();
   };
 
@@ -325,6 +318,11 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // to be a "kicked out of fullscreen" detector + re-enter pill here —
   // removed by request. Popup-forced exits can't be distinguished from
   // intentional ones anyway, and the pill fired on plain Esc too.)
+  // iOS Safari can't fullscreen arbitrary containers: there the provider
+  // keeps its own fullscreen permission (see the iframe below).
+  const isiOS =
+    typeof navigator !== 'undefined' &&
+    /iPad|iPhone|iPod/.test(navigator.userAgent || '');
   const enterFs = () => {
     containerRef.current?.requestFullscreen().catch(() => {});
   };
@@ -430,11 +428,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
 
   // Log the visit on a 5s heartbeat + on hide/close — so tapping History
   // always reopens the exact episode + second. Entries deduped per title.
-  // Same tick drives the stall detector. Suspended followers sit out: the
-  // frame is gone, so accruing wall-clock would inflate their history and
-  // poison the resume second. Position reports stay live (cheap, keeps
-  // the room's picture of this device fresh). `suspended` is a dep so the
-  // interval closure always sees the current hold state.
+  // Heartbeat: wall-clock accrue + persist + position reports.
+  // Suspended followers sit out: the frame is gone, so accruing wall-clock
+  // would inflate their history and poison the resume second. Position
+  // reports stay live (cheap, keeps the room's picture of this device
+  // fresh). `suspended` is a dep so the interval closure always sees the
+  // current hold state.
   useEffect(() => {
     const beat = setInterval(() => {
       if (!suspended) {
@@ -442,17 +441,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         saveNowRef.current();
       }
       reportRef.current();
-      if (
-        !stalledRef.current &&
-        !suspended &&
-        pmSeenRef.current &&
-        !pausedProvRef.current &&
-        !document.hidden &&
-        Date.now() - lastPmRef.current.at > 30000
-      ) {
-        stalledRef.current = true;
-        setStalled(true);
-      }
     }, 5000);
     const onHide = () => {
       if (document.hidden) {
@@ -645,10 +633,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             // Boot proof for the popup guard: telemetry marks pmSeen, then
             // tryArm gates on elapsed>=4s (never arms early on slow boots).
             armSandbox();
-            if (stalledRef.current) {
-              stalledRef.current = false;
-              setStalled(false);
-            }
             // Ended snaps to 100% even when the provider never sent a
             // duration (silent servers, wall-clock titles): the event IS
             // the evidence. Bare 'ended' with no time at all marks via
@@ -855,20 +839,22 @@ export default function Player({ media, details, onClose, onPosition = null, roo
                 exitFs();
               }
             }}
-            className="cine-icon-btn"
-            
+            className="cine-icon-btn cine-has-tip"
+
             aria-label="Toggle fullscreen"
           >
             <Maximize className="w-4 h-4" />
+            <span className="cine-tip cine-tip--below" aria-hidden="true">Fullscreen</span>
           </button>
 
           <button
             onClick={() => reloadStream(false)}
-            className="cine-icon-btn"
-            
+            className="cine-icon-btn cine-has-tip"
+
             aria-label="Reload stream"
           >
             <RotateCcw className="w-4 h-4" />
+            <span className="cine-tip cine-tip--below" aria-hidden="true">Reload stream</span>
           </button>
 
           {/* Room chat lives in the chrome row (next to fullscreen) and the
@@ -880,11 +866,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
                 markChromeTouched();
                 chat.onToggle();
               }}
-              className="cine-icon-btn relative"
-              
+              className="cine-icon-btn relative cine-has-tip"
+
               aria-label="Toggle room chat"
             >
               <MessageCircle className="w-4 h-4" />
+              <span className="cine-tip cine-tip--below" aria-hidden="true">Room chat</span>
               {chat.unread > 0 && !chat.open && (
                 <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-[var(--cine-accent)] text-black text-[10px] font-black flex items-center justify-center">
                   {chat.unread > 9 ? '9+' : chat.unread}
@@ -956,7 +943,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             ref={frameRef}
             onLoad={onFrameLoad}
             src={embedUrl}
-            
+
             className="w-full h-full border-0"
             // NOTE: no sandbox attribute — verified 2026-09-14 in headless
             // Chromium that Vidy and VidLink refuse sandboxed frames
@@ -965,9 +952,16 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             // free providers (VidLink ships adsco.re + yandex, confirmed
             // via traffic; Vidy is ad-free). Both carry the RU domestic
             // library (Brother 2 verified playing on both).
-            allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+            // Fullscreen belongs to OUR chrome (container-level): the
+            // provider's own fullscreen button is denied the permission,
+            // so going fullscreen costs zero clicks inside the ad-funded
+            // iframe (play/seek/fullscreen taps in there are what spawn
+            // popups). iOS Safari keeps the permission — it can't
+            // fullscreen arbitrary containers, so blocking it there would
+            // remove fullscreen entirely instead of moving it.
+            allow={isiOS ? 'autoplay; fullscreen; encrypted-media; picture-in-picture' : 'autoplay; encrypted-media; picture-in-picture'}
             referrerPolicy="origin"
-            allowFullScreen
+            allowFullScreen={isiOS || undefined}
           />
         )}
         {/* Room overlay (host paused / waiting) sits above either state. */}
@@ -977,26 +971,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           </div>
         )}
       </div>
-
-      {/* Stall recovery: our DOM is inside the fullscreen element, so
-          this stays visible and tappable where the iframe swallows every
-          gesture. Only real problems surface here — no persistent chrome,
-          so fullscreen stays clean. (Touch users wake controls via the
-          top-left wake zone below.) */}
-      {stalled && !suspended && (
-        <div className="absolute bottom-6 inset-x-0 z-30 flex flex-col items-center gap-2 pointer-events-none px-4">
-          <div className="pointer-events-auto flex items-center gap-2 pl-4 pr-2 py-1.5 cine-glass-panel rounded-2xl">
-            <span className="text-xs font-semibold text-white/80">Stream stuck?</span>
-            <button onClick={() => reloadStream(false)} className="cine-pill cine-pill--sm" aria-label="Reload at last position">
-              <RotateCcw className="w-3 h-3" />
-              Reload
-            </button>
-            <button onClick={() => reloadStream(true)} className="cine-pill cine-pill--sm" aria-label="Restart from the beginning">
-              From start
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Wake zone: the embed iframe swallows all pointer events, so once
           the chrome hides there is no hover path back. This transparent

@@ -49,8 +49,36 @@ if [ -n "$hit" ]; then
   fail "display utility on a cine-* class that sets display will lose to index.css — control visibility in the stylesheet instead." "$hit"
 fi
 
+# NOTE: checks 5-7 below are code guards (plural honesty, rail ownership,
+# thumb discipline) that live in this script so one `npm run guard` covers
+# every silent-regression family. Rename pending; behavior is what matters.
+
+# 5. Raw plurals: "{n} episodes"-style literals without a singular branch
+#    (the "1 Oscars" / "1 titles" family). Singularized lines spell the
+#    noun without trailing s (`title${...}`) or carry `=== 1` — both pass.
+hit=$(grep -rEn '(length|count)\} +(episodes|seasons|titles|matches|honours|awards)\b' src --include='*.jsx' | grep -v '=== 1' || true)
+if [ -n "$hit" ]; then
+  fail "raw plural found — singularize honestly (1 Oscar, not 1 Oscars)." "$hit"
+fi
+
+# 6. Rail scroll ownership: only RowRail.jsx may write scrollLeft (its
+#    identity-keyed reset). Stray writers reintroduce drift-into-space.
+hit=$(grep -rn 'scrollLeft *=' src --include='*.jsx' --include='*.js' | grep -v 'src/components/RowRail.jsx' || true)
+if [ -n "$hit" ]; then
+  fail "scrollLeft write outside RowRail — route it through the rail reset." "$hit"
+fi
+
+# 7. Sliding-thumb discipline: offsetLeft/offsetWidth measurers must live
+#    next to a fonts.ready re-measure (Navbar.jsx, PersonView.jsx SegFilter,
+#    StudioView.jsx SegFilter). New thumb code without one drifts on font
+#    load/swap.
+hit=$(grep -rln 'offsetLeft\|offsetWidth' src --include='*.jsx' | grep -v 'src/components/Navbar.jsx' | grep -v 'src/components/PersonView.jsx' | grep -v 'src/components/StudioView.jsx' || true)
+if [ -n "$hit" ]; then
+  fail "thumb measurer outside Navbar/PersonView/StudioView — add a fonts.ready re-measure." "$hit"
+fi
+
 if [ "$violations" -ne 0 ]; then
   echo "CSS guard failed."
   exit 1
 fi
-echo "CSS guard passed."
+echo "All guards passed."

@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
 // Generic pop-up button (Apple HIG: one exclusive choice from a defined
 // set — genre, year, sort, country, language). Glass value pill + fixed
-// menu panel with checked rows. The panel is position:fixed anchored to
-// the button so it escapes overflow-x scrollers (FilterBar) unclipped.
-// Page scrolls / resizes move the anchor, so the menu closes on those —
-// scrolls INSIDE the menu list itself never close it.
+// menu panel with checked rows. The panel portals to document.body so no
+// ancestor (modal backdrop-filter, overflow scrollers) can trap, clip or
+// re-anchor it. Page scrolls / resizes move the anchor, so the menu
+// closes on those — scrolls INSIDE the menu list itself never close it.
 export default function Picker({
   value,
   onChange,
@@ -29,7 +30,13 @@ export default function Picker({
     if (!open) return;
     const place = () => {
       const r = boxRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 232)) });
+      if (r) {
+        // Flip above the button when the menu would run off the viewport
+        // bottom (short screens, low rows like settings on phones).
+        let top = r.bottom + 8;
+        if (top + 320 > window.innerHeight) top = Math.max(8, r.top - 320);
+        setPos({ top, left: Math.max(8, Math.min(r.left, window.innerWidth - 232)) });
+      }
     };
     place();
     const close = () => setOpen(false);
@@ -79,14 +86,14 @@ export default function Picker({
         <span className="truncate">{current ? current.label : placeholder}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-white/50 transition-transform duration-200 flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && pos && (
+      {open && pos && createPortal(
         <div
           id={menuId}
           ref={menuRef}
           role="menu"
           aria-label={menuLabel}
           className="p-2 rounded-3xl cine-glass-panel"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: 224, zIndex: 70 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: 224, zIndex: 100 }}
         >
           <div className="space-y-1 max-h-72 overflow-y-auto">
             {list.map((o) => {
@@ -111,7 +118,8 @@ export default function Picker({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

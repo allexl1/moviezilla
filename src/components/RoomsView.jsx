@@ -29,7 +29,7 @@ function NickRow({ nickname, isAccount, setNicknameState, onToast }) {
     return (
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold text-white/45">Nickname:</span>
-        <span className="cine-chip cine-chip--neutral">{nickname}</span>
+        <span className="cine-chip cine-chip--neutral" style={{ color: 'var(--cine-accent)' }}>{nickname}</span>
         {isAccount ? (
           <span className="text-[11px] font-medium text-white/40">From your account</span>
         ) : (
@@ -38,7 +38,7 @@ function NickRow({ nickname, isAccount, setNicknameState, onToast }) {
               setNickname('');
               setNicknameState('');
             }}
-            className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
+            className="text-[11px] font-semibold text-white/40 hover:text-white/80 transition cursor-pointer"
           >
             Change
           </button>
@@ -334,7 +334,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
             </button>
             <div>
               <h2 className="text-xl font-bold text-white tracking-tight">What are we watching?</h2>
-              <p className="text-xs text-white/60 mt-0.5">Tap a title — the room is created instantly</p>
+              <p className="text-xs text-white/60 mt-0.5">Tap a title. The room is created instantly.</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-2xl cine-glass-panel px-4 py-3.5 focus-within:border-white/25 transition">
@@ -429,7 +429,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
             then My rooms — nothing important below the fold. */}
         {trending.length > 0 && (
           <RowRail
-            title="Trending now — start a room"
+            title="Trending now: start a room"
             cardSize="sm"
             items={trending}
             onSelect={(m) =>
@@ -448,7 +448,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         <section className="rounded-3xl cine-glass-panel p-6 sm:p-8 space-y-5 max-w-xl w-full mx-auto">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-extrabold text-white tracking-tight">Start watching together</h2>
-            <p className="text-xs text-white/60">One tap to create — or join with a code</p>
+            <p className="text-xs text-white/60">One tap to create, or join with a code</p>
           </div>
           {draftMedia && (
             <div className="flex items-center gap-3 mat-row p-2.5">
@@ -477,7 +477,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
           </button>
           <div className="flex items-center gap-3" aria-hidden="true">
             <div className="h-px flex-1 bg-white/10" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">or join</span>
+            <span className="text-[10px] font-semibold tracking-wide text-white/40">Or join</span>
             <div className="h-px flex-1 bg-white/10" />
           </div>
           <div className="flex flex-col sm:flex-row gap-2.5">
@@ -519,27 +519,28 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
                 meta={`${r.code} • ${r.owned ? 'Host' : 'Guest'}`}
                 onClick={() => onEnter(r.code)}
                 right={
-                  <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for room ${r.code}`}>
+                  <div className="flex items-center gap-1" role="group" aria-label={`Actions for room ${r.code}`}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         copyCode(r.code);
                       }}
+                      className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
                       aria-label={`Copy invite link ${r.code}`}
                     >
                       {copied === r.code ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Copy invite</span>
+                      <span className="cine-tip cine-tip--below" aria-hidden="true">Copy invite</span>
                     </button>
-                    <span className="cine-duo-divider" aria-hidden="true" />
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(r);
                       }}
+                      className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
                       aria-label={r.owned ? `Delete room ${r.code}` : `Remove room ${r.code}`}
                     >
                       {r.owned ? <Trash2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                      <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">
+                      <span className="cine-tip cine-tip--below" aria-hidden="true">
                         {r.owned ? 'Delete for everyone' : 'Remove'}
                       </span>
                     </button>
@@ -559,11 +560,11 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
       >
         {pending && (
           <div className="p-6 sm:p-8 space-y-5 text-center">
-            <div className="w-20 h-28 rounded-2xl overflow-hidden bg-black/50 mx-auto">
+            <div className="w-36 h-52 rounded-2xl overflow-hidden bg-black/50 mx-auto">
               <img
                 src={
                   pending.poster_path
-                    ? tmdb.getImageUrl(pending.poster_path, 'w185')
+                    ? tmdb.getImageUrl(pending.poster_path, 'w342')
                     : pending.thumb || ''
                 }
                 alt=""

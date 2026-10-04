@@ -19,8 +19,21 @@
   --cine-panel-deep: #14141699;           /* Deeper glass panel */
   --cine-panel-dark: #0a0a0e90;           /* Dark glass panel */
 
-  --cine-accent: #95ff50;                 /* Lime green accent — the "pop" color */
+  --cine-accent: #95ff50;                 /* Lime — state only (selected/playing/live), never static decor */
   --cine-accent-hover: #a0ff60;           /* Hover state */
+
+  /* Button tokens (friend audit, locked): white = action, glass-lite =
+     secondary, text = navigation, lime = state, red = destructive. */
+  --btn-primary-bg: #fff;
+  --btn-primary-text: #050505;
+  --btn-glass-bg: rgba(255, 255, 255, 0.06);
+  --btn-glass-hover: rgba(255, 255, 255, 0.10);
+  --btn-glass-border: rgba(255, 255, 255, 0.10);
+  --btn-glass-border-hover: rgba(255, 255, 255, 0.16);
+  --btn-ghost-bg-hover: rgba(255, 255, 255, 0.06);
+  --btn-accent: var(--cine-accent);
+  --btn-accent-bg: color-mix(in srgb, var(--cine-accent) 10%, transparent);
+  --btn-accent-border: color-mix(in srgb, var(--cine-accent) 25%, transparent);
 
   --cine-white: #ffffff;
   --cine-black: #000000;
@@ -191,7 +204,20 @@ html {
   scrollbar-width: none;
 }
 
-/* ─── Focus (visible keyboard nav — Apple HIG) ──────────────────────────── */
+/* ─── Focus (visible keyboard nav — Apple HIG) ────────────────────────────
+   Touch taps must never leave a ring behind (the "weird outline on tap"):
+   tap highlight off globally, mouse/touch focus gets no outline — only
+   keyboard :focus-visible rings. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -509,82 +535,74 @@ select:focus-visible,
    tile (bg-white/10, border-white/20, backdrop-blur-2xl). */
 
 .cine-btn-primary {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  color: var(--cine-text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 16px 40px rgba(0, 0, 0, 0.5);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
 }
 
 .cine-btn-primary:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
+  background: #f2f2f5;
+  color: var(--btn-primary-text);
+  border: none;
   transform: scale(1.03);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 18px 44px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
 .cine-btn-ghost {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 16px 40px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  color: var(--cine-text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .cine-btn-ghost:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
-  transform: scale(1.05);
+  background: var(--btn-ghost-bg-hover);
+  border-color: transparent;
+  color: #fff;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Accent keeps the navbar glass body — lime lives only in text + a soft
    outer glow (Apple: tint selectively for primary actions, never whole
    fills; also honors the no-green-fill rule from the screenshot chats). */
 .cine-btn-accent {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  color: var(--cine-accent);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 24px color-mix(in srgb, var(--cine-accent) 22%, transparent),
-    0 16px 40px rgba(0, 0, 0, 0.5);
+  background: var(--btn-accent-bg);
+  color: var(--btn-accent);
+  border: 1px solid var(--btn-accent-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
 .cine-btn-accent:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 0 28px color-mix(in srgb, var(--cine-accent) 32%, transparent),
-    0 16px 40px rgba(0, 0, 0, 0.5);
+  background: rgba(149, 255, 80, 0.14);
+  border-color: rgba(149, 255, 80, 0.35);
+  box-shadow: none;
+}
+
+/* Danger — subtle red tint for destructive actions (Leave, Delete,
+   Remove, Clear). Restrained, never solid bright red. Doubled class so it
+   wins over .cine-control-btn glass-lite regardless of source order. */
+.cine-btn-danger.cine-btn-danger {
+  background: rgba(255, 70, 70, 0.08);
+  border: 1px solid rgba(255, 70, 70, 0.15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  color: #ff7070;
+}
+
+.cine-btn-danger.cine-btn-danger:hover {
+  background: rgba(255, 70, 70, 0.13);
+  border-color: rgba(255, 70, 70, 0.28);
+  color: #ff8080;
+  box-shadow: none;
 }
 
 /* Solid white primary — the ONE non-glass action (hero Play). Deliberate:
@@ -710,29 +728,22 @@ select:focus-visible,
   font-size: 0.875rem;
   font-weight: var(--cine-font-semibold);
   letter-spacing: 0.01em;
-  color: var(--cine-text-primary);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.88);
+  background: var(--btn-glass-bg);
+  border: 1px solid var(--btn-glass-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .cine-control-btn:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
-  transform: translateY(-1px);
+  background: var(--btn-glass-hover);
+  border-color: var(--btn-glass-border-hover);
+  transform: none;
+  box-shadow: none;
 }
 
 .cine-control-btn:active {
@@ -747,30 +758,21 @@ select:focus-visible,
   align-items: center;
   justify-content: center;
   font-size: 0.875rem;
-  color: var(--cine-text-primary);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  /* Small discs sit over dark video frames where a faint edge disappears —
-     the top border + inset carry extra specular so the rim still reads. */
-  border-top-color: rgba(255, 255, 255, 0.32);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.72);
+  background: transparent;
+  border: 1px solid transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .cine-icon-btn:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
+  background: var(--btn-ghost-bg-hover);
+  border-color: transparent;
+  color: #fff;
 }
 
 .cine-icon-btn:active {
@@ -809,16 +811,11 @@ select:focus-visible,
   white-space: nowrap;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.6);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  background: var(--btn-glass-bg);
+  border: 1px solid var(--btn-glass-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
 }
@@ -829,11 +826,8 @@ a.cine-pill {
 
 .cine-pill:hover {
   color: rgba(255, 255, 255, 0.9);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
+  background: var(--btn-glass-hover);
+  border-color: var(--btn-glass-border-hover);
 }
 
 .cine-pill:active {
@@ -881,7 +875,7 @@ a.cine-pill {
   border-top-color: transparent;
 }
 
-/* ─── Reaction chip — glass at 11px scale ─────────────────────────────── */
+/* ─── Reaction chip — solid at 11px scale, no glass ─────────────────── */
 .cine-react {
   display: inline-flex;
   align-items: center;
@@ -893,13 +887,11 @@ a.cine-pill {
   font-weight: var(--cine-font-bold);
   line-height: 1;
   color: rgba(255, 255, 255, 0.8);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
   transition: all var(--cine-duration-base) var(--cine-ease-out);
   cursor: pointer;
 }
@@ -914,12 +906,8 @@ a.cine-pill {
 .cine-react--mine {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.6);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(12, 12, 16, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 0 16px rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: none;
 }
 
 /* Reaction chip glyph: the PNG carries its own transparent padding, so
@@ -1122,26 +1110,22 @@ a.cine-pill {
   transform: scale(0.97);
 }
 
-/* ─── Static icon disc — glass without button affordance ───────────────
+/* ─── Static icon disc — bare glyph, no container ───────────────────────
    Decorative medallions (settings rows, empty states, lobby icons):
-   same frost, no cursor, no hover lift. */
+   the glyph alone, no circle, no frost. Containers made empty states
+   read as buttons. */
 .cine-disc {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   border-radius: var(--cine-radius-full);
-  color: var(--cine-accent);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 
 .cine-disc--dim {
@@ -1168,10 +1152,10 @@ a.cine-pill {
   padding: 0.2rem 0.55rem;
   border-radius: var(--cine-radius-full);
   background-color: rgba(10, 10, 14, 0.85);
-  color: var(--cine-accent);
+  color: #fff;
   font-size: 0.75rem;
   font-weight: var(--cine-font-bold);
-  border: 1px solid var(--cine-glass-border);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 /* ─── Section Header ────────────────────────────────────────────────────── */
@@ -1290,10 +1274,17 @@ a.cine-pill {
 .cine-hero {
   position: relative;
   width: 100%;
-  height: 85vh;
-  min-height: 560px;
+  height: 92vh;
+  min-height: 620px;
   overflow: hidden;
   z-index: 10;
+}
+
+@media (max-width: 768px) {
+  .cine-hero {
+    height: 82vh;
+    min-height: 520px;
+  }
 }
 
 /* Bright in-flow poster: visible at top, scrolls away naturally. */
@@ -1307,11 +1298,10 @@ a.cine-pill {
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  /* Dissolve the photo BEFORE the hero's DOM edge (same melt as detail):
-     at the boundary only ghost shows through on both sides, so no tone
-     step can form at any scroll offset, on any backdrop. */
-  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
-  mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
+  /* Long soft dissolve: the feather spans most of the hero so bright
+     art ramps gently into the page tint instead of stepping at the edge. */
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 62%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 62%);
 }
 
 /* Full-bleed trailer: cover-fit the 16:9 YouTube frame into any hero shape
@@ -1332,18 +1322,29 @@ a.cine-pill {
 .cine-hero-scrim {
   position: absolute;
   inset: 0;
-  /* Transparent AT the hero edge on EVERY x (the image there is already
-     dissolved by mask, so the edge shows bare ghost on both sides).
-     The mask is the actual fix for "blends right, lines left": the old
-     90deg left-darkening ran at full strength down to y=0, so the left
-     edge showed ghost-behind-black while below it showed bare ghost.
-     Masking the whole scrim out at the boundary removes the step on the
-     full width. Darkness lives higher up, where the hero copy sits. */
+  /* Cinejoy rule: the dissolve zone lands in solid dark (masked out at
+     the exact edge, near-solid just above), so no step forms on bright
+     art. Darkness lives higher up, where the hero copy sits. */
   -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   background:
-    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
+    linear-gradient(0deg, rgba(5, 5, 5, 0.96) 0%, rgba(5, 5, 5, 0.85) 20%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
+}
+
+/* Joint shade: kills the crease where the hero meets the tinted page.
+   The mask feather alone can't hide it — bright art is still luminous
+   100px up. This lays a 220px ramp to near-solid inside the hero bottom
+   (above the photo, below copy/dots), so the edge hands the tint a tone
+   it already matches. No image, no blur, no per-art cost. */
+.cine-hero-joint {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 220px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(5, 5, 5, 0.55) 55%, rgba(5, 5, 5, 0.92) 100%);
 }
 
 /* Frozen home backdrop (cinejoy parity): the SAME picture as a dim ghost
@@ -1362,32 +1363,18 @@ a.cine-pill {
   height: 100%;
   object-fit: cover;
   object-position: center top;
-  /* Luminous ghost (reference parity): bright enough that scrolled
-     sections sit on color, not near-black. Uniform — no viewport gradient,
-     so no scroll-dependent edge can form. */
-  opacity: 1;
-  filter: blur(40px) brightness(0.62) saturate(1.4);
+  /* Poster tint at ~30%: the page carries the artwork's palette without
+     showing the picture. Uniform layer, no viewport gradient. */
+  opacity: 0.3;
+  filter: blur(60px) brightness(0.5) saturate(1.2);
   transform: scale(1.08);
 }
 
 .cine-home-bg-shade {
   position: absolute;
   inset: 0;
-  /* Bottom-anchored veil (NOT top): at scroll 0 the handoff zone sits at
-     the viewport bottom, which is exactly what must go dark so the tail
-     smear has nothing bright to step against. Top-anchored veils sit
-     behind the opaque hero and do nothing at the boundary. Fixed + smooth
-     = scroll-stable (only sharp scrolling-matched slabs can hold at one
-     offset; smooth fixed ramps hold everywhere). A mild top shade keeps
-     the nav zone legible. Mid-band stays light so no dark slab reads
-     behind the rails — rails carry no background of their own. */
-  background:
-    linear-gradient(0deg,
-      rgba(5, 5, 5, 0.92) 0%,
-      rgba(5, 5, 5, 0.72) 12%,
-      rgba(5, 5, 5, 0.32) 26%,
-      transparent 44%),
-    linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
+  /* Mild top shade for nav legibility only — the tint stays alive below. */
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.55) 0%, transparent 26%);
 }
 
 /* Home melt-base: same 3-layer architecture as detail (sharp dissolves
@@ -1415,9 +1402,9 @@ a.cine-pill {
 
 .cine-hero-content {
   position: absolute;
-  bottom: 5.5rem;
+  bottom: 3rem;
   left: 3.5rem;
-  max-width: 600px;
+  max-width: 640px;
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -1562,14 +1549,15 @@ a.cine-pill {
   bottom: calc(100% + 10px);
   left: 50%;
   translate: -50% 4px;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--cine-radius-full);
-  background: rgba(10, 10, 14, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(34, 34, 44, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 10px;
   font-weight: var(--cine-font-semibold);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -1624,14 +1612,15 @@ a.cine-pill {
   bottom: calc(100% + 10px);
   left: 50%;
   translate: -50% 4px;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--cine-radius-full);
-  background: rgba(10, 10, 14, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(34, 34, 44, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 10px;
   font-weight: var(--cine-font-semibold);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
@@ -1653,6 +1642,15 @@ a.cine-pill {
   }
   *:hover > .cine-tip--below {
     translate: -50% 0;
+  }
+  /* Left-edge variant: first item in a scroller — a centered tip would
+     clip past the viewport edge. Anchors to the control's left. */
+  .cine-tip--left {
+    left: 0;
+    translate: 0 4px;
+  }
+  *:hover > .cine-tip--left {
+    translate: 0 0;
   }
 }
 
@@ -1768,6 +1766,112 @@ a.cine-pill {
 .cine-hero-dot.is-active {
   width: 1.75rem;
   background: var(--cine-white);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hero duo: one joined dark track for the secondary actions next to
+   Play. Solid (no glass gradient), hairline edge, buttons bare inside
+   with a breathing gap — together, not scattered. */
+.cine-hero-duo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: var(--cine-radius-full);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.cine-hero-duo-divider {
+  width: 1px;
+  height: 1.5rem;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
+
+.cine-hero-duo-btn {
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform var(--cine-duration-base) var(--cine-ease-out), background var(--cine-duration-base) var(--cine-ease-out);
+}
+
+/* Long tips (box-office verdicts) wrap instead of clipping past the
+   viewport edge. Still hidden on touch. */
+.cine-tip--wrap {
+  white-space: normal;
+  max-width: 220px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.cine-hero-duo-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.cine-hero-duo-btn:active {
+  transform: scale(0.94);
+}
+
+/* Hero over-media disc: the ONE justified glass circle — a faint dark
+   disc so glyphs read on bright artwork (cinejoy rule). No divider, no
+   shared container. */
+.cine-hero-disc {
+  position: relative;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--cine-radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: transform var(--cine-duration-base) var(--cine-ease-out), background var(--cine-duration-base) var(--cine-ease-out);
+}
+
+.cine-hero-disc:hover {
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.06);
+}
+
+.cine-hero-disc:active {
+  transform: scale(0.96);
+}
+
+/* Hero dot progress: the 8s rotation made visible as a sweep on the live
+   dot. Remounts per slide; unmounted while overlays pause the timer. */
+.cine-dot-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  transform-origin: left;
+  animation: cine-dot-fill 8s linear both;
+}
+
+@keyframes cine-dot-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cine-dot-fill {
+    display: none;
+  }
 }
 
 /* Spotlight edge steppers: thin white chevrons pinned to the screen
@@ -2041,6 +2145,81 @@ a.cine-pill {
   border-radius: 9999px;
   background: var(--cine-accent);
   transition: width 0.3s ease;
+}
+
+/* ─── Continue Watching portrait (clean parity) ─────────────────────────
+   Standard 2:3 poster cards with a thin 3px progress timer pinned to the
+   art bottom + time-left caption. No landscape thumbs, no glass box. */
+.cine-cw-portrait {
+  position: relative;
+  width: 192px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.cine-cw-portrait-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2/3;
+  border-radius: var(--cine-radius-lg);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--cine-glass-border);
+}
+
+.cine-cw-portrait-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cine-cw-portrait-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  background: rgba(0, 0, 0, 0.35);
+  transition: opacity 0.2s ease;
+}
+
+.cine-cw-portrait:hover .cine-cw-portrait-play {
+  opacity: 1;
+}
+
+.cine-cw-portrait-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cine-cw-portrait-timer > span {
+  display: block;
+  height: 100%;
+  background: var(--cine-accent);
+}
+
+.cine-cw-portrait-title {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: var(--cine-font-semibold);
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cine-cw-portrait-meta {
+  font-size: 0.6875rem;
+  font-weight: var(--cine-font-semibold);
+  color: var(--cine-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Continue Watching card (overlay cinema) ───────────────────────────
@@ -2383,11 +2562,11 @@ body.mz-refract .cine-chip--glass {
 }
 
 /* High-contrast rating chip for list rows (search/history):
-   solid dark pill, lime figure — readable over glass, no cheap tint. */
+   solid dark pill, WHITE figure always — lime is state, never metadata. */
 .cine-chip--rating {
   background: rgba(0, 0, 0, 0.72);
-  color: var(--cine-accent);
-  border-color: rgba(149, 255, 80, 0.28);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 /* ─── Select / Dropdown ──────────────────────────────────────────────────
@@ -2534,14 +2713,9 @@ input[type='range'].cine-range {
   width: 100%;
   padding: 0.625rem 1rem;
   border-radius: 0.75rem;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 10px 26px rgba(0, 0, 0, 0.42);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: none;
   color: var(--cine-text-primary);
   font-size: 0.875rem;
   outline: none;
@@ -2551,10 +2725,8 @@ input[type='range'].cine-range {
 }
 
 .cine-input:focus {
-  border-color: var(--cine-accent);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .cine-input::placeholder {
@@ -2876,7 +3048,7 @@ button:hover .cine-provider-icon,
   gap: 0.3rem;
   font-size: 0.6875rem;
   font-weight: var(--cine-font-semibold);
-  color: var(--cine-accent);
+  color: #fff;
 }
 
 /* Trailer captions sit on bright artwork: a shadow does what glass can't
@@ -2982,24 +3154,21 @@ img.cine-detail-melt-img {
 }
 
 .cine-detail-melt-img {
-  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
-  mask-image: linear-gradient(0deg, transparent 0%, #000 32%);
-  /* Same crop anchor as home (center top): the ghost samples the same
+  -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 62%);
+  mask-image: linear-gradient(0deg, transparent 0%, #000 62%);
+  /* Same crop anchor as home (center top): the tint samples the same
      rows the sharp frame shows, so no tone step at any scroll offset. */
   object-position: center top;
 }
 
-/* Bottom scrim that feeds the melt: transparent AT the hero edge (the
-   melt-base beneath already carries the ghost's exact tone — any black
-   here would double-darken and redraw the edge line). Identical to the
-   home scrim (darkness peaks behind the copy, left shade included), so
-   both pages melt exactly alike. Masked like home so the fade holds on
-   the full width. */
+/* Bottom scrim (cinejoy rule): the dissolve zone lands in solid dark so
+   no step can form on bright art. Darkness peaks behind the copy, left
+   shade included. Masked so the fade holds the full width. */
 .cine-detail-hero-scrim {
   -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   mask-image: linear-gradient(0deg, transparent 0%, #000 26%);
   background:
-    linear-gradient(0deg, transparent 0%, rgba(5, 5, 5, 0.78) 22%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
+    linear-gradient(0deg, rgba(5, 5, 5, 0.96) 0%, rgba(5, 5, 5, 0.85) 20%, rgba(5, 5, 5, 0.45) 48%, transparent 82%),
     linear-gradient(90deg, rgba(5, 5, 5, 0.65) 0%, transparent 55%);
 }
 .cine-detail-bg {
@@ -3018,27 +3187,47 @@ img.cine-detail-melt-img {
   /* Center top, matching home on both layers: the ghost must sample the
      same crop or the boundary compares two different pictures. */
   object-position: center top;
-  /* Same uniform-ghost rule as home: no viewport gradient, so the match
-     holds at every scroll offset instead of exactly one. Same luminous
-     tone as home so both pages melt identically. */
-  opacity: 1;
-  filter: blur(40px) brightness(0.62) saturate(1.4);
+  /* Dimmer than home on purpose: the detail ghost sits behind body text
+     (cast, episodes, facts) on unpredictable backdrops, and at home
+     luminosity bright art hazed the whole page. Hero melt + tail keep
+     their tone (separate layers); only the body ghost drops. */
+  opacity: 0.3;
+  filter: blur(60px) brightness(0.5) saturate(1.2);
   transform: scale(1.08);
+}
+
+/* Catalog ambient (Movies / Shows headers): artwork-derived life without
+   a melt. Absolute top strip inside the page root (behind content via
+   negative z), masked to transparent so sections below sit on solid.
+   One layer, contain strict, frozen with mz-paused like all ambient. */
+.cine-page-ambient {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 380px;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+}
+
+.cine-page-ambient img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: blur(40px) brightness(0.5) saturate(1.4);
+  transform: scale(1.08);
+  opacity: 0.55;
 }
 
 .cine-detail-bg-shade {
   position: absolute;
   inset: 0;
-  /* Same bottom-anchored veil as home (see .cine-home-bg-shade): the tail
-     guarantees no step at the edge, this guarantees no fast black→color
-     read below it. Identical stops — the pages must never drift apart. */
-  background:
-    linear-gradient(0deg,
-      rgba(5, 5, 5, 0.92) 0%,
-      rgba(5, 5, 5, 0.72) 12%,
-      rgba(5, 5, 5, 0.32) 26%,
-      transparent 44%),
-    linear-gradient(180deg, rgba(5, 5, 5, 0.45) 0%, transparent 22%);
+  /* Mild top shade for nav legibility only — the tint stays alive below. */
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.55) 0%, transparent 26%);
 }
 
 /* ─── Segmented filter (joined track, sliding white thumb) ────────────
@@ -3142,14 +3331,13 @@ img.cine-detail-melt-img {
 
 .cine-cast-avatar {
   transition: transform var(--cine-duration-base) var(--cine-ease-out),
-    border-color var(--cine-duration-base) var(--cine-ease-out),
-    box-shadow var(--cine-duration-base) var(--cine-ease-out);
+    border-color var(--cine-duration-base) var(--cine-ease-out);
 }
 
 .group:hover .cine-cast-avatar {
   transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.32);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), var(--cine-shadow-2);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: none;
 }
 
 .cine-cast-card:hover {
@@ -3352,5 +3540,327 @@ body.mz-max-power .cine-soon-hover {
   .cine-disc,
   .cine-card-play {
     background: #17171d;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN.md direction — Apple-clean slate
+   (antislop during: ENERGY 2 / RHYTHM 1 / MOTION 1)
+   Reason: one flat slate base lets photography carry identity; blur is
+   reserved for surfaces floating over content (nav, sheets); a single white
+   accent keeps hierarchy quiet. Purple aurora + tab tints removed as
+   purposeless decoration. Pills kept for nav thumb + primary CTA only;
+   filters, chips, selects and inputs use the system large radius.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.cine-aurora-canvas,
+.cine-tab-tint {
+  display: none;
+}
+
+:root {
+  --cine-bg: #161a23;
+  --cine-bg-deep: #161a23;
+  --cine-accent: #ffffff;
+  --cine-accent-hover: #d9d9de;
+}
+
+.cine-pill,
+.cine-chip,
+.cine-select,
+.cine-input {
+  border-radius: var(--cine-radius-lg);
+}
+
+/* Rating figure: white on dark, neutral ring (was lime). */
+.cine-chip--rating {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Coming Soon: quiet dark meta instead of the green pill. */
+.cine-soon-badge {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+/* Group heads: sentence case, quiet weight. */
+.cine-group-head {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 700;
+}
+
+/* Mobile: the bottom dock floats — keep last rows clear of it. */
+@media (max-width: 768px) {
+  .cine-container {
+    padding-bottom: calc(var(--cine-space-16) + 5.5rem);
+  }
+}
+
+/* ─── /clean experiment only: posters with a pulse ───
+   Reason: lift + scale on hover/focus reads as tap affordance, not
+   decoration. Hero crossfades per slide. Nothing here touches the
+   rest of the app; delete with CleanHomeView. */
+.clean-home .cine-card {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+}
+
+.clean-home .cine-card:hover,
+.clean-home .cine-card:focus-visible {
+  transform: translateY(-6px) scale(1.03);
+  z-index: 2;
+}
+
+/* Press state on everything tappable: squash, never flash. */
+.clean-home .cine-card:active {
+  transform: translateY(-3px) scale(0.98);
+}
+
+.clean-home .clean-top:active {
+  transform: scale(0.96);
+}
+
+/* Rail posters carry no shadow by design (artwork edge + radius separate
+   them); the hover lift alone is the whole affordance. No border light:
+   a white ring on hover reads as a defect, not a state. */
+
+.clean-home .clean-hero-fade {
+  animation: clean-hero-in 0.3s ease both;
+}
+
+@keyframes clean-hero-in {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clean-home .cine-card:hover,
+  .clean-home .cine-card:focus-visible {
+    transform: none;
+  }
+  .clean-home .clean-hero-fade {
+    animation: none;
+  }
+}
+
+/* Plain slate rails (owner direction): no poster-derived wash behind the
+   content. The hero melt ends in the same slate token, so the joint is
+   tonally exact by construction. */
+
+/* Continue-watching progress pinned to the portrait art (fill reuses
+   the white accent progress fill). */
+.clean-home .clean-cw-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.25);
+  z-index: 3;
+}
+
+/* ─── Reference logic (cinejoy / Netflix / Apple, see DESIGN.md) ───
+   Side vignette for legibility without dimming the art; staggered
+   entrance per slide; editorial 64px rail rhythm; larger rail titles. */
+/* Melt: artwork dissolves into the page (mask fade) while slate fades in
+   underneath. A crossfade, never an overlay band, so no seam line exists. */
+.clean-home .clean-hero-img {
+  -webkit-mask-image: linear-gradient(to bottom, black 58%, transparent 99%);
+  mask-image: linear-gradient(to bottom, black 58%, transparent 99%);
+}
+
+.clean-home .clean-hero-melt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* One gradient, no extra layers: art stays vivid up top, slate takes
+     over toward the copy zone (localized dimming for logo legibility),
+     fully opaque exactly at the hero edge where the veil continues it. */
+  background: linear-gradient(to bottom, transparent 30%, var(--cine-bg-deep) 100%);
+}
+
+.clean-home .clean-rise {
+  animation: clean-rise 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes clean-rise {
+  from { opacity: 0; transform: translateY(24px); filter: blur(12px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+.clean-home main.cine-container {
+  gap: 4rem;
+}
+
+.clean-home .cine-section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clean-home .clean-rise {
+    animation: none;
+  }
+}
+
+/* Test-page chrome: the floating nav + logo keep their glass, but lose
+   the heavy 40px halo while over bright hero art. Scoped to /clean via
+   body.mz-clean so deployed pages are untouched. */
+body.mz-clean .cine-nav-pill-box,
+body.mz-clean .cine-logo-tile,
+body.mz-clean .cine-duo-btn {
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Secondary buttons join the 14px system on the test page. Primary CTA,
+   nav thumb, segmented duos and icon buttons keep their pill/circle
+   language (Arco: one shape per role). */
+body.mz-clean .cine-control-btn,
+body.mz-clean .cine-select {
+  border-radius: var(--cine-radius-lg);
+}
+
+/* Hero action row reads as one family: the duo matches the Play pill's
+   exact height (48px) so solid primary + glass secondary sit as siblings
+   instead of strangers. */
+body.mz-clean .cine-duo-btn {
+  height: 3rem;
+}
+
+/* ─── Arco breakpoint system (xs 576 / md 768 / lg 992 / xl 1200) ───
+   Responsive gutter idea: tighter rail gaps and section rhythm on
+   phones, full editorial spacing on desktop. Dots leave the crowded
+   action row on xs and dock under the nav instead. */
+@media (max-width: 576px) {
+  .clean-home .cine-rail {
+    gap: 0.75rem;
+  }
+
+  .clean-home main.cine-container {
+    gap: 2.5rem;
+  }
+
+  .clean-home .cine-hero-dots {
+    top: 5.25rem;
+    right: 1.25rem;
+    bottom: auto;
+  }
+
+  .clean-home .cine-section-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (min-width: 577px) and (max-width: 768px) {
+  .clean-home main.cine-container {
+    gap: 3rem;
+  }
+}
+
+/* ─── Rail steppers (RowRail `arrows`, opt-in) ───
+   Bare chevrons over fading scrims at the rail edges: visible on hover
+   or keyboard focus, present on touch, dead ends disable. */
+.cine-rail-wrap {
+  position: relative;
+}
+
+.cine-rail-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0.5rem;
+  width: 3.5rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+/* Steppers are a mouse/keyboard affordance. Touch users swipe, and an
+   always-on overlay slab over art reads as a defect on phones. */
+@media (hover: hover) {
+  .cine-rail-wrap:hover .cine-rail-arrow {
+    opacity: 1;
+  }
+}
+
+.cine-rail-arrow:focus-visible {
+  opacity: 1;
+}
+
+.cine-rail-arrow--prev {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 0.25rem;
+  background: linear-gradient(to right, rgba(10, 10, 14, 0.7), transparent);
+}
+
+.cine-rail-arrow--next {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 0.25rem;
+  background: linear-gradient(to left, rgba(10, 10, 14, 0.7), transparent);
+}
+
+.cine-rail-arrow:disabled,
+.cine-rail-wrap:hover .cine-rail-arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .cine-rail-arrow {
+    display: none;
+  }
+}
+
+/* Back-to-top: glass circle over the dock corner (test page only). */
+.clean-home .clean-top {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 6rem;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cine-text-primary);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    rgba(12, 12, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+/* Hero dot progress: the 8s rotation made visible as a sweep. */
+.clean-home .cine-hero-dot.is-active {
+  position: relative;
+  overflow: hidden;
+}
+
+.clean-home .clean-dot-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  transform-origin: left;
+  animation: clean-dot-fill 8s linear both;
+}
+
+@keyframes clean-dot-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clean-home .clean-dot-fill {
+    display: none;
   }
 }

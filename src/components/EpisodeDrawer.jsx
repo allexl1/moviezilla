@@ -2,6 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Check, ListVideo, ChevronDown, Crosshair } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 
+// Day-first everywhere ("19 May 2026", never 2026-05-19).
+function formatEpDay(iso) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function EpisodeDrawer({
   isOpen,
   onClose,
@@ -203,7 +211,7 @@ export default function EpisodeDrawer({
                         )}
                         <p className="text-[10px] text-white/50">
                           {[
-                            ep.air_date || null,
+                            formatEpDay(ep.air_date),
                             ep.runtime ? `${ep.runtime}m` : null,
                             ep.vote_average ? `★ ${Number(ep.vote_average).toFixed(1)}` : null,
                           ]

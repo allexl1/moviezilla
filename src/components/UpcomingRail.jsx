@@ -61,12 +61,12 @@ export default function UpcomingRail({
   }
   if (!items || items.length === 0) return null;
 
-  // "Sep 16" like the reference — falls back to the raw year.
+  // Day-first everywhere ("16 Sep 2026", never 2026-09-16).
   const dateOf = (m) => {
     const iso = m?.[dateKey] || '';
     const d = new Date(`${iso}T00:00:00`);
     if (iso && !Number.isNaN(d.getTime())) {
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     }
     return null;
   };

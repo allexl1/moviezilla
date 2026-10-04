@@ -92,7 +92,7 @@ function NameEditor({ initial }) {
     setMsg('');
     try {
       await saveDisplayName(draft);
-      setMsg('Saved — this name shows in rooms, chat and playlists.');
+      setMsg('Saved. This name shows in rooms, chat and playlists.');
     } catch (err) {
       setMsg(err.message || 'Could not save.');
     } finally {
@@ -215,7 +215,7 @@ function AccountBody() {
           </h3>
           <p className="text-[13px] text-white/55 leading-relaxed max-w-[280px]">
             {signup
-              ? 'One email, no password — your library follows you everywhere.'
+              ? 'One email, no password. Your library follows you everywhere.'
               : 'Log in to pick up your watchlist and resume points.'}
           </p>
         </div>
@@ -255,14 +255,14 @@ function AccountBody() {
               {busy ? 'Sending…' : signup ? 'Create account' : 'Log in'}
             </button>
             <p className="flex items-center justify-center gap-1.5 text-[11px] text-white/40">
-              <Lock className="w-3 h-3" /> No password — tap the link in the email to sign in instantly.
+              <Lock className="w-3 h-3" /> No password. Tap the link in the email to sign in instantly.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-center text-[13px] text-white/60">
               Tap the link we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span>
-              {` — or enter the 6-digit code below`}
+              {`, or enter the 6-digit code below`}
             </p>
             <div className="flex justify-center">
               <OtpBoxes code={code} onCode={setCode} disabled={busy} />
@@ -332,7 +332,7 @@ function AccountBody() {
       <NameEditor key={user.id} initial={displayName} />
       <div className="flex items-center justify-between gap-3 mat-row p-3">
         <p className="text-[11px] text-white/55">
-          {syncLabel} — watchlist, watched & resume sync across devices.
+          {syncLabel}. Watchlist, watched and resume sync across devices.
         </p>
         <button
           onClick={async () => {

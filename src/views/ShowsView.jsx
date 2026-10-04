@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TV_GENRES, TV_SORTS, tmdb } from '../services/tmdb';
+import { upgradeTopRatings } from '../services/ratings';
 import { pickUpcoming, pickAiring, getProviderOptions } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
@@ -54,6 +55,14 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
     loadMore: loadMoreOnAir,
   } = usePagedRail('shows-onair', fetchOnAirPage, pickAiring, showAiring);
 
+  // Display order (same as Movies): on Top Rated re-sort loaded items
+  // by the DISPLAYED number so upgraded IMDb badges read sorted.
+  const [imdbMap, setImdbMap] = useState({});
+  const ratingOf = (m) => imdbMap[m.id] ?? m.vote_average ?? 0;
+  const displayItems =
+    !showAiring && filters.sort === 'vote_average.desc'
+      ? [...releasedItems].sort((a, b) => ratingOf(b) - ratingOf(a))
+      : releasedItems;
   const [providerOptions, setProviderOptions] = useState([]);
   useEffect(() => {
     let on = true;
@@ -64,6 +73,18 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
       on = false;
     };
   }, []);
+
+  // Top Rated IMDb upgrade (same as Movies): TMDB orders, first cards
+  // upgrade to exact-ID IMDb where they resolve.
+  const gridItems = showAiring ? onAirToday : releasedItems;
+  useEffect(() => {
+    if (filters.sort !== 'vote_average.desc' || showAiring || gridItems.length === 0) return;
+    let alive = true;
+    upgradeTopRatings(gridItems, 'tv', (t, id) => tmdb.getMediaDetails(t, id)).then((m) => {
+      if (alive) setImdbMap(m);
+    });
+    return () => { alive = false; };
+  }, [filters.sort, showAiring, gridItems]);
 
   return (
     <div className="flex flex-col gap-10">
@@ -133,17 +154,18 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
         ) : (
           <>
             <div className="cine-grid">
-              {(showAiring ? onAirToday : releasedItems).map((media) => (
+              {(showAiring ? onAirToday : displayItems).map((media) => (
                 <Card
                   key={`${media.id}_${media.title || media.name}`}
                   media={showAiring ? { ...media, media_type: 'tv' } : media}
                   onClick={onSelectMedia}
                   size="fluid"
                   posterOnly
+                  imdb={showAiring ? null : (imdbMap[media.id] ?? null)}
                 />
               ))}
             </div>
-            {(showAiring ? onAirToday : releasedItems).length === 0 && (
+            {(showAiring ? onAirToday : displayItems).length === 0 && (
               <p className="text-center py-16 text-xs text-white/60">
                 {showAiring ? 'Nothing on the air right now. Check back later.' : 'No titles found. Try clearing filters.'}
               </p>

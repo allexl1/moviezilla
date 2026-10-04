@@ -60,12 +60,12 @@ export default function FilterBar({
           <span className="relative inline-flex flex-shrink-0">
             <button
               onClick={onRandom}
-              className="cine-icon-btn"
+              className="cine-icon-btn cine-has-tip"
               aria-label="Random pick"
             >
               <Shuffle className="w-4 h-4" />
             </button>
-            <span className="cine-tip" aria-hidden="true">Random pick</span>
+            <span className="cine-tip cine-tip--left" aria-hidden="true">Random pick</span>
           </span>
         )}
         {extra && <div className="flex-shrink-0">{extra}</div>}

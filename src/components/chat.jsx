@@ -400,7 +400,7 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
           </button>
         </div>
       )}
-      <div className="flex items-end gap-2">
+      <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
           <textarea
             ref={areaRef}
@@ -426,11 +426,11 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
 
           aria-label="Send a GIF"
           aria-pressed={gifOpen}
-          className={`cine-pill cine-pill--sm flex-shrink-0${gifOpen ? ' cine-pill--active' : ''}`}
+          className={`cine-control-btn flex-shrink-0 h-11 px-4 text-xs${gifOpen ? ' cine-pill--active' : ''}`}
         >
           GIF
         </button>
-        <button onClick={send} className="cine-icon-btn flex-shrink-0" aria-label="Send message">
+        <button onClick={send} className="flex-shrink-0 w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-[#f2f2f5] active:scale-95 transition" aria-label="Send message">
           <Send className="w-4 h-4" />
         </button>
       </div>
@@ -529,7 +529,7 @@ export function ChatView({
       >
         {messages.length === 0 && (
           <p className="text-center text-[11px] text-white/40 pt-6">
-            Say hi — chat lives only while the room is open.
+            Say hi. Chat lives only while the room is open.
           </p>
         )}
         {messages.map((m) => (

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Play, Trash2, Zap, Download } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
-import Select from './ui/Select';
+import Picker from './Picker';
 
 const SERVERS = [
   { value: 'vidy', label: 'Vidy (Recommended)' },
@@ -11,6 +11,7 @@ const SERVERS = [
 ];
 
 const ACCENTS = [
+  { name: 'Mono', value: '#ffffff' },
   { name: 'Lime', value: '#95ff50' },
   { name: 'Sky', value: '#5ac8ff' },
   { name: 'Violet', value: '#b78cff' },
@@ -18,7 +19,7 @@ const ACCENTS = [
   { name: 'Pink', value: '#ff6b9d' },
 ];
 
-const DEFAULT_ACCENT = '#95ff50';
+const DEFAULT_ACCENT = '#ffffff';
 
 function liftHex(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -160,19 +161,28 @@ export default function SettingsModal({ isOpen, onClose }) {
           title="Default Server"
           desc="First player tried for every title."
           control={
-            <Select value={defaultServer} onChange={setDefaultServer} options={SERVERS} />
+            <Picker
+              value={defaultServer}
+              onChange={setDefaultServer}
+              ariaLabel="Default server"
+              menuLabel="Servers"
+              placeholder="Server"
+              options={SERVERS}
+            />
           }
         />
 
         <SettingRow
           icon={<Zap className="w-4 h-4" />}
           title="Power Mode"
-          desc="Low stills motion. Max also kills blurs and transitions — coolest, still usable."
+          desc="Low stills motion. Max also kills blurs and transitions. Coolest, still usable."
           control={
-            <Select
+            <Picker
               value={powerMode}
               onChange={setPowerMode}
-              label="Power mode"
+              ariaLabel="Power mode"
+              menuLabel="Power mode"
+              placeholder="Power"
               options={[
                 { value: 'off', label: 'Off' },
                 { value: 'low', label: 'Low' },
@@ -217,7 +227,7 @@ export default function SettingsModal({ isOpen, onClose }) {
             title="Install app"
             desc={
               installEvt
-                ? 'Opens standalone — no browser bar, popups stop kicking fullscreen.'
+                ? 'Opens standalone: no browser bar, popups stop kicking fullscreen.'
                 : 'On iPhone: Share → Add to Home Screen, then open from the icon.'
             }
             control={
@@ -240,7 +250,7 @@ export default function SettingsModal({ isOpen, onClose }) {
           control={
             <button
               onClick={handleClearHistory}
-              className="cine-control-btn w-full"
+              className="cine-control-btn cine-btn-danger w-full"
             >
               Clear
             </button>

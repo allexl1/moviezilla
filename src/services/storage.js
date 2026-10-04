@@ -471,6 +471,32 @@ export const storage = {
     }
   },
 
+  // Un-mark one episode as watched: drops its per-episode stamp. If the
+  // top-level pointed at this episode, it resets to 0 (unwatched) instead
+  // of showing a stale 100%.
+  unmarkEpisode({ mediaId, type, season = 1, episode = 1 }) {
+    if (!mediaId) return;
+    try {
+      const all = safeGet(STORAGE_KEYS.PROGRESS, {});
+      const key = `${type}_${mediaId}`;
+      const entry = all[key];
+      if (!entry) return;
+      const episodes = { ...(entry.episodes || {}) };
+      delete episodes[`${season}x${episode}`];
+      const topIsThis = Number(entry.season) === Number(season) && Number(entry.episode) === Number(episode);
+      all[key] = {
+        ...entry,
+        episodes,
+        ...(topIsThis ? { currentTime: 0, duration: 0, percent: 0 } : null),
+        updatedAt: Date.now(),
+      };
+      safeSet(STORAGE_KEYS.PROGRESS, all);
+      dispatchAccountDirty('progress');
+    } catch (err) {
+      console.error('Failed to unmark episode:', err);
+    }
+  },
+
   // Remove one title from the watchlist by TMDB id.
   removeFromWatchlist(id) {
     const list = safeGet(STORAGE_KEYS.WATCHLIST, []).filter((x) => x.id !== id);

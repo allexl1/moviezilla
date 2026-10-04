@@ -18,11 +18,13 @@ const MoviesView = lazy(() => import('./views/MoviesView'));
 const ShowsView = lazy(() => import('./views/ShowsView'));
 const MediaDetailPage = lazy(() => import('./components/MediaDetailPage'));
 const PersonView = lazy(() => import('./components/PersonView'));
+const StudioView = lazy(() => import('./components/StudioView'));
 const Player = lazy(() => import('./components/Player'));
 const RoomsView = lazy(() => import('./components/RoomsView'));
 const RoomView = lazy(() => import('./components/RoomView'));
 const WatchlistView = lazy(() => import('./components/WatchlistView'));
 const FootballView = lazy(() => import('./components/FootballView'));
+const CleanHomeView = lazy(() => import('./views/CleanHomeView'));
 
 const DEFAULT_FILTERS = {
   genre: '',
@@ -38,6 +40,9 @@ export default function App() {
   // StrictMode-safe). State owns navigation from here on; the push effect
   // mirrors it to the URL.
   const [activeTab, setActiveTab] = useState(() => parseLocationSafe().tab);
+  // Test-only clean home (/clean): isolated remake, no nav entry.
+  const [cleanHome, setCleanHome] = useState(() => parseLocationSafe().clean);
+  const [cleanHero, setCleanHero] = useState(() => parseLocationSafe().hero);
 
   const [letterboxdUser, setLetterboxdUser] = useState(
     () => localStorage.getItem('mz_letterboxd_user') || ''
@@ -54,6 +59,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(() => parseLocationSafe().media);
   const [selectedPerson, setSelectedPerson] = useState(() => parseLocationSafe().personId);
+  const [selectedStudio, setSelectedStudio] = useState(() => parseLocationSafe().studioId);
   // Back-stack: every Person↔Media hop pushes the context you came from,
   // so Back restores the real page (Heath Ledger → movie → Back returns
   // to Heath Ledger, not /movies). Tab switches, home and rooms clear it
@@ -117,8 +123,11 @@ export default function App() {
         setPlayerFrom(p.from);
       }
       setActiveTab(p.tab);
+      setCleanHome(Boolean(p.clean));
+      setCleanHero(p.hero ?? null);
       setSelectedMedia(p.media);
       setSelectedPerson(p.personId);
+      setSelectedStudio(p.studioId);
       // A draft lobby card dies when the browser leaves rooms context —
       // otherwise a stale "Room opens on this title" resurfaces later.
       if (p.tab !== 'rooms' || p.roomCode) setRoomDraft(null);
@@ -130,7 +139,8 @@ export default function App() {
         const top = prev[prev.length - 1];
         if (p.media && top.kind === 'media' && top.media.id === p.media.id) return prev.slice(0, -1);
         if (p.personId && top.kind === 'person' && top.id === p.personId) return prev.slice(0, -1);
-        if (!p.media && !p.personId && !p.roomCode) return [];
+        if (p.studioId && top.kind === 'studio' && top.id === p.studioId) return prev.slice(0, -1);
+        if (!p.media && !p.personId && !p.studioId && !p.roomCode) return [];
         return prev;
       });
       setActiveRoomCode(p.roomCode);
@@ -161,20 +171,23 @@ export default function App() {
       prevRoom.current = activeRoomCode;
       return;
     }
-    const mediaForUrl = selectedPerson ? null : selectedMedia || activePlayer?.media || null;
+    const mediaForUrl = selectedPerson || selectedStudio ? null : selectedMedia || activePlayer?.media || null;
     const url = buildLocation({
       tab: activeTab,
       media: mediaForUrl,
       personId: selectedPerson,
+      studioId: selectedStudio,
       play: Boolean(activePlayer),
       roomCode: activeRoomCode,
+      clean: cleanHome && !selectedMedia && !selectedPerson && !selectedStudio && !activeRoomCode,
+      hero: cleanHome ? cleanHero : null,
       // Origin shelf for tab-root playback (Watchlist/Home resume,
       // incl. its reloads) — detail playback carries none (close stays
       // on the detail). playerFrom is only ever set with no detail
       // open, and cleared on any detail/tab navigation or close.
       from: activePlayer && playerFrom ? playerFrom : null,
     });
-    const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${activeRoomCode ?? ''}`;
+    const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${selectedStudio ?? ''}|${activeRoomCode ?? ''}`;
     const routeChanged = prevRoute.current !== null && prevRoute.current !== routeId;
     prevRoute.current = routeId;
     try {
@@ -207,11 +220,11 @@ export default function App() {
     }
     prevPlay.current = Boolean(activePlayer);
     prevRoom.current = activeRoomCode;
-  }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode, playerFrom]);
+  }, [activeTab, selectedMedia, selectedPerson, selectedStudio, activePlayer, activeRoomCode, playerFrom, cleanHome, cleanHero]);
 
   // Route changes reset scroll (state-router keeps DOM scroll otherwise).
   // Player toggles excluded — the page underneath must not jump.
-  const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${activeRoomCode ?? ''}`;
+  const routeId = `${activeTab}|${selectedMedia?.id ?? ''}|${selectedPerson ?? ''}|${selectedStudio ?? ''}|${activeRoomCode ?? ''}`;
   useEffect(() => {
     try {
       window.scrollTo(0, 0);
@@ -223,25 +236,27 @@ export default function App() {
   // Per-route document titles (share/bookmark/switcher readable).
   useEffect(() => {
     try {
-      let t = 'Moviezilla — Movies & Shows';
+      let t = 'Moviezilla - Movies & Shows';
       if (activePlayer?.media) {
         const m = activePlayer.media;
-        t = `▶ ${m.title || m.name || 'Playing'} — Moviezilla`;
+        t = `▶ ${m.title || m.name || 'Playing'} - Moviezilla`;
       } else if (selectedPerson) {
-        t = 'Person — Moviezilla';
+        t = 'Person - Moviezilla';
+      } else if (selectedStudio) {
+        t = 'Studio - Moviezilla';
       } else if (selectedMedia) {
         const y = (selectedMedia.release_date || selectedMedia.first_air_date || '').split('-')[0];
-        t = `${selectedMedia.title || selectedMedia.name || 'Details'}${y ? ` (${y})` : ''} — Moviezilla`;
+        t = `${selectedMedia.title || selectedMedia.name || 'Details'}${y ? ` (${y})` : ''} - Moviezilla`;
       } else if (activeRoomCode) {
-        t = `Room ${activeRoomCode} — Moviezilla`;
+        t = `Room ${activeRoomCode} - Moviezilla`;
       } else if (activeTab === 'movie') {
-        t = 'Movies — Moviezilla';
+        t = 'Movies - Moviezilla';
       } else if (activeTab === 'tv') {
-        t = 'Shows — Moviezilla';
+        t = 'Shows - Moviezilla';
       } else if (activeTab === 'watchlist') {
-        t = 'Watchlist — Moviezilla';
+        t = 'Watchlist - Moviezilla';
       } else if (activeTab === 'rooms') {
-        t = 'Rooms — Moviezilla';
+        t = 'Rooms - Moviezilla';
       } else if (activeTab === 'football') {
         t = 'Football — Moviezilla';
       }
@@ -249,7 +264,7 @@ export default function App() {
     } catch {
       // ignore
     }
-  }, [activeTab, selectedMedia, selectedPerson, activePlayer, activeRoomCode]);
+  }, [activeTab, selectedMedia, selectedPerson, selectedStudio, activePlayer, activeRoomCode]);
 
   const leaveRoom = () => {
     // URL follows via the mirror effect (replaces → /rooms, so Back
@@ -277,8 +292,10 @@ export default function App() {
     // tab to the title type) must Back-return to the shelf, not the grid.
     if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
     else if (selectedPerson) pushBack({ kind: 'person', id: selectedPerson });
+    else if (selectedStudio) pushBack({ kind: 'studio', id: selectedStudio });
     else pushBack({ kind: 'tab', tab: activeTab });
     setSelectedPerson(null);
+    setSelectedStudio(null);
     setSelectedMedia(item);
     if (item) setActiveTab(resolveMediaType(item) === 'tv' ? 'tv' : 'movie');
   };
@@ -287,17 +304,32 @@ export default function App() {
     setPlayerFrom(null);
     if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
     else if (selectedPerson && selectedPerson !== id) pushBack({ kind: 'person', id: selectedPerson });
-    else if (!selectedMedia && !selectedPerson) pushBack({ kind: 'tab', tab: activeTab });
+    else if (selectedStudio) pushBack({ kind: 'studio', id: selectedStudio });
+    else if (!selectedMedia && !selectedPerson && !selectedStudio) pushBack({ kind: 'tab', tab: activeTab });
     setSelectedMedia(null);
+    setSelectedStudio(null);
     setSelectedPerson(id);
+  };
+  const selectStudio = (id) => {
+    setActivePlayer(null);
+    setPlayerFrom(null);
+    if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
+    else if (selectedPerson) pushBack({ kind: 'person', id: selectedPerson });
+    else if (selectedStudio && selectedStudio !== id) pushBack({ kind: 'studio', id: selectedStudio });
+    else if (!selectedMedia && !selectedPerson && !selectedStudio) pushBack({ kind: 'tab', tab: activeTab });
+    setSelectedMedia(null);
+    setSelectedPerson(null);
+    setSelectedStudio(id);
   };
   // Tab-root navigation contract (navbar, logo, home rails): new root —
   // player off, detail gone, stack + draft cleared, filters reset.
   const openTab = (tab) => {
+    setCleanHome(false);
     setActivePlayer(null);
     setPlayerFrom(null);
     setSelectedMedia(null);
     setSelectedPerson(null);
+    setSelectedStudio(null);
     setBackStack([]);
     setRoomDraft(null);
     // Tabs and the logo work from inside a room too (RoomView held
@@ -311,11 +343,19 @@ export default function App() {
     setPlayerFrom(null);
     setSelectedMedia(null);
     setSelectedPerson(null);
+    setSelectedStudio(null);
     setBackStack([]);
     setActiveRoomCode(null);
     setRoomDraft(null);
     setActiveTab('home');
   };
+
+  // Test-page scope: softens floating chrome shadows on /clean only.
+  useEffect(() => {
+    const onClean = cleanHome && activeTab === 'home' && !selectedMedia && !selectedPerson && !selectedStudio && !activeRoomCode;
+    document.body.classList.toggle('mz-clean', onClean);
+    return () => document.body.classList.remove('mz-clean');
+  }, [cleanHome, activeTab, selectedMedia, selectedPerson, selectedStudio, activeRoomCode]);
 
   // Freeze ambient animation while the tab is hidden, any overlay
   // covers the page (search/settings/account/player/details), or we're on a
@@ -370,7 +410,7 @@ export default function App() {
     // origin shelf: the URL carries ?from= and closing the player
     // returns there instead of a phantom detail. Detail playback
     // carries none — close stays on the detail.
-    if (!selectedMedia && !selectedPerson) setPlayerFrom(activeTab);
+    if (!selectedMedia && !selectedPerson && !selectedStudio) setPlayerFrom(activeTab);
 
     const mediaType =
       (media.media_type === 'tv' || media.media_type === 'movie') ? media.media_type :
@@ -432,6 +472,7 @@ export default function App() {
       setPlayerFrom(null);
       setSelectedMedia(null);
       setSelectedPerson(null);
+      setSelectedStudio(null);
       setActiveTab(t);
     }
     setActivePlayer(null);
@@ -447,13 +488,7 @@ export default function App() {
           activeTab === 'movie' ? 'opacity-90' : ''
         }`}
       />
-      {/* Per-tab tint wash (green Movies / indigo Shows parity) */}
-      {(activeTab === 'movie' || activeTab === 'tv') && !selectedMedia && (
-        <div
-          className={`cine-tab-tint ${activeTab === 'movie' ? 'cine-tab-tint--movie' : 'cine-tab-tint--tv'}`}
-          aria-hidden="true"
-        />
-      )}
+      {/* Tab tints removed per DESIGN.md — flat slate base everywhere. */}
 
       <Navbar
         activeTab={activeTab}
@@ -464,7 +499,7 @@ export default function App() {
             openTab(tab);
           }
         }}
-        isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson)}
+        isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson) || Boolean(selectedStudio)}
         onBack={() => {
           // Player open: Back only closes it (browser-Back parity) —
           // never pops the stack underneath, or the detail gets skipped.
@@ -482,20 +517,28 @@ export default function App() {
             setBackStack((s) => s.slice(0, -1));
             if (top.kind === 'media') {
               setSelectedPerson(null);
+              setSelectedStudio(null);
               setSelectedMedia(top.media);
               setActiveTab(resolveMediaType(top.media) === 'tv' ? 'tv' : 'movie');
             } else if (top.kind === 'person') {
               setSelectedMedia(null);
+              setSelectedStudio(null);
               setSelectedPerson(top.id);
+            } else if (top.kind === 'studio') {
+              setSelectedMedia(null);
+              setSelectedPerson(null);
+              setSelectedStudio(top.id);
             } else {
               setSelectedMedia(null);
               setSelectedPerson(null);
+              setSelectedStudio(null);
               setActiveTab(top.tab);
             }
             return;
           }
           setSelectedMedia(null);
           setSelectedPerson(null);
+          setSelectedStudio(null);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -524,6 +567,17 @@ export default function App() {
               selectMedia(item);
             }}
           />
+        ) : selectedStudio ? (
+          <StudioView
+            studioId={selectedStudio}
+            onSelectMedia={(item) => {
+              selectMedia(item);
+            }}
+            onSelectPerson={(id) => {
+              selectPerson(id);
+            }}
+            onToast={showToast}
+          />
         ) : selectedMedia ? (
           <MediaDetailPage
             media={selectedMedia}
@@ -541,14 +595,26 @@ export default function App() {
             onSelectPerson={(id) => {
               selectPerson(id);
             }}
+            onSelectStudio={(id) => {
+              selectStudio(id);
+            }}
             onWatchTogether={(media) => {
               setActivePlayer(null);
               setSelectedMedia(null);
               setSelectedPerson(null);
+              setSelectedStudio(null);
               setBackStack([]);
               setRoomDraft(media);
               setActiveTab('rooms');
             }}
+          />
+        ) : cleanHome && activeTab === 'home' ? (
+          <CleanHomeView
+            onSelectMedia={selectMedia}
+            onPlay={playMedia}
+            onToast={showToast}
+            overlaid={overlaid}
+            heroId={cleanHero}
           />
         ) : activeTab === 'home' ? (
           <HomeView

@@ -293,10 +293,35 @@ export async function deleteRoom(code) {
 // presence (who's here + their playback state). Returns { send, close,
 // update }. `update` re-tracks presence meta (pos/paused/started) so the
 // People tab can show everyone's state — call it on discrete transitions
-// only (pause/play/seek/swap), never per tick.
-export function openRoomChannel({ code, name, onEvent, onPresence }) {
+// and the 10s beats (clocks tick), never per tick. Roster code must treat
+// syncs as ADD/refresh-only (see RoomView pruner): one partial sync must
+// never read as everyone leaving.
+//
+// Async: Supabase reuses channel instances by topic (StrictMode remounts,
+// fast room switches), and realtime-js throws when `.on()` runs on an
+// already-subscribed instance. So any stale channel for this topic is
+// removed first, then a fresh one is built.
+export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave }) {
   const sb = getSupabase();
   if (!sb) throw new Error('Rooms not configured.');
+  const clean = String(code || '').trim().toUpperCase();
+  // Drain stale instances for this topic BEFORE creating: realtime-js
+  // throws on `.on()` for an already-subscribed channel, and StrictMode
+  // (dev) plus fast switches otherwise hand us a live one.
+  try {
+    const stale = (sb.getChannels?.() || []).filter((c) =>
+      String(c?.topic || '').endsWith(`:${clean}`)
+    );
+    for (const c of stale) {
+      try {
+        await sb.removeChannel(c);
+      } catch {
+        // one stuck channel never blocks the fresh one
+      }
+    }
+  } catch {
+    // getChannels unavailable — creation below still tries
+  }
   const device = myDeviceId();
   // Last tracked presence body: update() merges into it so the name and
   // earlier meta survive (re-subscribes reset it with the fresh name).
@@ -337,6 +362,15 @@ export function openRoomChannel({ code, name, onEvent, onPresence }) {
         applyPresence(channel.presenceState());
       } catch (err) {
         console.error('[rooms] presence failed:', err);
+      }
+    })
+    // Server-sent untrack: the pruner fast-tracks collection (a missing
+    // key in one sync is a flap, not a leave — see RoomView).
+    .on('presence', { event: 'leave' }, ({ key } = {}) => {
+      try {
+        if (key) onLeave?.({ key });
+      } catch (err) {
+        console.error('[rooms] presence leave failed:', err);
       }
     })
     .subscribe(async (status) => {

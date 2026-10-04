@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from './ui/Card';
 
 /**
@@ -11,8 +11,18 @@ import Card from './ui/Card';
  * `expandable`: adds a "Show all N" toggle that swaps the rail for a full
  * grid — caps become progressive disclosure instead of a hard wall.
  */
-export default function RowRail({ title, titleNode, filterNode, items = [], onSelect, mediaType, action, showRating = false, showRole = false, captioned = false, expandable = false, cardSize = 'default' }) {
+export default function RowRail({ title, titleNode, filterNode, items = [], onSelect, mediaType, action, showRating = false, showRole = false, captioned = false, expandable = false, cardSize = 'default', arrows = false }) {
   const [expanded, setExpanded] = useState(false);
+  // Rail steppers (opt-in): real buttons that page the rail. Measured, so
+  // short rails never sprout dead arrows; ends disable at the edges.
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+  const updateArrows = () => {
+    const el = railRef.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 8);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
   // TMDB combined credits repeat ids (same title, multiple characters).
   // Dedupe first: duplicate sibling keys mis-associate component state
   // (84 key warnings on one person page) and render ghost cards.
@@ -31,6 +41,12 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
   useEffect(() => {
     if (railRef.current) railRef.current.scrollLeft = 0;
   }, [rowSig, expanded]);
+  useEffect(() => {
+    if (!arrows) return;
+    updateArrows();
+    window.addEventListener('resize', updateArrows);
+    return () => window.removeEventListener('resize', updateArrows);
+  }, [arrows, rowSig]);
   // An empty slice must NOT unmount the section header: the Career
   // filter (titleNode) vanishes with it and the thumb loses position.
   // Header + honest empty note instead; plain rails keep old behaviour.
@@ -69,6 +85,13 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
     );
   }
 
+  const scrollByPage = (dir) => {
+    const el = railRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: reduce ? 'auto' : 'smooth' });
+  };
+
   const cards = (size) =>
     unique.map((media) => (
       <Card
@@ -88,6 +111,26 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
 
       {expanded ? (
         <div className="cine-grid">{cards('fluid')}</div>
+      ) : arrows ? (
+        <div className="cine-rail-wrap">
+          <div ref={railRef} onScroll={updateArrows} className="cine-rail no-scrollbar -mx-1 px-1">{cards(cardSize)}</div>
+          <button
+            className="cine-rail-arrow cine-rail-arrow--prev"
+            onClick={() => scrollByPage(-1)}
+            disabled={!canL}
+            aria-label={`Scroll ${title} backward`}
+          >
+            <ChevronLeft className="w-8 h-8" strokeWidth={1.5} />
+          </button>
+          <button
+            className="cine-rail-arrow cine-rail-arrow--next"
+            onClick={() => scrollByPage(1)}
+            disabled={!canR}
+            aria-label={`Scroll ${title} forward`}
+          >
+            <ChevronRight className="w-8 h-8" strokeWidth={1.5} />
+          </button>
+        </div>
       ) : (
         <div ref={railRef} className="cine-rail no-scrollbar -mx-1 px-1">{cards(cardSize)}</div>
       )}

@@ -126,12 +126,12 @@ export function effectiveName() {
 function friendlyAuthError(err, fallback) {
   const msg = String(err?.message || '');
   if (/sign ?ups? (not allowed|are disabled)/i.test(msg)) {
-    return 'Email sign-in is off in Supabase — enable the Email provider, then retry.';
+    return 'Email sign-in is off in Supabase. Enable the Email provider, then retry.';
   }
-  if (/rate ?limit|too many/i.test(msg)) return 'Too many tries — wait a minute, then retry.';
-  if (/expired/i.test(msg)) return 'That code expired — send a new one.';
-  if (/invalid|incorrect|wrong|token/i.test(msg)) return 'Wrong code — check the email and try again.';
-  if (/network|fetch|failed/i.test(msg)) return 'Network hiccup — check connection and retry.';
+  if (/rate ?limit|too many/i.test(msg)) return 'Too many tries. Wait a minute, then retry.';
+  if (/expired/i.test(msg)) return 'That code expired. Send a new one.';
+  if (/invalid|incorrect|wrong|token/i.test(msg)) return 'Wrong code. Check the email and try again.';
+  if (/network|fetch|failed/i.test(msg)) return 'Network hiccup. Check connection and retry.';
   return msg || fallback;
 }
 

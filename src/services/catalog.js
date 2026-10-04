@@ -21,14 +21,10 @@ export const GENRE_ICON = {
   Thriller: Flame,
 };
 
-// Resolve the item's own type — never the nav tab. discover/* items lack
-// media_type, so fall back to first_air_date (TV) before defaulting to movie.
-export function resolveMediaType(media) {
-  if (media?.media_type === 'tv' || media?.media_type === 'movie') return media.media_type;
-  if (media?.type === 'tv' || media?.type === 'movie') return media.type;
-  if (media?.first_air_date) return 'tv';
-  return 'movie';
-}
+// Resolve the item's own type — never the nav tab. Single implementation
+// lives in routing.js (dependency-free, unit-tested); this re-export keeps
+// every existing `from './catalog'` / `'../services/catalog'` import working.
+export { resolveMediaType } from './routing';
 
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -47,10 +43,19 @@ export function pickUpcoming(results, dateKey = 'release_date') {
       x.poster_path &&
       (x.overview || '').trim().length > 20 &&
       dateOf(x) &&
-      dateOf(x) >= today
+      dateOf(x) >= today &&
+      // Quality floor: unreleased filler with zero buzz reads as junk.
+      // Real upcoming titles carry TMDB popularity before release.
+      (x.popularity || 0) >= 3
   );
   if (strict.length >= 4) {
-    return strict.sort((a, b) => dateOf(a).localeCompare(dateOf(b))).slice(0, 10);
+    // English-first: the shelf serves this household, untranslated filler
+    // buries premieres people will actually watch. Non-English still shows
+    // below, never excluded.
+    const en = (x) => (x.original_language === 'en' ? 0 : 1);
+    return strict
+      .sort((a, b) => en(a) - en(b) || dateOf(a).localeCompare(dateOf(b)))
+      .slice(0, 10);
   }
   return (results || [])
     .filter((x) => !x.adult && x.backdrop_path && x.poster_path && dateOf(x))

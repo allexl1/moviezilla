@@ -9,7 +9,7 @@ function formatDate(iso) {
   if (!iso) return null;
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const dateOf = (x) => x?.release_date || x?.first_air_date || '';
@@ -404,7 +404,7 @@ export default function PersonView({ personId, onSelectMedia }) {
               </div>
             ) : (
               <p className="text-sm italic text-white/40 pt-1">
-                No biography yet — nobody has written one for {person.name} on TMDB.
+                No biography yet. Nobody has written one for {person.name} on TMDB.
               </p>
             )}
           </div>
@@ -453,7 +453,7 @@ export default function PersonView({ personId, onSelectMedia }) {
               {honoursShown.map((a, i) => (
                 <div key={`${a.label}_${a.year}_${i}`} className="mat-row flex items-center gap-3 px-4 py-3">
                   <span className="text-[11px] font-bold tabular-nums text-white/40 w-10 flex-shrink-0">
-                    {a.year || '—'}
+                    {a.year || '-'}
                   </span>
                   <Trophy className="w-3.5 h-3.5 text-[#f5c518] flex-shrink-0" />
                   <span className="min-w-0">

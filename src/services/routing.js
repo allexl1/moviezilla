@@ -26,10 +26,11 @@ const PATH_TO_TAB = {
 const ROOM_RE = /^\/room\/([A-Za-z0-9]{6})\/?$/;
 const MEDIA_RE = /^\/(movie|tv)\/(\d+)\/?$/;
 const PERSON_RE = /^\/person\/(\d+)\/?$/;
+const STUDIO_RE = /^\/studio\/(\d+)\/?$/;
 const LEGACY_ROOM_RE = /^[A-Z0-9]{6}$/i;
 
 function empty(tab = 'home') {
-  return { tab, media: null, personId: null, play: false, roomCode: null, legacy: false, from: null };
+  return { tab, media: null, personId: null, studioId: null, play: false, roomCode: null, legacy: false, from: null, clean: false, hero: null };
 }
 
 // Total-safe parse for useState initializers (pure — StrictMode-safe,
@@ -50,6 +51,9 @@ export function parseLocation(loc = window.location) {
     const tabOf = tabParam && TAB_TO_PATH[tabParam] ? tabParam : null;
     const fromParam = q.get('from');
     const fromOf = fromParam && TAB_TO_PATH[fromParam] ? fromParam : null;
+    // Test-only spotlight override (/clean?hero=<tmdbId>): numeric only.
+    const heroParam = q.get('hero');
+    const heroOf = heroParam && /^\d+$/.test(heroParam) ? Number(heroParam) : null;
 
     let m = path.match(ROOM_RE);
     if (m) return { ...empty('rooms'), roomCode: m[1].toUpperCase() };
@@ -74,6 +78,11 @@ export function parseLocation(loc = window.location) {
     // lights up the same tab as in-app (selectPerson never switches).
     if (m) return { ...empty(tabOf || 'home'), personId: Number(m[1]) };
 
+    m = path.match(STUDIO_RE);
+    // Same contract as person: sender tab preserved, in-app select never
+    // switches tabs.
+    if (m) return { ...empty(tabOf || 'home'), studioId: Number(m[1]) };
+
     // Legacy invite links (?room=ABC123) resolve from any path — old
     // invites sometimes carry one. Explicit /room/CODE above wins.
     const legacyRoom = (q.get('room') || '').trim();
@@ -83,29 +92,35 @@ export function parseLocation(loc = window.location) {
 
     if (PATH_TO_TAB[path]) return empty(PATH_TO_TAB[path]);
 
+    // Test-only clean home (isolated remake — no nav entry, direct URL only).
+    if (path === '/clean') return { ...empty('home'), clean: true, hero: heroOf };
+
     return empty('home');
   } catch {
     return empty('home');
   }
 }
 
-function mediaTypeOf(media) {
-  if (!media) return 'movie';
-  if (media.media_type === 'tv' || media.type === 'tv') return 'tv';
-  // discover/* + stored rows lack media_type: same fallback as
-  // resolveMediaType (catalog.js), or show URLs build as /movie/<showId>
-  // and reload onto the wrong tab + wrong details endpoint.
-  if (media.first_air_date) return 'tv';
+// Single source of truth for item → 'tv' | 'movie'. discover/* items
+// and stored rows lack media_type, so first_air_date breaks the tie
+// before defaulting to movie (a wrong default once built show URLs as
+// /movie/<showId>, landing reloads on the wrong tab + endpoint).
+export function resolveMediaType(media) {
+  if (media?.media_type === 'tv' || media?.media_type === 'movie') return media.media_type;
+  if (media?.type === 'tv' || media?.type === 'movie') return media.type;
+  if (media?.first_air_date) return 'tv';
   return 'movie';
 }
 
-export function buildLocation({ tab = 'home', media = null, personId = null, play = false, roomCode = null, from = null } = {}) {
+export function buildLocation({ tab = 'home', media = null, personId = null, studioId = null, play = false, roomCode = null, from = null, clean = false, hero = null } = {}) {
   if (roomCode) return `/room/${roomCode}`;
   if (personId) return `/person/${personId}${tab && tab !== 'home' && TAB_TO_PATH[tab] ? `?tab=${tab}` : ''}`;
+  if (studioId) return `/studio/${studioId}${tab && tab !== 'home' && TAB_TO_PATH[tab] ? `?tab=${tab}` : ''}`;
   if (media && media.id != null) {
-    const base = `/${mediaTypeOf(media)}/${media.id}`;
+    const base = `/${resolveMediaType(media)}/${media.id}`;
     if (!play) return base;
     return `${base}?play=1${from && TAB_TO_PATH[from] ? `&from=${from}` : ''}`;
   }
+  if (clean) return hero ? `/clean?hero=${hero}` : '/clean';
   return TAB_TO_PATH[tab] || '/';
 }

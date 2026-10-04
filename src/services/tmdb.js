@@ -271,14 +271,15 @@ export const tmdb = {
     }
 
     // Rating sorts need a vote floor or obscure single-vote titles win.
-    // Unfiltered Top Rated must clear real consensus (TMDB's own list
-    // runs thousands deep); filtered views keep a light floor so niche
-    // combos (year + genre) don't empty out. Per-title IMDb re-sorting
-    // for 100+ grid items is not an option (100+ fetches per page), and
-    // RT has no free list source — this floor is the honest lever.
+    // Unfiltered Top Rated must clear real consensus (brigaded fan votes
+    // dominate the 8+ band, so the bar sits at 1000); filtered views keep
+    // a light floor so niche combos (year + genre) don't empty out.
+    // Per-title IMDb re-sorting for 100+ grid items is not an option (100+
+    // fetches per page), and RT has no free list source — this floor is
+    // the honest lever.
     if (String(sort).startsWith('vote_average')) {
       const filtered = genre || (year && year !== 'All Years') || provider || country || language;
-      params['vote_count.gte'] = filtered ? 50 : 250;
+      params['vote_count.gte'] = filtered ? 50 : 1000;
     }
     // Date sorts need a small vote floor too: pure newest-first pages are
     // 20/20 zero-vote day-0 releases, which the UI hides as unrated.
@@ -345,7 +346,7 @@ export const tmdb = {
 
     if (String(sort).startsWith('vote_average')) {
       const filtered = genre || (year && year !== 'All Years') || provider || country || language;
-      params['vote_count.gte'] = filtered ? 50 : 250;
+      params['vote_count.gte'] = filtered ? 50 : 1000;
     }
     if (/release_date|first_air_date/.test(String(sort))) {
       params['vote_count.gte'] = 5;
@@ -493,8 +494,32 @@ export const tmdb = {
       return null;
     }
   },
-  async getSeasonDetails(tvId, seasonNumber) {
-    const cacheKey = `season:${tvId}:${seasonNumber}`;
+  // Studio/company profile (logo, HQ country) + its catalog via
+  // discover with_companies. Powers the /studio/:id page.
+  async getCompany(id) {
+    const cacheKey = `company:${id}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return cached;
+    const query = new URLSearchParams({ path: `company/${id}` });
+    const res = await fetch(`/api/tmdb?${query.toString()}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`TMDB company failed: ${res.status}`);
+    const data = await res.json();
+    cacheSet(cacheKey, data);
+    return data;
+  },
+  async getCompanyTitles(companyId, type = 'movie', page = 1) {
+    // No vote floor here: studio catalogs are archival (obscure 60s
+    // titles included) — floors are what emptied small-studio shelves.
+    return proxyFetch(`discover/${type === 'tv' ? 'tv' : 'movie'}`, {
+      with_companies: String(companyId),
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+      page,
+    });
+  },
+  async getSeasonDetails(tvId, seasonNumber) {    const cacheKey = `season:${tvId}:${seasonNumber}`;
     const cached = cacheGet(cacheKey);
     if (cached) return cached;
 

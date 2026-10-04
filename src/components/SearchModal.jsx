@@ -35,7 +35,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           setTrending(
             (res?.results || [])
               .filter((x) => !x.adult && x.poster_path && (x.title || x.name))
-              .slice(0, 8)
+              .slice(0, 20)
           );
         }
       })
@@ -217,7 +217,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
             )}
             {trending.length > 0 && (
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50 mb-2">
+                <p className="text-[11px] font-semibold tracking-wide text-white/50 mb-2">
                   Trending now
                 </p>
                 <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>

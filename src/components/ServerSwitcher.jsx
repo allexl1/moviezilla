@@ -12,6 +12,9 @@ export default function ServerSwitcher({ currentServer, onSelectServer, closeSig
   // domestic library too (Brother 2, Slovo Patsana play verified). Some RU
   // series stall on Vidy (0:00) / 404 on VidLink (Kukhnya, Interny) —
   // Vaplayer covers part of that gap (found Slovo, 404s Kukhnya).
+  // Vaplayer stays THIRD on purpose: no resume param, so time/episode
+  // can't be saved or restored there (wall-clock estimates only) — it
+  // is the ad-free fallback, not the daily driver.
   // Retired: VidFast (no seek, ads), Russian/Voidboost (dead), VidPhantom
   // (broken), apiplayer.ru (extractor fails: "Streams Unavailable").
   const servers = [

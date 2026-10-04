@@ -301,6 +301,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
 
   return (
     <>
+      {/* Poster tint: the artwork's palette at 30% across the whole page. */}
       {heroItem && (
         <div className="cine-home-bg" aria-hidden="true">
           <img
@@ -327,17 +328,8 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
         <>
         <section className="cine-hero">
           <div className="cine-hero-media" aria-hidden="true">
-            <img
-              key={`melt-${heroItem.id}`}
-              src={tmdb.getImageUrl(
-                heroItem.backdrop_path,
-                'w1280',
-                heroItem.backdrop_fallback
-              )}
-              alt=""
-              aria-hidden="true"
-              className="cine-home-melt-base"
-            />
+            {/* Previous slide crossfade (cheap opacity layer, part of the
+                8s rotation — not a blur, no melt role). */}
             {prevHeroItem && (
               <img
                 key={`prev-${prevHeroItem.id}`}
@@ -419,26 +411,30 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 <span>{heroResumeSec > 0 ? `Resume • ${formatClock(heroResumeSec)}` : 'Play'}</span>
               </button>
 
-              <div className="cine-duo-btn">
+              {/* Hero duo: old joined track with divider, new solid material.
+                  No glass gradient, hairline edge. */}
+              <div className="cine-hero-duo">
                 <button
                   onClick={() => {
                     const added = storage.toggleWatchlist(heroItem);
                     onToast(added ? 'Added to Watch Later' : 'Removed from Watch Later');
                   }}
                   aria-label={heroInWL ? 'Remove from Watch Later' : 'Add to Watch Later'}
+                  className="cine-hero-duo-btn cine-has-tip"
                 >
                   {heroInWL ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                  <span className="cine-duo-tip" aria-hidden="true">
+                  <span className="cine-tip" aria-hidden="true">
                     {heroInWL ? 'Remove from Watch Later' : 'Add to Watch Later'}
                   </span>
                 </button>
-                <span className="cine-duo-divider" />
+                <span className="cine-hero-duo-divider" aria-hidden="true" />
                 <button
                   onClick={() => onSelectMedia(heroItem)}
                   aria-label="Details"
+                  className="cine-hero-duo-btn cine-has-tip"
                 >
                   <Info className="w-5 h-5" />
-                  <span className="cine-duo-tip" aria-hidden="true">Details</span>
+                  <span className="cine-tip" aria-hidden="true">Details</span>
                 </button>
               </div>
             </div>
@@ -450,11 +446,18 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 <button
                   key={item.id}
                   onClick={() => setHeroIndex(i)}
-                  
+
                   aria-label={`Show ${item.title || item.name}`}
                   aria-current={i === heroIndex}
                   className={`cine-hero-dot ${i === heroIndex ? 'is-active' : ''}`}
-                />
+                >
+                  {/* 8s progress sweep on the live dot: the rotation made
+                      visible. Remounts per slide; unmounted while an overlay
+                      pauses the timer, so the two agree. */}
+                  {i === heroIndex && !overlaid && (
+                    <span key={heroItems[heroIndex]?.id} className="cine-dot-fill" aria-hidden="true" />
+                  )}
+                </button>
               ))}
             </div>
           )}
@@ -481,19 +484,6 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
             </>
           )}
         </section>
-        {/* Melt tail: laps 40px over the hero bottom and crossfades down
-            over 260px, transparent-capped both ends so no joint exists. */}
-        <div className="cine-melt-tail" aria-hidden="true">
-          <img
-            key={`tail-${heroItem.id}`}
-            src={tmdb.getImageUrl(
-              heroItem.backdrop_path,
-              'w1280',
-              heroItem.backdrop_fallback
-            )}
-            alt=""
-          />
-        </div>
         </>
       )}
       {!heroItem && !catalogError && (
@@ -511,7 +501,17 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
             </div>
 
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-              {continueWatching.map((item) => (
+              {continueWatching.map((item) => {
+                const pct = item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0;
+                // Uniform time phrase: remaining when the duration is known,
+                // position otherwise. Never mixed bare numbers.
+                const time =
+                  item.duration > item.currentTime && item.currentTime > 0
+                    ? `${formatClock(item.duration - item.currentTime)} left`
+                    : item.currentTime > 0
+                      ? `at ${formatClock(item.currentTime)}`
+                      : progressLabel(item);
+                return (
                 <div
                   key={`${item.type}_${item.mediaId}`}
                   onClick={() =>
@@ -531,44 +531,40 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                       }
                     )
                   }
-                  className="cine-cw-card cine-cw-card--overlay group"
+                  className="cine-cw-portrait group"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Resume ${item.title}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.currentTarget.click();
+                    }
+                  }}
                 >
-                  <div className="cine-cw-thumb">
+                  <div className="cine-cw-portrait-art">
                     <img
-                      src={tmdb.getImageUrl(item.poster, 'w300')}
+                      src={tmdb.getImageUrl(item.poster, 'w342')}
                       alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      loading="lazy"
+                      className="group-hover:scale-[1.03] transition duration-300"
                     />
-                    <div className="cine-cw-shade" aria-hidden="true" />
-
-                    <div className="cine-cw-play">
-                      <div className="cine-cw-play-btn">
-                        <Play className="w-3 h-3" fill="currentColor" />
-                      </div>
+                    <div className="cine-cw-portrait-play" aria-hidden="true">
+                      <span className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center">
+                        <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+                      </span>
+                    </div>
+                    <div className="cine-cw-portrait-timer" aria-hidden="true">
+                      <span style={{ width: `${pct}%` }} />
                     </div>
                   </div>
-
-                  <div className="cine-cw-caption">
-                    <h4 className="cine-cw-title">
-                      {item.title}
-                    </h4>
-
-                    <p className="cine-cw-meta">
-                      {item.type === 'tv'
-                        ? `Season ${item.season} • Episode ${item.episode}`
-                        : 'Movie'}{' '}
-                      • {progressLabel(item)}
-                    </p>
-                  </div>
-
-                  <div className="cine-cw-progress">
-                    <div
-                      className="cine-cw-progress-fill"
-                      style={{ width: `${item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0}%` }}
-                    />
-                  </div>
+                  <h4 className="cine-cw-portrait-title">{item.title}</h4>
+                  <p className="cine-cw-portrait-meta">
+                    {item.type === 'tv' ? `S${item.season} E${item.episode} · ` : ''}{time}
+                  </p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

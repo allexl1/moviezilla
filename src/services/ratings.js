@@ -39,3 +39,27 @@ export function imdbIdOf(details, mediaType) {
   if (mediaType !== 'tv' && details.imdb_id) return details.imdb_id;
   return details.external_ids?.imdb_id || null;
 }
+
+// Top Rated upgrade: TMDB orders the grid instantly (vote-floored, honest
+// on its own), then the first visible cards upgrade to exact-ID IMDb
+// figures where they resolve. Anything unresolved keeps TMDB — never
+// empty, never faked. Cached both layers, so repeat visits cost zero.
+export async function upgradeTopRatings(items, mediaType, tmdbGetDetails, limit = 8) {
+  const out = {};
+  const slice = (items || []).slice(0, limit);
+  await Promise.all(
+    slice.map(async (m) => {
+      try {
+        if (!m?.id) return;
+        const details = await tmdbGetDetails(mediaType, m.id);
+        const imdbId = imdbIdOf(details, mediaType);
+        if (!imdbId) return;
+        const r = await getImdbRating(mediaType, imdbId);
+        if (Number.isFinite(r)) out[m.id] = r;
+      } catch {
+        // unresolved — TMDB figure stands
+      }
+    })
+  );
+  return out;
+}

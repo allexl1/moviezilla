@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight } from 'lucide-react';
-import { tmdb, FALLBACK_PROFILE } from '../services/tmdb';
+import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight, ChevronDown, ChevronLeft, ListVideo, Eye } from 'lucide-react';
+import { tmdb, FALLBACK_PROFILE, FALLBACK_POSTER } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
-import { storage } from '../services/storage';
+import { storage, WATCHED_PCT } from '../services/storage';
 import RowRail from './RowRail';
 
 // RT lookups cache a day (edge caches hits a day too; misses an hour).
@@ -42,7 +42,16 @@ function formatDate(iso) {
   if (!iso) return null;
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Day-first everywhere ("19 May 2026", never 2026-05-19): episode air
+// dates, guest sections, history rows. One helper, all screens.
+function formatDay(iso) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function certificationOf(details, mediaType) {
@@ -61,22 +70,419 @@ function certificationOf(details, mediaType) {
 
 // US certification → plain-English explainer for the hover tip.
 const CERT_TIPS = {
-  G: 'Rated G — all ages admitted',
-  PG: 'Rated PG — parental guidance suggested',
-  'PG-13': 'Rated PG-13 — 13 and older recommended',
-  R: 'Rated R — 17 and older without a parent or guardian',
-  'NC-17': 'Rated NC-17 — adults only',
-  'TV-Y': 'TV-Y — all children',
-  'TV-Y7': 'TV-Y7 — 7 and older',
-  'TV-G': 'TV-G — all audiences',
-  'TV-PG': 'TV-PG — parental guidance suggested',
-  'TV-14': 'TV-14 — 14 and older',
-  'TV-MA': 'TV-MA — mature audiences',
+  G: 'Rated G: all ages admitted',
+  PG: 'Rated PG: parental guidance suggested',
+  'PG-13': 'Rated PG-13: 13 and older recommended',
+  R: 'Rated R: 17 and older without a parent or guardian',
+  'NC-17': 'Rated NC-17: adults only',
+  'TV-Y': 'TV-Y: all children',
+  'TV-Y7': 'TV-Y7: 7 and older',
+  'TV-G': 'TV-G: all audiences',
+  'TV-PG': 'TV-PG: parental guidance suggested',
+  'TV-14': 'TV-14: 14 and older',
+  'TV-MA': 'TV-MA: mature audiences',
   NR: 'Not rated',
   UR: 'Unrated',
 };
 
-export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether, onSelectPerson }) {
+// Episodes (detail page, above cast): season pills + episode rail with
+// stills and synopses. Card click plays that exact episode via
+// switchEpisode, eye marks watched, chevron opens the episode sheet
+// (Phase 2: full overview + guest stars + prev/next). Guest names ride
+// the season payload, no extra calls. Same file by design (single
+// consumer): EpisodeDrawer stays the player chrome.
+function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPerson }) {
+  const apiSeasons = Array.isArray(details?.seasons) ? details.seasons : [];
+  const seasons = apiSeasons.length > 0
+    ? apiSeasons
+        .filter((s) => s && s.season_number != null && s.season_number >= 0)
+        .sort((a, b) => a.season_number - b.season_number)
+    : Array.from({ length: Math.max(1, details?.number_of_seasons || 1) }, (_, i) => ({ season_number: i + 1 }));
+  const [activeSeason, setActiveSeason] = useState(1);
+  const [episodes, setEpisodes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState('');
+  const [seasonRetry, setSeasonRetry] = useState(0);
+  const [newestFirst, setNewestFirst] = useState(false);
+  const [sheetEp, setSheetEp] = useState(null);
+  const [watchedTick, setWatchedTick] = useState(0);
+
+  useEffect(() => {
+    if (!mediaId) return;
+    let alive = true;
+    setLoading(true);
+    setSeasonError('');
+    tmdb.getSeasonDetails(mediaId, activeSeason)
+      .then((data) => {
+        if (alive) {
+          setEpisodes(data?.episodes || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setSeasonError('Could not load episodes. Check your connection.');
+          setLoading(false);
+        }
+      });
+    return () => { alive = false; };
+  }, [mediaId, activeSeason, seasonRetry]);
+
+  useEffect(() => {
+    if (!sheetEp) return;
+    const onKey = (e) => { if (e.key === 'Escape') setSheetEp(null); };
+    document.addEventListener('keydown', onKey);
+    // Lock the page behind the sheet. iOS Safari ignores body overflow,
+    // so pin the body fixed at the current scroll offset instead.
+    const y = window.scrollY || 0;
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
+    const prevTop = document.body.style.top;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${y}px`;
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.top = prevTop;
+      window.scrollTo(0, y);
+    };
+  }, [sheetEp]);
+
+  // Watched truth reads the whole episode stamp, not one server slot:
+  // episodes finished inside the player carry per-server clocks, and a
+  // server-less read returned null for those (the toggle that never
+  // flipped). Any clock past the watched percent counts.
+  const isWatched = (epNum) => {
+    try {
+      const entry = storage.getProgress('tv', mediaId);
+      const ep = entry?.episodes?.[`${activeSeason}x${epNum}`];
+      if (!ep) return false;
+      if ((ep.percent || 0) >= WATCHED_PCT) return true;
+      return Object.values(ep.servers || {}).some((s) => {
+        const pct = s && s.duration > 0 ? (s.currentTime / s.duration) * 100 : 0;
+        return pct >= WATCHED_PCT;
+      });
+    } catch {
+      return false;
+    }
+  };
+  void watchedTick;
+
+  const playEp = (epNum) => {
+    try {
+      storage.switchEpisode({
+        mediaId,
+        type: 'tv',
+        season: activeSeason,
+        episode: epNum,
+        title: details?.name || details?.title || media?.name || media?.title || '',
+        poster: details?.poster_path || media?.poster_path || '',
+        genres: (details?.genres || []).map((g) => g.id),
+      });
+    } catch {
+      // storage unavailable. Play still works, resume just will not stick.
+    }
+    onPlay?.(media, details);
+  };
+
+  const markEpWatched = (epNum, runtimeMin) => {
+    try {
+      const dur = Math.max(1, Math.round((runtimeMin || details?.episode_run_time?.[0] || 45) * 60));
+      storage.saveProgress({
+        mediaId,
+        type: 'tv',
+        season: activeSeason,
+        episode: epNum,
+        currentTime: dur,
+        duration: dur,
+        title: details?.name || details?.title || media?.name || media?.title || '',
+        poster: details?.poster_path || media?.poster_path || '',
+        genres: (details?.genres || []).map((g) => g.id),
+      });
+      setWatchedTick((t) => t + 1);
+      onToast?.(`Marked S${activeSeason} E${epNum} watched`);
+    } catch {
+      onToast?.('Could not mark watched. Retry.');
+    }
+  };
+
+  const toggleEpWatched = (epNum, runtimeMin) => {
+    if (isWatched(epNum)) {
+      try {
+        storage.unmarkEpisode({ mediaId, type: 'tv', season: activeSeason, episode: epNum });
+        setWatchedTick((t) => t + 1);
+        onToast?.(`Removed S${activeSeason} E${epNum} from watched`);
+      } catch {
+        onToast?.('Could not update. Retry.');
+      }
+      return;
+    }
+    markEpWatched(epNum, runtimeMin);
+  };
+
+  const ordered = newestFirst ? [...episodes].reverse() : episodes;
+  const seasonLabel = (n) => (n === 0 ? 'Specials' : `Season ${n}`);
+  const sheetIdx = sheetEp ? ordered.findIndex((e) => e.episode_number === sheetEp.episode_number) : -1;
+
+  return (
+    <section className="space-y-4" aria-label="Episodes">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <h3 className="cine-section-title inline-flex items-center gap-2">
+          <ListVideo className="w-4 h-4 text-white/60" />
+          Episodes
+          {!loading && episodes.length > 0 && (
+            <span className="text-xs font-semibold text-white/50">
+              {seasonLabel(activeSeason)} · {episodes.length} episode{episodes.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setNewestFirst((v) => !v)}
+            className="cine-pill cine-pill--sm cine-has-tip"
+            aria-pressed={newestFirst}
+            aria-label={newestFirst ? 'Sort oldest first' : 'Sort newest first'}
+          >
+            {newestFirst ? 'Newest' : 'Oldest'}
+            <span className="cine-tip" aria-hidden="true">
+              {newestFirst ? 'Newest episodes first' : 'Oldest episodes first'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Seasons">
+        {seasons.map((s) => {
+          const n = s.season_number;
+          const active = n === activeSeason;
+          return (
+            <button
+              key={n}
+              role="tab"
+              aria-selected={active}
+              onClick={() => { setActiveSeason(n); setSheetEp(null); }}
+              className={`cine-pill cine-pill--sm${active ? ' cine-pill--active' : ''}`}
+            >
+              {seasonLabel(n)}
+            </button>
+          );
+        })}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40" aria-label="Loading episodes">
+          <div className="w-6 h-6 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : seasonError ? (
+        <div className="flex flex-col items-center justify-center gap-3 h-32 text-xs text-white/60">
+          <span>{seasonError}</span>
+          <button onClick={() => setSeasonRetry((r) => r + 1)} className="cine-control-btn">
+            Retry
+          </button>
+        </div>
+      ) : ordered.length === 0 ? (
+        <p className="text-xs text-white/60 py-6 text-center">No episodes indexed for this season yet.</p>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-1 px-1">
+          {ordered.map((ep) => {
+            const watched = isWatched(ep.episode_number);
+            const thumb = ep.still_path ? tmdb.getImageUrl(ep.still_path, 'w300') : FALLBACK_POSTER;
+            return (
+              <article key={ep.id || ep.episode_number} className="flex-shrink-0 w-64 md:w-72 space-y-2.5">
+                <div
+                  onClick={() => playEp(ep.episode_number)}
+                  className="group relative aspect-video rounded-2xl overflow-hidden cursor-pointer border border-[var(--cine-glass-border)] hover:border-white/25 transition bg-black/50"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Play episode ${ep.episode_number}: ${ep.name || ''}`}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playEp(ep.episode_number); } }}
+                >
+                  <img
+                    src={thumb}
+                    alt={ep.name || `Episode ${ep.episode_number}`}
+                    loading="lazy"
+                    className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                    onError={(e) => { e.target.src = FALLBACK_POSTER; }}
+                  />
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/75 text-[10px] font-bold text-white">
+                    E{ep.episode_number}
+                  </span>
+                  {ep.runtime ? (
+                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-black/75 text-[10px] font-bold text-white">
+                      {ep.runtime}m
+                    </span>
+                  ) : null}
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/30">
+                    <span className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center">
+                      <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
+                    </span>
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-start gap-2">
+                    <h4 className={`flex-1 text-sm font-bold leading-snug ${watched ? 'text-white/50' : 'text-white'}`}>
+                      {ep.episode_number}. {ep.name || `Episode ${ep.episode_number}`}
+                    </h4>
+                    <button
+                      onClick={() => toggleEpWatched(ep.episode_number, ep.runtime)}
+                      className={`cine-icon-btn cine-icon-btn--xs flex-shrink-0 cine-has-tip${watched ? ' text-[var(--cine-accent)]' : ''}`}
+                      aria-label={watched ? `Remove episode ${ep.episode_number} from watched` : `Mark episode ${ep.episode_number} watched`}
+                      aria-pressed={watched}
+                    >
+                      {watched ? <Check className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span className="cine-tip" aria-hidden="true">
+                        {watched ? 'Remove from watched' : 'Mark watched'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setSheetEp(ep)}
+                      className="cine-icon-btn cine-icon-btn--xs flex-shrink-0 cine-has-tip"
+                      aria-label={`Episode ${ep.episode_number} details`}
+                      aria-expanded={sheetEp?.episode_number === ep.episode_number}
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                      <span className="cine-tip" aria-hidden="true">Episode details</span>
+                    </button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-white/60 line-clamp-2">
+                    {ep.overview || 'No synopsis available.'}
+                  </p>
+                  <p className="text-[11px] text-white/40">
+                    {[
+                      formatDay(ep.air_date),
+                      ep.vote_average ? `★ ${Number(ep.vote_average).toFixed(1)}` : null,
+                    ].filter(Boolean).join(' · ') || 'Details coming soon'}
+                  </p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {sheetEp && sheetIdx >= 0 && (
+        <div
+          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 pt-24 bg-black/70"
+          onClick={() => setSheetEp(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Episode ${sheetEp.episode_number} details`}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[86vh] overflow-y-auto rounded-3xl bg-[#0e0e12] border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative aspect-video bg-black/60">
+              <img
+                src={sheetEp.still_path ? tmdb.getImageUrl(sheetEp.still_path, 'w780') : FALLBACK_POSTER}
+                alt={sheetEp.name || `Episode ${sheetEp.episode_number}`}
+                className="w-full h-full object-cover"
+                onError={(e) => { e.target.src = FALLBACK_POSTER; }}
+              />
+              <button
+                onClick={() => setSheetEp(null)}
+                className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition"
+                aria-label="Close episode details"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 md:p-6 space-y-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+                  {seasonLabel(activeSeason)} · Episode {sheetEp.episode_number}
+                </p>
+                <h4 className="text-xl font-black text-white mt-1">{sheetEp.name || `Episode ${sheetEp.episode_number}`}</h4>
+                <p className="text-xs text-white/50 mt-1">
+                  {[
+                    formatDay(sheetEp.air_date),
+                    sheetEp.runtime ? `${sheetEp.runtime}m` : null,
+                    sheetEp.vote_average ? `★ ${Number(sheetEp.vote_average).toFixed(1)}` : null,
+                  ].filter(Boolean).join(' · ') || 'Details coming soon'}
+                </p>
+              </div>
+              <p className="text-sm leading-relaxed text-white/75">{sheetEp.overview || 'No synopsis available.'}</p>
+              {(sheetEp.guest_stars || []).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Guest starring</p>
+                  <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
+                    {sheetEp.guest_stars.slice(0, 6).map((g) => (
+                      <button
+                        key={g.id || g.name}
+                        onClick={() => { if (g.id) { setSheetEp(null); onSelectPerson?.(g.id); } }}
+                        className="group flex-shrink-0 w-20 text-center space-y-1.5 cursor-pointer"
+                        aria-label={g.id ? `Open ${g.name}'s profile` : g.name}
+                      >
+                        <span className="block w-[72px] h-[72px] mx-auto rounded-full overflow-hidden bg-white/5 border border-white/10 group-hover:border-white/30 transition">
+                          <img
+                            src={tmdb.getImageUrl(g.profile_path, 'w185', FALLBACK_PROFILE)}
+                            alt={g.name}
+                            loading="lazy"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.target.src = FALLBACK_PROFILE; }}
+                          />
+                        </span>
+                        <span className="block text-[11px] font-semibold text-white/85 leading-tight line-clamp-2 group-hover:text-white group-hover:underline">
+                          {g.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  onClick={() => { setSheetEp(null); playEp(sheetEp.episode_number); }}
+                  className="h-11 px-6 text-sm rounded-full bg-white text-black font-bold inline-flex items-center gap-2 hover:bg-[#f2f2f5] transition"
+                >
+                  <Play className="w-4 h-4" fill="currentColor" /> Play episode
+                </button>
+                {isWatched(sheetEp.episode_number) ? (
+                  <button
+                    onClick={() => toggleEpWatched(sheetEp.episode_number, sheetEp.runtime)}
+                    className="cine-control-btn h-11 px-5 text-sm"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Remove from watched
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => toggleEpWatched(sheetEp.episode_number, sheetEp.runtime)}
+                    className="cine-control-btn h-11 px-5 text-sm"
+                  >
+                    <Check className="w-3.5 h-3.5" /> Mark watched
+                  </button>
+                )}
+                <span className="flex-1" />
+                <button
+                  onClick={() => { const p = ordered[sheetIdx - 1]; if (p) setSheetEp(p); }}
+                  disabled={sheetIdx <= 0}
+                  className="cine-icon-btn cine-has-tip disabled:opacity-30"
+                  aria-label="Previous episode"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="cine-tip" aria-hidden="true">Previous episode</span>
+                </button>
+                <button
+                  onClick={() => { const n = ordered[sheetIdx + 1]; if (n) setSheetEp(n); }}
+                  disabled={sheetIdx >= ordered.length - 1}
+                  className="cine-icon-btn cine-has-tip disabled:opacity-30"
+                  aria-label="Next episode"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                  <span className="cine-tip" aria-hidden="true">Next episode</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedia, onToast, onWatchTogether, onSelectPerson, onSelectStudio }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailsError, setDetailsError] = useState('');
@@ -211,6 +617,12 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const cert = certificationOf(details, mediaType);
   const revenue = formatMoney(details?.revenue);
   const budget = formatMoney(details?.budget);
+  // Profit verdict: real-data color, not decoration. Green = box office
+  // covered the budget, red = it did not. Null when either is missing.
+  const boxVerdict =
+    details?.revenue > 0 && details?.budget > 0
+      ? (details.revenue >= details.budget ? 'profit' : 'flop')
+      : null;
   const genres = details?.genres || [];
   const cast = details?.credits?.cast?.slice(0, 12) || [];
   const directors = (details?.credits?.crew || []).filter((c) => c.job === 'Director');
@@ -221,17 +633,24 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const seasonsCount = details?.number_of_seasons || null;
   const episodesCount = details?.number_of_episodes || null;
   const releaseDate = formatDate(details?.release_date || details?.first_air_date);
-  // Sensible "You Might Also Like": TMDB similar as candidates, but scored
-  // by shared genres with THIS title and stripped of unrated junk. Topped
+  // Sensible "You Might Also Like": TMDB similar as candidates, scored
+  // by shared genres with THIS title, then same language, then same
+  // origin country (a US drama suggesting Korean dramas on genre overlap
+  // alone is how the shelf goes wrong). Stripped of unrated junk. Topped
   // up from same-genre top-rated when TMDB returns thin air.
   const [similar, setSimilar] = useState([]);
   useEffect(() => {
     let alive = true;
     const genreIds = new Set((details?.genres || []).map((g) => g.id));
-    const score = (x) => (x.genre_ids || []).filter((g) => genreIds.has(g)).length;
+    const lang = details?.original_language || null;
+    const countries = new Set(details?.origin_country || (details?.origin_country === undefined && details?.production_countries ? details.production_countries.map((c) => c.iso_3166_1) : []));
+    const score = (x) =>
+      (x.genre_ids || []).filter((g) => genreIds.has(g)).length * 2 +
+      (lang && x.original_language === lang ? 3 : 0) +
+      ((x.origin_country || []).some((c) => countries.has(c)) ? 2 : 0);
     const clean = (list) =>
       (list || [])
-        .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 10)
+        .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 20)
         .sort(
           (a, b) =>
             score(b) - score(a) ||
@@ -271,23 +690,15 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
   return (
     <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
-      {/* Blurred continuation: below the hero the same backdrop lives on as
-          a dim frozen ghost, so the page melts instead of hard-cutting. */}
+      {/* Poster tint: the artwork's palette at 30% across the whole page. */}
       <div className="cine-detail-bg" aria-hidden="true">
         <img src={backdrop} alt="" className="cine-detail-bg-img" />
         <div className="cine-detail-bg-shade" />
       </div>
-      {/* Hero: still backdrop. Trailers play here only when the user picks
-          one below — never autoplayed, so no player chrome or mute dance.
-          No bg fill (home parity): the melt-base + ghost own the tone. */}
+      {/* Hero: still backdrop dissolving straight into the tinted page
+          (cinejoy rule: one mask feather + one scrim, no blur stack).
+          Trailers play here only when the user picks one below. */}
       <div className="relative w-full h-[86vh] min-h-[600px] overflow-hidden">
-        {/* Melt base: the SAME backdrop, blurred, living under the sharp
-            image. The sharp layer dissolves into it (mask), and the page
-            ghost below is the same blur — so there is no boundary line,
-            only a continuous melt like the reference. */}
-        {!heroVideo && (
-          <img src={backdrop} alt="" aria-hidden="true" className="cine-detail-melt-base" />
-        )}
         {heroVideo ? (
           <iframe
             key={heroVideo}
@@ -385,7 +796,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 </span>
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-[var(--cine-accent)] font-bold cine-has-tip">
+            <span className="inline-flex items-center gap-1 text-white font-bold cine-has-tip">
               <Star className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
               {rating}
               <span className="cine-tip" aria-hidden="true">
@@ -397,7 +808,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <span className="cine-imdb-logo">IMDb</span>
                 {imdb.toFixed(1)}
                 <span className="cine-tip" aria-hidden="true">
-                  IMDb {imdb.toFixed(1)} — matched by IMDb ID
+                  IMDb {imdb.toFixed(1)} (matched by IMDb ID)
                 </span>
               </span>
             )}
@@ -405,7 +816,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               <span className="cine-chip cine-chip--accent cine-has-tip" >
                 🍅 {rt.critic}%
                 <span className="cine-tip" aria-hidden="true">
-                  Rotten Tomatoes Tomatometer — critics
+                  Rotten Tomatoes Tomatometer (critics)
                 </span>
               </span>
             )}
@@ -413,7 +824,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               <span className="cine-chip cine-chip--neutral cine-has-tip" >
                 🍿 {rt.audience}%
                 <span className="cine-tip" aria-hidden="true">
-                  Rotten Tomatoes Popcornmeter — audience
+                  Rotten Tomatoes Popcornmeter (audience)
                 </span>
               </span>
             )}
@@ -518,7 +929,16 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             {revenue && budget ? (
               <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
                 <span className="text-white/45 font-medium">Box Office / Budget</span>
-                <span className="text-white/90 font-semibold">{revenue} / {budget}</span>
+                <span
+                  className={`font-semibold cine-has-tip ${boxVerdict === 'profit' ? 'text-[var(--cine-accent)]' : boxVerdict === 'flop' ? 'text-[#ff7070]' : 'text-white/90'}`}
+                >
+                  {revenue} / {budget}
+                  {boxVerdict && (
+                    <span className="cine-tip cine-tip--wrap" aria-hidden="true">
+                      {boxVerdict === 'profit' ? 'Box office covered the budget' : 'Box office did not cover the budget'}
+                    </span>
+                  )}
+                </span>
               </div>
             ) : revenue ? (
               <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
@@ -536,8 +956,19 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <span className="text-white/45 font-medium flex-shrink-0">
                   Studio{studios.length > 1 ? 's' : ''}
                 </span>
-                <span className="text-white/90 font-semibold text-right leading-snug">
-                  {studios.map((s) => s.name).join(' · ')}
+                <span className="text-right leading-snug">
+                  {studios.map((s, i) => (
+                    <span key={s.id || s.name}>
+                      {i > 0 && <span className="text-white/40"> · </span>}
+                      <button
+                        onClick={() => s.id && onSelectStudio?.(s.id)}
+                        className="text-white/90 font-semibold hover:text-white hover:underline transition cursor-pointer"
+                        aria-label={s.id ? `Open ${s.name} studio page` : s.name}
+                      >
+                        {s.name}
+                      </button>
+                    </span>
+                  ))}
                 </span>
               </div>
             )}
@@ -546,16 +977,8 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         )}
       </div>
 
-      {/* Melt tail: laps 40px over the hero bottom and crossfades down
-          over 260px, transparent-capped both ends. Hidden while a trailer
-          plays. */}
-      {!heroVideo && (
-        <div className="cine-melt-tail" aria-hidden="true">
-          <img src={backdrop} alt="" />
-        </div>
-      )}
-
-      {/* Main Details Body (above the melt tail: content crisp, haze behind) */}
+      {/* Main Details Body (solid page: the hero mask + scrim land the
+          dissolve, no tail or ghost layers) */}
       <div className="relative z-20 max-w-[1560px] mx-auto px-6 md:px-14 mt-8 space-y-10">
         {detailsError && (
           <div className="flex items-center gap-3 text-xs text-white/60">
@@ -576,14 +999,28 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         </section>
 
         {studios.length > 0 && (
-          <p className="xl:hidden text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
-            {studios.map((s) => s.name).join(' · ')}
+          <p className="xl:hidden text-[11px] font-bold tracking-[0.2em] text-white/50">
+            {studios.map((s, i) => (
+              <span key={s.id || s.name}>
+                {i > 0 && <span> · </span>}
+                <button
+                  onClick={() => s.id && onSelectStudio?.(s.id)}
+                  className="uppercase hover:text-white/80 hover:underline transition cursor-pointer"
+                  aria-label={s.id ? `Open ${s.name} studio page` : s.name}
+                >
+                  {s.name}
+                </button>
+              </span>
+            ))}
           </p>
         )}
 
         {(revenue || budget) && (
           <section className="xl:hidden flex flex-wrap items-center gap-2 text-xs">
-            <span className="cine-chip cine-chip--neutral">
+            <span
+              className="cine-chip cine-chip--neutral"
+              style={boxVerdict === 'profit' ? { color: 'var(--cine-accent)' } : boxVerdict === 'flop' ? { color: '#ff7070' } : undefined}
+            >
               {revenue && budget ? `Box Office: ${revenue} / ${budget}` : revenue ? `Box Office: ${revenue}` : `Budget: ${budget}`}
             </span>
           </section>
@@ -622,6 +1059,18 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               </button>
             )}
           </section>
+        )}
+
+        {/* Episodes — above cast for shows: seasons, stills, synopses. */}
+        {mediaType === 'tv' && (
+          <EpisodesSection
+            mediaId={mediaId}
+            media={media}
+            details={details}
+            onPlay={onPlay}
+            onToast={onToast}
+            onSelectPerson={onSelectPerson}
+          />
         )}
 
         {/* Cast */}

@@ -5,13 +5,15 @@ import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
  * Shared MediaCard component — replaces all ad-hoc card implementations.
  * Used in: home grid, discovery pages, search results, "More Like This", etc.
  */
-export default function Card({ media, onClick, showRating = true, showRole = false, size = 'default', posterOnly = false }) {
+export default function Card({ media, onClick, showRating = true, showRole = false, size = 'default', posterOnly = false, imdb = null }) {
   const title = media?.title || media?.name || 'Untitled';
   // Fluid grid cards render up to ~210px wide — w500 keeps them crisp on
   // retina; rails stay on lighter w342, lg keeps w780.
   const posterSize = size === 'lg' ? 'w780' : size === 'fluid' ? 'w500' : 'w342';
   const poster = tmdb.getImageUrl(media?.poster_path, posterSize);
-  const rating = media?.vote_average ? media.vote_average.toFixed(1) : null;
+  // IMDb upgrade wins where it resolved (Top Rated sorts); TMDB otherwise.
+  const ratingValue = Number.isFinite(imdb) ? imdb : media?.vote_average;
+  const rating = ratingValue ? Number(ratingValue).toFixed(1) : null;
   const year = (media?.release_date || media?.first_air_date || '').split('-')[0];
   // Person credits: whose story it is on that title ("as Ana", "Director").
   const role = showRole ? media?.character || media?.job || null : null;

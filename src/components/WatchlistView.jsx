@@ -94,7 +94,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
       }
     } catch (err) {
       console.error('Letterboxd resolve failed:', err);
-      setResolveError(`Could not look up "${item.title}" — check connection and retry.`);
+      setResolveError(`Could not look up "${item.title}". Check connection and retry.`);
     } finally {
       setResolvingId(null);
     }
@@ -345,15 +345,16 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="cine-chip cine-chip--neutral">
-                  Letterboxd: {letterboxdUser}
+                <span className="text-[11px] font-semibold text-white/45">Letterboxd:</span>
+                <span className="cine-chip cine-chip--neutral" style={{ color: 'var(--cine-accent)' }}>
+                  {letterboxdUser}
                 </span>
                 <button
                   onClick={() => {
                     setLbDraft(letterboxdUser);
                     setEditingLb(true);
                   }}
-                  className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
+                  className="text-[11px] font-semibold text-white/40 hover:text-white/80 transition cursor-pointer"
                 >
                   Change
                 </button>
@@ -609,11 +610,12 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                         e.stopPropagation();
                         handleRemoveHistory(h);
                       }}
-                      className="cine-icon-btn cine-icon-btn--sm"
-                      
-                      aria-label={`Remove "${h.title}" from history`}
+                      className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+
+                      aria-label={`Remove "${h.title}" from watched`}
                     >
                       <X className="w-3.5 h-3.5" />
+                      <span className="cine-tip cine-tip--below" aria-hidden="true">Remove from watched</span>
                     </button>
                   </div>
                 }
@@ -652,7 +654,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                     onClick={() => onResume(media, fallback)}
                     thumbClassName="w-20 h-28"
                     titleClassName="text-sm md:text-base font-semibold text-white truncate"
-                    progress={h.percent}
+                    progress={h.percent > 0 ? h.percent : h.currentTime > 0 ? 4 : 0}
                     overlay={(
                       <span className="cine-cw-play-btn">
                         <Play className="w-3 h-3" fill="currentColor" />
@@ -663,27 +665,28 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                         <span className="cine-chip cine-chip--neutral">
                           {h.type === 'tv' ? 'Show' : 'Movie'}
                         </span>
-                        <div className="cine-duo-btn cine-duo-btn--sm" role="group" aria-label={`Actions for ${h.title}`}>
+                        <div className="flex items-center gap-1" role="group" aria-label={`Actions for ${h.title}`}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleMarkWatched(h);
                             }}
+                            className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
                             aria-label={`Mark "${h.title}" as watched`}
                           >
                             <Check className="w-3.5 h-3.5" />
-                            <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Mark watched</span>
+                            <span className="cine-tip cine-tip--below" aria-hidden="true">Mark watched</span>
                           </button>
-                          <span className="cine-duo-divider" aria-hidden="true" />
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRemoveHistory(h);
                             }}
+                            className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
                             aria-label={`Remove "${h.title}" from history`}
                           >
                             <X className="w-3.5 h-3.5" />
-                            <span className="cine-duo-tip cine-duo-tip--below" aria-hidden="true">Remove</span>
+                            <span className="cine-tip cine-tip--below" aria-hidden="true">Remove</span>
                           </button>
                         </div>
                       </div>

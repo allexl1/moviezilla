@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MOVIE_GENRES, SORTS, tmdb } from '../services/tmdb';
+import { upgradeTopRatings } from '../services/ratings';
 import { pickUpcoming, getProviderOptions } from '../services/catalog';
 import { useDiscovery } from '../hooks/useDiscovery';
 import { usePagedRail } from '../hooks/usePagedRail';
@@ -41,6 +42,25 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
     loadMore: loadMoreUpcoming,
     retry: retryUpcoming,
   } = usePagedRail('movies-upcoming', fetchUpcomingMovies, pickUpcoming);
+  // Top Rated IMDb upgrade: TMDB orders instantly, first visible cards
+  // upgrade to exact-ID IMDb figures where they resolve (TMDB fallback).
+  const [imdbMap, setImdbMap] = useState({});
+  useEffect(() => {
+    if (filters.sort !== 'vote_average.desc' || releasedItems.length === 0) return;
+    let alive = true;
+    upgradeTopRatings(releasedItems, 'movie', (t, id) => tmdb.getMediaDetails(t, id)).then((m) => {
+      if (alive) setImdbMap(m);
+    });
+    return () => { alive = false; };
+  }, [filters.sort, releasedItems, page]);
+  // Display order: on Top Rated the badges may show upgraded IMDb
+  // figures, so re-sort loaded items by the DISPLAYED number — otherwise
+  // the grid reads unsorted (8.4, 8.2, 9.5). Other sorts keep API order.
+  const ratingOf = (m) => imdbMap[m.id] ?? m.vote_average ?? 0;
+  const displayItems =
+    filters.sort === 'vote_average.desc'
+      ? [...releasedItems].sort((a, b) => ratingOf(b) - ratingOf(a))
+      : releasedItems;
   // Same catalog as the home wall: a service tapped on Home must exist
   // in this filter (falls back to the short list until it resolves).
   const [providerOptions, setProviderOptions] = useState([]);
@@ -120,17 +140,18 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
         ) : (
           <>
             <div className="cine-grid">
-              {releasedItems.map((media) => (
+              {displayItems.map((media) => (
                 <Card
                   key={`${media.id}_${media.title || media.name}`}
                   media={media}
                   onClick={onSelectMedia}
                   size="fluid"
                   posterOnly
+                  imdb={imdbMap[media.id] ?? null}
                 />
               ))}
             </div>
-            {releasedItems.length === 0 && (
+            {displayItems.length === 0 && (
               <p className="text-center py-16 text-xs text-white/60">
                 No titles found. Try clearing filters.
               </p>

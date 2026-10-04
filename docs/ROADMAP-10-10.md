@@ -1,5 +1,15 @@
 # Moviezilla — Road to 10/10 (step-by-step)
 
+> SESSION STATE (updated 2026-09-27, end of session — read this first).
+> - Last finished: rooms presence fix (§A1 equivalent — see DONE list),
+>   verified headless vs real backend. NOT pushed (user: don't push).
+> - Next up, in order: (1) live two-device rooms test with the user;
+>   (2) user's pending PLAYER issue — NOT yet described, waiting on
+>   them, do not start; (3) §1 actors batch verification → push working
+>   version → roadmap discussion (§2–§8).
+> - Tree state: all work below marked [x] is local-only in the working
+>   tree. Nothing since `a29bf73` is committed. Push only when asked.
+
 Planning doc, NOT shipped to the site. Every step lists files, the exact
 action, and how to verify. Work them in order; check off as you go.
 
@@ -42,6 +52,16 @@ being asked.
 - [x] Sync: clear-flag respected in merge, merge re-renders shelves
   (`account.js`).
 - [x] Detail hero reverted to full-bleed per taste (`MediaDetailPage.jsx`).
+- [x] Code foundations: one `resolveMediaType` (`routing.js`,
+  re-exported by `catalog.js`); `npm test` 18/18 green
+  (`tests/routing.test.js`, `tests/storage.test.js`); guards
+  extended (raw plurals, rogue `scrollLeft`, thumb discipline).
+- [x] Rooms presence fix: syncs only ADD/refresh (order-stable
+  merge), 5s pruner owns removals after 15s unseen, server `leave`
+  fast-tracks, renames via `update()` with no teardown
+  (`services/rooms.js`, `components/RoomView.jsx`). Headless
+  two-device test vs real backend green (1→2 on join, →1 ≤12s
+  after unclean close); live test with you still required.
 
 ---
 
@@ -137,6 +157,19 @@ being asked.
   (`${n} seasons|episodes|titles|matches|honours` without a
   singular branch).
 
+### 2G. Tab title + favicon
+- [ ] Step 2G.1 — Player tab title shows the movie/show name. Code
+  already sets `▶ Title — Moviezilla` while playing (`App.jsx`
+  title effect); verify on LIVE after push (the "Playing —
+  Moviezilla" screenshot predates it). Drop the `▶` prefix if it
+  reads noisy in the tab strip.
+- [x] Step 2G.2 — Favicon white tile. Root cause: transparent PNG
+  corners composited white by the tab bar. Fixed with opaque
+  full-bleed base (`public/favicon.svg` + regenerated
+  `icon-192/512.png`, `apple-touch-icon.png` — verified 0
+  transparent pixels). Confirm on live after push (favicons cache
+  hard — bump query or rename if the old tile sticks).
+
 ---
 
 ## 3. SPEED (priority)
@@ -213,6 +246,19 @@ being asked.
 Diagnosis: services are clean; `App.jsx` (~630), `Player.jsx`
 (~1000), `RoomView.jsx` (~1800) are god-components — every recent
 bug lived in an effect edge case there.
+- [x] Step 6.5 — Unified `resolveMediaType`/`mediaTypeOf` into ONE
+  function in `routing.js`; `catalog.js` re-exports it (callers
+  untouched). Done — the `/movie/<showId>` bug class is structurally
+  impossible now.
+- [x] Step 6.2 — Unit tests for pure logic (`npm test`, `node --test`,
+  no new framework, 18 tests green): `tests/routing.test.js`
+  (type matrix, URL round-trips incl. `?from=`, `?tab=`, legacy
+  `?room=`) and `tests/storage.test.js` (CW gates incl. the Sheldon
+  rule, `progressLabel` matrix, `switchEpisode`, 0-write guard).
+  `tests/helpers.js` shims localStorage/window.
+- [x] Step 6.3 — Extended `scripts/guard-css.sh` (checks 5–7): raw
+  plurals, rogue `scrollLeft` writes, font-unaware thumb measurers.
+  Verified catching a planted violation.
 - [ ] Step 6.1 — Extract hooks per concern (same files first, split
   only when shared): `useBackStack`, `usePlayerUrl` (mirror +
   firstPush/prevPlay/prevRoom/prevRoute + `?from=`), `useRoomPresence`

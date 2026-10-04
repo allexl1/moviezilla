@@ -11,6 +11,7 @@ const ALLOWED_PATHS = [
   /^(movie|tv)\/\d+$/,
   /^(movie|tv)\/\d+\/images$/,
   /^tv\/\d+\/season\/\d+$/,
+  /^company\/\d+$/,
 ];
 
 // Never forward credential/session params even if a caller sends them.
