@@ -1135,8 +1135,26 @@ export default function RoomView({ code, onLeave, onToast }) {
             };
       const server = picked.kind === 'youtube' ? 'youtube' : 'vidy';
       const title = picked.title || 'Room';
+      // Keep-what-plays: the outgoing title joins the queue front (if not
+      // already queued), so switching never loses it — rewatch later.
+      const curMedia = roomRef.current?.media;
+      const curPicked =
+        curMedia?.kind === 'youtube' && curMedia?.youtubeId
+          ? { kind: 'youtube', youtubeId: curMedia.youtubeId, title: curMedia.title, thumb: curMedia.poster }
+          : curMedia?.kind !== 'youtube' && curMedia?.id
+            ? { kind: 'tmdb', id: curMedia.id, media_type: curMedia.type || 'movie', title: curMedia.title, poster_path: curMedia.poster }
+            : null;
+      const baseQueue = queueNext || queue;
+      let nextQueue = baseQueue;
+      if (curPicked) {
+        const curItem = makeQueueItem(curPicked, name);
+        const incomingKey = keyOfMedia(media);
+        if (curItem.key && curItem.key !== incomingKey && !baseQueue.some((q) => q.key === curItem.key)) {
+          nextQueue = [curItem, ...baseQueue];
+        }
+      }
       const patch = { media, title, season: 1, episode: 1, server, position: 0, state: 'live', started: false };
-      if (queueNext) patch.queue = queueNext;
+      patch.queue = nextQueue;
       const row = await patchRoom(code, patch);
       if (row) setRoom(row);
       // Fresh title on this device too (pre-migration reload honesty).
@@ -1145,14 +1163,14 @@ export default function RoomView({ code, onLeave, onToast }) {
       } catch {
         // ignore
       }
-      if (queueNext) setQueue(queueNext);
+      if (nextQueue !== queue) setQueue(nextQueue);
       channelRef.current?.send('media', {
         device,
         name: name,
         media,
         title,
         server,
-        queue: queueNext || undefined,
+        queue: nextQueue,
       });
       adoptMedia(media, server, title, null);
       setSwapQuery('');
@@ -1519,20 +1537,28 @@ export default function RoomView({ code, onLeave, onToast }) {
   // exactly where it stopped: no reload, no blank time on resume for them.
   // Followers keep the old deal (unmount/remount — providers take no remote
   // orders, so there is no other way to stop them). A paused room shows
-  // paused cards, not video; resume remounts follower frames at the frozen
+  // paused cards, not video; resume remounts held frames at the frozen
   // second. Unmounting is the only true pause these providers allow (they
-  // take no remote orders).
+  // take no remote orders). The pauser is held too — including the host:
+  // pausing must stop your own player or you'll forget the room is held.
   // Not-started followers (T1) park the same way: no 0:00 black VidLink,
   // no phantom clock — their player loads when the host presses play.
   const suspended =
-    !isYouTube && (!!pausedBy || waitingForHost || (!roomStarted && !canControl)) && pausedByDevice !== device;
+    !isYouTube && (!!pausedBy || waitingForHost || (!roomStarted && !canControl));
   // YouTube pauses for real via the command API — no overlay needed.
-  // Explicit holds: waiting for an absent host, or the host hasn't
-  // pressed play yet (T1) — followers see a card, never a black 0:00.
+  // Explicit holds: the pauser sees "Paused by you", everyone else sees
+  // who held them; waiting rooms and not-started followers see a card,
+  // never a black 0:00.
+  const iPausedIt = pausedBy && pausedByDevice && pausedByDevice === device;
   const overlay = !isYouTube && pausedBy && !canControl ? (
     <div className="text-center space-y-3 max-w-xs">
       <p className="text-sm font-bold text-white">Paused by {pausedBy}</p>
       <p className="text-xs text-white/60">Your player is held here. Press play when the room resumes and you'll re-sync automatically.</p>
+    </div>
+  ) : !isYouTube && iPausedIt ? (
+    <div className="text-center space-y-3 max-w-xs">
+      <p className="text-sm font-bold text-white">Paused by you</p>
+      <p className="text-xs text-white/60">Everyone is held here, including you. Resume when ready and the room follows.</p>
     </div>
   ) : !isYouTube && !roomStarted && !canControl ? (
     <div className="text-center space-y-3 max-w-xs">
@@ -1550,7 +1576,7 @@ export default function RoomView({ code, onLeave, onToast }) {
     <div className="fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col md:flex-row text-white">
       {/* Video column */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        <div className="flex items-center gap-2 px-4 md:px-6 py-3 border-b border-[var(--cine-glass-border)] flex-shrink-0 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 px-4 md:px-6 py-3 border-b border-[var(--cine-glass-border)] flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar">
           <button onClick={() => handleLeave(false)} className="cine-icon-btn cine-icon-btn--sm flex-shrink-0"  aria-label="Leave room">
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -1642,12 +1668,13 @@ export default function RoomView({ code, onLeave, onToast }) {
           {canControl && (
             <button
               onClick={() => setPlaylistOpen((o) => !o)}
-              className="cine-control-btn h-9 px-4 text-xs relative flex-shrink-0"
+              className="cine-control-btn h-9 px-4 text-xs relative flex-shrink-0 cine-has-tip"
 
               aria-label="Open room playlist"
               aria-expanded={playlistOpen}
             >
               <ListMusic className="w-3.5 h-3.5" /> Playlist
+              <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Room playlist</span>
               {queue.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-[var(--cine-accent)] text-black text-[10px] font-black flex items-center justify-center">
                   {queue.length > 9 ? '9+' : queue.length}
@@ -1672,47 +1699,49 @@ export default function RoomView({ code, onLeave, onToast }) {
                 broadcastPlay();
                 onToast?.('Room synced to your position');
               }}
-              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0"
+              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0 cine-has-tip"
               aria-label="Pull everyone to your second right now"
             >
               <RefreshCw className="w-3.5 h-3.5" /> Sync all
+              <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Pull everyone to your second</span>
             </button>
           )}
           {/* N2 manual hold (host only): provider pause events don't always
               arrive, so the host gets a deterministic Pause/Resume. Either
               path freezes the room instantly with the second attached.
-              The slot always renders for the host (invisible pre-start) so
-              the eye never jumps when it appears. */}
-          {canControl && !roomStarted && (
-            <span className="cine-icon-btn invisible" aria-hidden="true" />
-          )}
-          {canControl && roomStarted && !pausedBy && (
+              Followers never see this control. Always rendered (even
+              pre-start — pausing then simply holds the room at 0:00), so
+              the slot never sits empty. */}
+          {canControl && !pausedBy && (
             <button
               onClick={() => broadcastPause()}
-              className="cine-icon-btn flex-shrink-0"
+              className="cine-icon-btn flex-shrink-0 cine-has-tip"
 
               aria-label="Pause the room for everyone"
             >
               <Pause className="w-4 h-4" />
+              <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Pause for everyone</span>
             </button>
           )}
           {canControl && pausedBy && (
             <button
               onClick={() => broadcastPlay()}
-              className="cine-icon-btn flex-shrink-0"
+              className="cine-icon-btn flex-shrink-0 cine-has-tip"
 
               aria-label="Resume the room for everyone"
             >
               <Play className="w-4 h-4" fill="currentColor" />
+              <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Resume for everyone</span>
             </button>
           )}
           {!canControl && (
             <button
               onClick={syncToHost}
-              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0"
+              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0 cine-has-tip"
               aria-label={hostPos ? `Jump to the host's ${formatClock(hostPos.second)} right now` : "Jump to the host's second right now"}
             >
               <RefreshCw className="w-3.5 h-3.5" /> Sync{hostPos ? ` ${formatClock(hostPos.second)}` : ''}
+              <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Jump to the host's second</span>
             </button>
           )}
           {/* T16 hide-chat sits absolute last: invite, playlist, sync, hold,
@@ -1720,12 +1749,15 @@ export default function RoomView({ code, onLeave, onToast }) {
               panel, not visibility. */}
           <button
             onClick={() => setChatHidden((h) => !h)}
-            className="cine-icon-btn flex-shrink-0"
+            className="cine-icon-btn flex-shrink-0 cine-has-tip"
 
             aria-label={chatHidden ? 'Show room chat' : 'Hide room chat'}
             aria-pressed={chatHidden}
           >
             {chatHidden ? <MessageCircle className="w-4 h-4" /> : <MessageCircleOff className="w-4 h-4" />}
+            <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">
+              {chatHidden ? 'Show room chat' : 'Hide room chat'}
+            </span>
           </button>
         </div>
 

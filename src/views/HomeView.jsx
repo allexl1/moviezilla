@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
 import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
@@ -497,10 +497,18 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
         {continueWatching.length > 0 && (
           <section className="space-y-3">
             <div className="cine-section-head">
-              <h2 className="cine-section-title">Continue Watching</h2>
+              <h2 className="cine-section-title inline-flex items-center gap-2">
+                <History className="w-4 h-4 text-white/60" /> Continue Watching
+              </h2>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+            {/* Full-bleed rail (Trending language): the row breaks out of
+                the container padding to the viewport edges, so the last
+                card always peeks instead of landing flush. */}
+            <div className="cine-rail-wrap">
+              <div
+                className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 md:-mx-14 md:px-14"
+              >
               {continueWatching.map((item) => {
                 const pct = item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0;
                 // Uniform time phrase: remaining when the duration is known,
@@ -565,6 +573,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 </div>
                 );
               })}
+              </div>
             </div>
           </section>
         )}
@@ -590,14 +599,6 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
             ) : (
               <RowRail title="Trending Now" items={items.filter(hasRating)} onSelect={onSelectMedia} />
             )}
-            <RowRail title="Trending Today" items={trendingDay} onSelect={onSelectMedia} />
-            <RowRail
-              title="Now Playing in Theaters"
-              items={nowPlaying}
-              onSelect={onSelectMedia}
-              mediaType="movie"
-              action={{ label: 'View All', onClick: () => onOpenTab('movie') }}
-            />
             <RowRail
               title="Popular Movies"
               items={popularMovies}
@@ -611,6 +612,13 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
               onSelect={onSelectMedia}
               mediaType="tv"
               action={{ label: 'View All', onClick: () => onOpenTab('tv') }}
+            />
+            <RowRail
+              title="Now Playing in Theaters"
+              items={nowPlaying}
+              onSelect={onSelectMedia}
+              mediaType="movie"
+              action={{ label: 'View All', onClick: () => onOpenTab('movie') }}
             />
             <RowRail
               title="On The Air"

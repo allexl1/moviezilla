@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Building2, ExternalLink } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, COUNTRIES } from '../services/tmdb';
+import { shortName } from '../services/catalog';
 import Card from './ui/Card';
 import { SkelGrid } from './ui';
 
@@ -284,8 +285,8 @@ export default function StudioView({ studioId, onSelectMedia, onSelectPerson, on
                           onError={(e) => { e.target.src = FALLBACK_PROFILE; }}
                         />
                       </span>
-                      <span className="block text-xs font-bold text-white/85 leading-tight line-clamp-2 group-hover:text-white group-hover:underline">
-                        {a.name}
+                      <span className="block text-xs font-bold text-white/85 leading-tight min-h-[2.2em] line-clamp-2 group-hover:text-white group-hover:underline">
+                        {shortName(a.name)}
                       </span>
                     </button>
                   ))}

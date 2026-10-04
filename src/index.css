@@ -235,7 +235,16 @@ select:focus-visible,
   box-shadow: none;
 }
 
-/* ─── Glass Surface Primitives ──────────────────────────────────────────── */
+/* ─── Glass Surface Primitives ────────────────────────────────────────────
+   No-blur fallback: where backdrop-filter is unsupported or disabled
+   (some Windows Chrome configs), translucent panels would read as fully
+   transparent. Opaque base keeps every surface legible regardless. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cine-glass-panel,
+  .cine-glass-panel--strong {
+    background: #101014;
+  }
+}
 
 /* Aurora background canvas — layered liquid mesh (cinejoy parity:
    base + drifting ribbon + sun glow). */
@@ -1045,9 +1054,12 @@ a.cine-pill {
   resize: none;
   overflow-y: auto;
   max-height: 110px;
+  min-height: 44px;
   line-height: 22px;
-  padding-top: 0.55rem;
-  padding-bottom: 0.55rem;
+  /* 22px line + 2×11px padding = 44px single-line: exactly the GIF/send
+     button height, so the composer row aligns on all three. */
+  padding-top: 0.6875rem;
+  padding-bottom: 0.6875rem;
 }
 
 /* Message … menu rows (B6): icon + label, danger last. */
@@ -1222,10 +1234,10 @@ a.cine-pill {
 }
 
 .cine-section-title {
-  font-size: 1.05rem;
-  font-weight: var(--cine-font-semibold);
-  color: rgba(255, 255, 255, 0.92);
-  letter-spacing: 0.01em;
+  font-size: 1.25rem;
+  font-weight: var(--cine-font-bold);
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.01em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
@@ -1642,6 +1654,11 @@ a.cine-pill {
   }
   *:hover > .cine-tip--below {
     translate: -50% 0;
+  }
+  /* Topmost variant: paints above video iframes (room header tips open
+     over the player — iframes lose to a high z in the same context). */
+  .cine-tip--top {
+    z-index: 60;
   }
   /* Left-edge variant: first item in a scroller — a centered tip would
      clip past the viewport edge. Anchors to the control's left. */

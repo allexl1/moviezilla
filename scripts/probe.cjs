@@ -17,7 +17,10 @@ const { chromium } = require('playwright-core');
   await page.waitForTimeout(4000);
   for (const step of clicks) {
     try {
-      if (step.startsWith('type:')) {
+      if (step.startsWith('eval:')) {
+        await page.evaluate(`(async () => { ${step.slice(5)} })()`);
+        await page.waitForTimeout(2500);
+      } else if (step.startsWith('type:')) {
         const [, sel, ...rest] = step.split(':');
         await page.fill(sel, rest.join(':'), { timeout: 8000 });
         await page.waitForTimeout(2500);

@@ -12,7 +12,7 @@
   {/* Opaque full-bleed base: tab bars composite transparent corners as
       white (the horrendous white tile) — no pixel may stay transparent. */}
   <rect x="0" y="0" width="64" height="64" fill="#050505"/>
-  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#mz-bg)" stroke="#95ff50" stroke-opacity="0.45" stroke-width="2"/>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#mz-bg)" stroke="#ffffff" stroke-opacity="0.4" stroke-width="2"/>
   <rect x="2" y="2" width="60" height="30" rx="16" fill="url(#mz-sheen)"/>
-  <text x="32" y="41" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="900" fill="#95ff50">MZ</text>
+  <text x="32" y="41" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="900" fill="#ffffff">MZ</text>
 </svg>

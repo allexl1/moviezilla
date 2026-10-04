@@ -3,15 +3,26 @@ import { Search, X, Clapperboard } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
+import Picker from './Picker';
 import Row from './ui/Row';
 import Card from './ui/Card';
 import EmptyState from './ui/EmptyState';
 import { SkelRow } from './ui';
 
-export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPerson }) {
+const SCOPES = [
+  { id: 'all', label: 'All' },
+  { id: 'movie', label: 'Movies' },
+  { id: 'tv', label: 'Shows' },
+  { id: 'person', label: 'People' },
+  { id: 'company', label: 'Studios' },
+];
+
+export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPerson, onSelectStudio }) {
   const [query, setQuery] = useState('');
+  const [scope, setScope] = useState('all');
   const [results, setResults] = useState([]);
   const [people, setPeople] = useState([]);
+  const [studios, setStudios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchRetry, setSearchRetry] = useState(0);
@@ -49,6 +60,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
     if (!query.trim()) {
       setResults([]);
       setPeople([]);
+      setStudios([]);
       return;
     }
 
@@ -56,20 +68,57 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
       setLoading(true);
       setSearchError('');
       try {
-        const [multi, persons] = await Promise.all([
-          tmdb.searchMulti(query),
-          tmdb.searchPerson(query).catch(() => null),
-        ]);
-        setResults(
-          (multi?.results || []).filter(
-            (x) => !x.adult && x.poster_path && (x.media_type === 'person' || (x.vote_average || 0) > 0)
-          )
-        );
-        setPeople(
-          (persons?.results || [])
-            .filter((x) => x.profile_path && x.name)
-            .slice(0, 4)
-        );
+        if (scope === 'movie') {
+          const r = await tmdb.searchMovies(query);
+          setResults(
+            (r?.results || [])
+              .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0)
+              .map((x) => ({ ...x, media_type: 'movie' }))
+          );
+          setPeople([]);
+          setStudios([]);
+        } else if (scope === 'tv') {
+          const r = await tmdb.searchTV(query);
+          setResults(
+            (r?.results || [])
+              .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0)
+              .map((x) => ({ ...x, media_type: 'tv' }))
+          );
+          setPeople([]);
+          setStudios([]);
+        } else if (scope === 'person') {
+          const persons = await tmdb.searchPerson(query).catch(() => null);
+          setPeople(
+            (persons?.results || [])
+              .filter((x) => x.profile_path && x.name)
+              .slice(0, 12)
+          );
+          setResults([]);
+          setStudios([]);
+        } else if (scope === 'company') {
+          const co = await tmdb.searchCompanies(query).catch(() => null);
+          setStudios((co?.results || []).filter((x) => x.name).slice(0, 12));
+          setResults([]);
+          setPeople([]);
+        } else {
+          const [multi, persons, co] = await Promise.all([
+            tmdb.searchMulti(query),
+            tmdb.searchPerson(query).catch(() => null),
+            tmdb.searchCompanies(query).catch(() => null),
+          ]);
+          setResults(
+            (multi?.results || []).filter(
+              (x) => !x.adult && x.poster_path && (x.media_type === 'person' || (x.vote_average || 0) > 0)
+            )
+          );
+          // All-mode caps people at 3 — titles lead, studios close.
+          setPeople(
+            (persons?.results || [])
+              .filter((x) => x.profile_path && x.name)
+              .slice(0, 3)
+          );
+          setStudios((co?.results || []).filter((x) => x.name).slice(0, 6));
+        }
       } catch (err) {
         console.error('Search failed:', err);
         setSearchError("Search failed. Check your connection.");
@@ -79,17 +128,18 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, searchRetry]);
+  }, [query, scope, searchRetry]);
 
-  // Flat keyboard order: people first, then titles.
+  // Flat keyboard order: people first, then titles, then studios.
   const navItems = [
     ...people.map((p) => ({ kind: 'person', id: p.id, data: p })),
     ...results.map((item) => ({ kind: 'media', id: `${item.media_type}_${item.id}`, data: item })),
+    ...studios.map((s) => ({ kind: 'studio', id: s.id, data: s })),
   ];
 
   useEffect(() => {
     setActiveIdx(-1);
-  }, [query, results.length, people.length]);
+  }, [query, scope, results.length, people.length, studios.length]);
 
   // Keep the highlighted row/card in view while arrowing through results.
   useEffect(() => {
@@ -97,7 +147,12 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
   }, [activeIdx]);
 
   const chooseMedia = (item) => {
-    if (query.trim()) storage.addSearchHistory(query.trim());
+    const title = item.title || item.name || '';
+    const type = item.media_type === 'tv' ? 'tv' : 'movie';
+    // Typed recents: scope pills filter history by kind. Legacy plain
+    // strings (pre-scope) still show under All + Movies + Shows.
+    if (title.trim()) storage.addSearchHistory(`${type}:${title.trim()}`);
+    else if (query.trim()) storage.addSearchHistory(query.trim());
     onSelectMedia(item);
     onClose();
   };
@@ -105,7 +160,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
   const choosePerson = (id, name) => {
     // People count as searches too (actors were silently dropped from
     // recents — only title picks recorded the query).
-    if (name?.trim()) storage.addSearchHistory(name.trim());
+    if (name?.trim()) storage.addSearchHistory(`person:${name.trim()}`);
     else if (query.trim()) storage.addSearchHistory(query.trim());
     onSelectPerson?.(id);
     onClose();
@@ -123,9 +178,43 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
       e.preventDefault();
       const target = navItems[activeIdx];
       if (target.kind === 'person') choosePerson(target.id, target.data?.name);
+      else if (target.kind === 'studio') chooseStudio(target.id, target.data?.name);
       else chooseMedia(target.data);
     }
   };
+
+  const chooseStudio = (id, name) => {
+    if (name?.trim()) storage.addSearchHistory(`studio:${name.trim()}`);
+    else if (query.trim()) storage.addSearchHistory(query.trim());
+    onSelectStudio?.(id);
+    onClose();
+  };
+
+  // Typed recents: `kind:title` going forward, plain legacy strings show
+  // under All + Movies + Shows (their kind is unknowable).
+  const recents = history;
+  const recentKind = (term) => {
+    const m = /^(movie|tv|person|studio):(.*)$/.exec(term || '');
+    return m ? { kind: m[1], label: m[2] } : { kind: null, label: term };
+  };
+  const scopedRecents = recents.filter((term) => {
+    if (scope === 'all') return true;
+    const { kind } = recentKind(term);
+    if (!kind) return scope === 'movie' || scope === 'tv';
+    if (scope === 'movie') return kind === 'movie';
+    if (scope === 'tv') return kind === 'tv';
+    if (scope === 'person') return kind === 'person';
+    if (scope === 'company') return kind === 'studio';
+    return true;
+  });
+  // Trending follows the scope too: Movies sees movies, Shows sees shows,
+  // People/Studios hide the grid (no people trending endpoint).
+  const scopedTrending = trending.filter((x) => {
+    if (scope === 'movie') return (x.media_type || 'movie') === 'movie';
+    if (scope === 'tv') return x.media_type === 'tv';
+    if (scope === 'person' || scope === 'company') return false;
+    return true;
+  });
 
   return (
     <Modal
@@ -145,10 +234,19 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onInputKey}
-          placeholder="Search movies, shows, people…"
-          aria-label="Search movies, shows, people"
+          placeholder="Search movies, shows, people, studios…"
+          aria-label="Search movies, shows, people, studios"
           autoFocus
           className="cine-focus-none w-full bg-transparent text-lg md:text-xl font-medium text-white placeholder-white/30 focus:outline-none"
+        />
+        {/* Scope dropdown lives inside the bar, next to the clear button. */}
+        <Picker
+          value={scope}
+          onChange={setScope}
+          ariaLabel="Search scope"
+          menuLabel="Search in"
+          placeholder="All"
+          options={SCOPES}
         />
         <button
           onClick={onClose}
@@ -171,7 +269,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
 
         {!loading && !query.trim() && (
           <div className="space-y-5 py-2">
-            {history.length > 0 && (
+            {scopedRecents.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
@@ -188,16 +286,16 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {history.map((term) => (
+                  {scopedRecents.map((term) => (
                     <span
                       key={term}
                       className="cine-pill cine-pill--sm cine-pill--value"
                     >
                       <button
-                        onClick={() => setQuery(term)}
+                        onClick={() => setQuery(recentKind(term).label)}
                         className="hover:text-white transition cursor-pointer"
                       >
-                        {term}
+                        {recentKind(term).label}
                       </button>
                       <button
                         onClick={() => {
@@ -205,8 +303,8 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                           setHistory(storage.getSearchHistory());
                         }}
                         className="cine-icon-btn cine-icon-btn--xs ml-1"
-                        
-                        aria-label={`Remove "${term}" from search history`}
+
+                        aria-label={`Remove "${recentKind(term).label}" from search history`}
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -215,13 +313,13 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                 </div>
               </div>
             )}
-            {trending.length > 0 && (
+            {scopedTrending.length > 0 && (
               <div>
                 <p className="text-[11px] font-semibold tracking-wide text-white/50 mb-2">
                   Trending now
                 </p>
                 <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
-                  {trending.map((item) => (
+                  {scopedTrending.map((item) => (
                     <Card
                       key={item.id}
                       media={item}
@@ -239,7 +337,7 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
           </div>
         )}
 
-        {!loading && query && results.length === 0 && people.length === 0 && !searchError && (
+        {!loading && query && results.length === 0 && people.length === 0 && studios.length === 0 && !searchError && (
           <EmptyState
             icon={<Clapperboard className="w-5 h-5" />}
             title={`No titles found for "${query}"`}
@@ -309,6 +407,31 @@ export default function SearchModal({ isOpen, onClose, onSelectMedia, onSelectPe
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {studios.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+              Studios • {studios.length}
+            </p>
+            {studios.map((s, si) => {
+              const gi = people.length + results.length + si;
+              return (
+                <div
+                  key={`studio_${s.id}`}
+                  ref={activeIdx === gi ? activeRef : null}
+                  className={`rounded-2xl transition ${activeIdx === gi ? 'ring-2 ring-white/70' : ''}`}
+                >
+                  <Row
+                    poster={s.logo_path ? tmdb.getImageUrl(s.logo_path, 'w185') : ''}
+                    title={s.name}
+                    meta={s.origin_country || 'Studio'}
+                    onClick={() => chooseStudio(s.id, s.name)}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

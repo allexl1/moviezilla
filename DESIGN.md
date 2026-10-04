@@ -39,7 +39,12 @@ media. Content layer stays solid: cards, rails, chips, panels. No
 glass-on-glass, no blur over flat backgrounds (nothing to refract).
 Accent: white, single primary action per view. Red stays for LIVE only.
 A saved accent choice always wins (applied inline pre-paint); Mono white
-is the default. Secondary controls use the 14px system radius.
+is the default. Lime rule (locked): the accent hue marks interactive
+STATE only — selected, playing, current, unread, enabled, host identity.
+Static metadata never takes the accent (ratings white, counts white,
+studios white). Semantic finance colors are fixed (#4ade80 profit,
+#ff7070 loss), independent of the accent. X/back/leave stay bare and
+unlabeled; every other icon-only control carries a hover tip. Secondary controls use the 14px system radius.
 Corners: pills for nav thumb, segmented controls, primary CTAs.
 Filters, chips, selects, inputs use the 14px system radius. Cards keep
 their poster radii.

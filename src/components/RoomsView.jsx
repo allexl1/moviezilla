@@ -525,10 +525,10 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
                         e.stopPropagation();
                         copyCode(r.code);
                       }}
-                      className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+                      className="cine-icon-btn cine-has-tip"
                       aria-label={`Copy invite link ${r.code}`}
                     >
-                      {copied === r.code ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === r.code ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                       <span className="cine-tip cine-tip--below" aria-hidden="true">Copy invite</span>
                     </button>
                     <button
@@ -536,10 +536,10 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
                         e.stopPropagation();
                         handleDelete(r);
                       }}
-                      className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+                      className="cine-icon-btn cine-has-tip"
                       aria-label={r.owned ? `Delete room ${r.code}` : `Remove room ${r.code}`}
                     >
-                      {r.owned ? <Trash2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                      {r.owned ? <Trash2 className="w-5 h-5" /> : <X className="w-5 h-5" />}
                       <span className="cine-tip cine-tip--below" aria-hidden="true">
                         {r.owned ? 'Delete for everyone' : 'Remove'}
                       </span>

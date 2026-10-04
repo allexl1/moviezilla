@@ -610,11 +610,11 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                         e.stopPropagation();
                         handleRemoveHistory(h);
                       }}
-                      className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                      className="cine-icon-btn cine-has-tip"
 
                       aria-label={`Remove "${h.title}" from watched`}
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-5 h-5" />
                       <span className="cine-tip cine-tip--below" aria-hidden="true">Remove from watched</span>
                     </button>
                   </div>
@@ -671,10 +671,10 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                               e.stopPropagation();
                               handleMarkWatched(h);
                             }}
-                            className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+                            className="cine-icon-btn cine-has-tip"
                             aria-label={`Mark "${h.title}" as watched`}
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            <Check className="w-5 h-5" />
                             <span className="cine-tip cine-tip--below" aria-hidden="true">Mark watched</span>
                           </button>
                           <button
@@ -682,10 +682,10 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                               e.stopPropagation();
                               handleRemoveHistory(h);
                             }}
-                            className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+                            className="cine-icon-btn cine-has-tip"
                             aria-label={`Remove "${h.title}" from history`}
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="w-5 h-5" />
                             <span className="cine-tip cine-tip--below" aria-hidden="true">Remove</span>
                           </button>
                         </div>

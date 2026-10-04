@@ -234,33 +234,67 @@ export default function App() {
   }, [routeId]);
 
   // Per-route document titles (share/bookmark/switcher readable).
+  // Same effect owns the share meta (description, canonical, OG): link
+  // unfurls read the served HTML, so static index.html carries the brand
+  // defaults and this upgrades them per route for in-app shares/clips.
+  // Full per-title crawler unfurls would need SSR — out of scope for a
+  // client SPA; this is the honest maximum here.
   useEffect(() => {
     try {
       let t = 'Moviezilla - Movies & Shows';
+      let desc = 'Personal movies and shows hub: watchlist, continue watching, rooms, fast discovery.';
       if (activePlayer?.media) {
         const m = activePlayer.media;
         t = `▶ ${m.title || m.name || 'Playing'} - Moviezilla`;
+        desc = `Now playing: ${m.title || m.name || 'a title'} on Moviezilla.`;
       } else if (selectedPerson) {
         t = 'Person - Moviezilla';
+        desc = 'Actor and creator profile on Moviezilla.';
       } else if (selectedStudio) {
         t = 'Studio - Moviezilla';
+        desc = 'Studio catalog on Moviezilla.';
       } else if (selectedMedia) {
         const y = (selectedMedia.release_date || selectedMedia.first_air_date || '').split('-')[0];
         t = `${selectedMedia.title || selectedMedia.name || 'Details'}${y ? ` (${y})` : ''} - Moviezilla`;
+        desc = `${selectedMedia.title || selectedMedia.name || 'Title details'}${y ? ` (${y})` : ''} on Moviezilla.`;
       } else if (activeRoomCode) {
         t = `Room ${activeRoomCode} - Moviezilla`;
+        desc = `Join room ${activeRoomCode} and watch together on Moviezilla.`;
       } else if (activeTab === 'movie') {
         t = 'Movies - Moviezilla';
+        desc = 'Discover new movies to watch on Moviezilla.';
       } else if (activeTab === 'tv') {
         t = 'Shows - Moviezilla';
+        desc = 'Explore hit series on Moviezilla.';
       } else if (activeTab === 'watchlist') {
         t = 'Watchlist - Moviezilla';
+        desc = 'What you have watched and what you are saving for later.';
       } else if (activeTab === 'rooms') {
         t = 'Rooms - Moviezilla';
+        desc = 'Watch together, in sync, with chat.';
       } else if (activeTab === 'football') {
         t = 'Football — Moviezilla';
+        desc = 'Live and upcoming football on Moviezilla.';
       }
       document.title = t;
+      const setMeta = (sel, attr, value) => {
+        if (!value) return;
+        let el = document.head.querySelector(sel);
+        if (!el) {
+          el = document.createElement('meta');
+          if (sel.includes('property')) el.setAttribute('property', sel.match(/property="([^"]+)"/)?.[1] || '');
+          else el.setAttribute('name', sel.match(/name="([^"]+)"/)?.[1] || '');
+          document.head.appendChild(el);
+        }
+        el.setAttribute(attr, value);
+      };
+      setMeta('meta[name="description"]', 'content', desc);
+      setMeta('meta[property="og:title"]', 'content', t);
+      setMeta('meta[property="og:description"]', 'content', desc);
+      setMeta('meta[name="twitter:title"]', 'content', t);
+      setMeta('meta[name="twitter:description"]', 'content', desc);
+      let canon = document.head.querySelector('link[rel="canonical"]');
+      if (canon) canon.setAttribute('href', window.location.href);
     } catch {
       // ignore
     }
@@ -693,6 +727,7 @@ export default function App() {
         onClose={() => setIsSearchOpen(false)}
         onSelectMedia={(item) => selectMedia(item)}
         onSelectPerson={(id) => selectPerson(id)}
+        onSelectStudio={(id) => selectStudio(id)}
       />
 
       {activePlayer && (

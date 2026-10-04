@@ -54,8 +54,10 @@ export default function FilterBar({
   return (
     <div className="w-full flex flex-col gap-3 py-1">
       {/* Headroom above the row lives inside the scroller (pt-8/-mt-8 net
-          zero) so hover tooltips never clip against the overflow edge. */}
-      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar px-1 pt-8 -mt-8 pb-1 lg:justify-end">
+          zero) so hover tooltips never clip against the overflow edge.
+          Desktop shows the row unclipped (tips paint whole); small screens
+          keep the scroll (touch has no hover anyway). */}
+      <div className="flex items-center gap-2.5 overflow-x-auto lg:overflow-visible no-scrollbar px-1 pt-8 -mt-8 pb-1 lg:justify-end">
         {onRandom && (
           <span className="relative inline-flex flex-shrink-0">
             <button

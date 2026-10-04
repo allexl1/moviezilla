@@ -4,7 +4,9 @@ import { tmdb, FALLBACK_PROFILE, FALLBACK_POSTER } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
 import { storage, WATCHED_PCT } from '../services/storage';
+import { shortName } from '../services/catalog';
 import RowRail from './RowRail';
+import ClampedText from './ClampedText';
 
 // RT lookups cache a day (edge caches hits a day too; misses an hour).
 // Module scope: survives detail open/close.
@@ -424,8 +426,8 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
                             onError={(e) => { e.target.src = FALLBACK_PROFILE; }}
                           />
                         </span>
-                        <span className="block text-[11px] font-semibold text-white/85 leading-tight line-clamp-2 group-hover:text-white group-hover:underline">
-                          {g.name}
+                        <span className="block text-[11px] font-semibold text-white/85 leading-tight min-h-[2.5em] line-clamp-2 group-hover:text-white group-hover:underline">
+                          {shortName(g.name)}
                         </span>
                       </button>
                     ))}
@@ -492,7 +494,6 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [heroVideo, setHeroVideo] = useState(null);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [logo, setLogo] = useState(null);
-  const [expanded, setExpanded] = useState(false);
   const [imdb, setImdb] = useState(null);
   const [rt, setRt] = useState(null);
   const [awards, setAwards] = useState([]);
@@ -507,7 +508,6 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
       setDetailsError('');
       setHeroVideo(null);
       setLogo(null);
-      setExpanded(false);
       setHonoursExpanded(false);
       try {
         const [data, titleLogo] = await Promise.all([
@@ -633,31 +633,29 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const seasonsCount = details?.number_of_seasons || null;
   const episodesCount = details?.number_of_episodes || null;
   const releaseDate = formatDate(details?.release_date || details?.first_air_date);
-  // Sensible "You Might Also Like": TMDB similar as candidates, scored
-  // by shared genres with THIS title, then same language, then same
-  // origin country (a US drama suggesting Korean dramas on genre overlap
-  // alone is how the shelf goes wrong). Stripped of unrated junk. Topped
-  // up from same-genre top-rated when TMDB returns thin air.
+  // "You Might Also Like": TMDB's /similar ranking IS the relevance
+  // signal (computed from this exact title — keywords, collection,
+  // people). We only strip junk (adult, posterless, unvoted, obscure)
+  // and never re-sort: re-scoring by genre pushed same-genre strangers
+  // (Star Trek for Spider-Man) above the real neighbors. English-first
+  // partition keeps it familiar without disturbing TMDB order. Topped up
+  // from same-genre top-rated when TMDB returns thin air.
   const [similar, setSimilar] = useState([]);
   useEffect(() => {
     let alive = true;
     const genreIds = new Set((details?.genres || []).map((g) => g.id));
     const lang = details?.original_language || null;
-    const countries = new Set(details?.origin_country || (details?.origin_country === undefined && details?.production_countries ? details.production_countries.map((c) => c.iso_3166_1) : []));
-    const score = (x) =>
-      (x.genre_ids || []).filter((g) => genreIds.has(g)).length * 2 +
-      (lang && x.original_language === lang ? 3 : 0) +
-      ((x.origin_country || []).some((c) => countries.has(c)) ? 2 : 0);
     const clean = (list) =>
-      (list || [])
-        .filter((x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 20)
-        .sort(
-          (a, b) =>
-            score(b) - score(a) ||
-            (b.vote_average || 0) - (a.vote_average || 0) ||
-            (b.popularity || 0) - (a.popularity || 0)
-        );
-    const base = clean(details?.similar?.results);
+      (list || []).filter(
+        (x) => !x.adult && x.poster_path && (x.vote_average || 0) > 0 && (x.vote_count || 0) >= 20
+      );
+    const order = (list) => {
+      const en = [];
+      const rest = [];
+      for (const x of list) (lang && x.original_language !== lang ? rest : en).push(x);
+      return [...en, ...rest];
+    };
+    const base = order(clean(details?.similar?.results));
     if (base.length >= 8 || genreIds.size === 0) {
       setSimilar(base);
       return () => {
@@ -673,7 +671,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     fetcher
       .then((res) => {
         if (!alive) return;
-        const extra = clean(res?.results).filter((x) => !have.has(x.id));
+        const extra = order(clean(res?.results)).filter((x) => !have.has(x.id));
         setSimilar([...base, ...extra]);
       })
       .catch(() => {
@@ -869,17 +867,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           )}
 
           <div className="max-w-2xl">
-            <p className={`text-sm leading-relaxed text-white/70 ${expanded ? '' : 'line-clamp-3'}`}>
-              {overview}
-            </p>
-            {overview.length > 180 && (
-              <button
-                onClick={() => setExpanded((e) => !e)}
-                className="text-xs font-semibold text-white/50 hover:text-white mt-1 transition cursor-pointer"
-              >
-                {expanded ? 'Show Less' : 'Read More'}
-              </button>
-            )}
+            <ClampedText text={overview} />
           </div>
         </div>
 
@@ -930,7 +918,8 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               <div className={`flex items-center justify-between px-4 py-3 text-xs ${studios.length > 0 ? 'border-b border-white/[0.07]' : ''}`}>
                 <span className="text-white/45 font-medium">Box Office / Budget</span>
                 <span
-                  className={`font-semibold cine-has-tip ${boxVerdict === 'profit' ? 'text-[var(--cine-accent)]' : boxVerdict === 'flop' ? 'text-[#ff7070]' : 'text-white/90'}`}
+                  className={`font-semibold cine-has-tip ${boxVerdict ? '' : 'text-white/90'}`}
+                  style={boxVerdict === 'profit' ? { color: '#4ade80' } : boxVerdict === 'flop' ? { color: '#ff7070' } : undefined}
                 >
                   {revenue} / {budget}
                   {boxVerdict && (
@@ -1019,7 +1008,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
           <section className="xl:hidden flex flex-wrap items-center gap-2 text-xs">
             <span
               className="cine-chip cine-chip--neutral"
-              style={boxVerdict === 'profit' ? { color: 'var(--cine-accent)' } : boxVerdict === 'flop' ? { color: '#ff7070' } : undefined}
+              style={boxVerdict === 'profit' ? { color: '#4ade80' } : boxVerdict === 'flop' ? { color: '#ff7070' } : undefined}
             >
               {revenue && budget ? `Box Office: ${revenue} / ${budget}` : revenue ? `Box Office: ${revenue}` : `Budget: ${budget}`}
             </span>
@@ -1096,7 +1085,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     />
                   </div>
                   <div>
-                    <h4 className="text-[13px] font-bold text-white truncate">{actor.name}</h4>
+                    <h4 className="text-[13px] font-bold text-white truncate">{shortName(actor.name)}</h4>
                     <p className="text-[11px] text-white/70 truncate">{actor.character}</p>
                   </div>
                 </div>

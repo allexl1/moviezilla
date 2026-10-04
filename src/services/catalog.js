@@ -25,9 +25,16 @@ export const GENRE_ICON = {
 // lives in routing.js (dependency-free, unit-tested); this re-export keeps
 // every existing `from './catalog'` / `'../services/catalog'` import working.
 export { resolveMediaType } from './routing';
-
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Display name: middle names never fit rails ("Christopher Rodriguez
+// Marquette" breaks the row rhythm), so keep first + last only.
+export function shortName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 2) return parts.join(' ');
+  return `${parts[0]} ${parts[parts.length - 1]}`;
 }
 
 // Strict first, relaxed fallback so the shelf never renders empty while

@@ -3,6 +3,7 @@ import { Cake, MapPin, Trophy, ExternalLink, X, Globe } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { getAwardsByImdb, ageOf } from '../services/wikidata';
 import RowRail from './RowRail';
+import ClampedText from './ClampedText';
 import { SkelRail } from './ui';
 
 function formatDate(iso) {
@@ -82,7 +83,6 @@ export default function PersonView({ personId, onSelectMedia }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [expanded, setExpanded] = useState(false);
   const [honoursExpanded, setHonoursExpanded] = useState(false);
   const [awards, setAwards] = useState([]);
   const [zoom, setZoom] = useState(null);
@@ -94,7 +94,6 @@ export default function PersonView({ personId, onSelectMedia }) {
     let alive = true;
     setLoading(true);
     setFailed(false);
-    setExpanded(false);
     setHonoursExpanded(false);
     // A new person always opens on All: a stale Directing slice from the
     // last profile would otherwise greet them with an empty view.
@@ -390,17 +389,7 @@ export default function PersonView({ personId, onSelectMedia }) {
                 the honest ghost line when TMDB has nothing. */}
             {bio ? (
               <div className="pt-1">
-                <p className={`text-sm leading-relaxed text-white/70 ${expanded ? '' : 'line-clamp-3'}`}>
-                  {bio}
-                </p>
-                {bio.length > 180 && (
-                  <button
-                    onClick={() => setExpanded((e) => !e)}
-                    className="text-xs font-semibold text-white/50 hover:text-white mt-1 transition cursor-pointer"
-                  >
-                    {expanded ? 'Show Less' : 'Read More'}
-                  </button>
-                )}
+                <ClampedText text={bio} />
               </div>
             ) : (
               <p className="text-sm italic text-white/40 pt-1">

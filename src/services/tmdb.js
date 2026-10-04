@@ -279,7 +279,7 @@ export const tmdb = {
     // the honest lever.
     if (String(sort).startsWith('vote_average')) {
       const filtered = genre || (year && year !== 'All Years') || provider || country || language;
-      params['vote_count.gte'] = filtered ? 50 : 1000;
+      params['vote_count.gte'] = filtered ? 50 : 2000;
     }
     // Date sorts need a small vote floor too: pure newest-first pages are
     // 20/20 zero-vote day-0 releases, which the UI hides as unrated.
@@ -346,7 +346,7 @@ export const tmdb = {
 
     if (String(sort).startsWith('vote_average')) {
       const filtered = genre || (year && year !== 'All Years') || provider || country || language;
-      params['vote_count.gte'] = filtered ? 50 : 1000;
+      params['vote_count.gte'] = filtered ? 50 : 2000;
     }
     if (/release_date|first_air_date/.test(String(sort))) {
       params['vote_count.gte'] = 5;
@@ -544,6 +544,18 @@ export const tmdb = {
     return proxyFetch('search/multi', {
       query: queryText,
     });
+  },
+
+  // Scoped search (modal scope pills): typed endpoints so Movies never
+  // returns people and Studios never returns titles.
+  async searchMovies(queryText) {
+    return proxyFetch('search/movie', { query: queryText });
+  },
+  async searchTV(queryText) {
+    return proxyFetch('search/tv', { query: queryText });
+  },
+  async searchCompanies(queryText) {
+    return proxyFetch('search/company', { query: queryText });
   },
 
   async searchPerson(queryText) {
