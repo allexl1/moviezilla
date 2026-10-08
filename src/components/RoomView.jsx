@@ -82,6 +82,23 @@ function makeQueueItem(picked, by) {
   return { ...base, key: keyOfMedia(base.kind === 'youtube' ? base : { ...base, media_type: base.type }), by: by || '', at: Date.now() };
 }
 
+// Live per-person clock: extrapolates between 10s presence beats so the
+// People tab reads live instead of stepping. A tiny self-ticking text
+// node, so the room itself does not re-render every second.
+function LiveClock({ pos, baseAt, paused }) {
+  const [now, setNow] = useState(() => Date.now());
+  const live = paused === false && pos != null;
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  const shown = live
+    ? Math.floor(pos) + Math.max(0, Math.floor((now - (baseAt || now)) / 1000))
+    : Math.floor(pos || 0);
+  return <>{formatClock(shown)}</>;
+}
+
 // Queue item back into the {kind,...} shape doSwap expects.
 function pickedOfItem(item) {
   if (item.kind === 'youtube') {
@@ -393,11 +410,13 @@ export default function RoomView({ code, onLeave, onToast }) {
   // Merge-add a presence list into the roster (no removals, no spam).
   // Returns the merged array; callers guard setMembers with sameRoster.
   const absorbList = (list) => {
+    const now = Date.now();
     const byDevice = new Map(membersRef.current.map((m) => [m.device, m]));
     for (const m of list || []) {
       if (!m || !m.device) continue;
-      lastSeenRef.current.set(m.device, Date.now());
-      byDevice.set(m.device, m);
+      lastSeenRef.current.set(m.device, now);
+      // Stamp arrival time: LiveClock extrapolates pos from here.
+      byDevice.set(m.device, { ...m, at: now });
     }
     // Local truth: I am here until I explicitly leave, so my own clock
     // refreshes even when the server list omits me (quiet-room flap).
@@ -419,7 +438,7 @@ export default function RoomView({ code, onLeave, onToast }) {
     const prev = cur.find((m) => m.device === id);
     if (!prev) {
       seenDevices.current.add(id);
-      setMembers([...cur, { device: id, name: nm || 'Guest' }]);
+      setMembers([...cur, { device: id, name: nm || 'Guest', at: Date.now() }]);
     } else if (nm && nm !== prev.name) {
       setMembers(cur.map((m) => (m.device === id ? { ...m, name: nm } : m)));
     }
@@ -1682,7 +1701,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       : waitingForHost && !canControl
         ? 'Waiting for host'
         : syncNote;
-  const hostClock = !canControl && !pausedBy && hostPos && roomStarted ? ` • Host ${formatClock(hostPos.second)}` : '';
+  const showHostClock = !canControl && !pausedBy && hostPos && roomStarted;
 
   // Playlist derivation: the room's current media splits the queue into
   // watched (before), now (match), up next (after). Titles played outside
@@ -1741,7 +1760,7 @@ export default function RoomView({ code, onLeave, onToast }) {
     <div className="fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col md:flex-row text-white">
       {/* Video column */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        <div className="flex items-center gap-2 px-4 md:px-6 py-3 border-b border-[var(--cine-glass-border)] flex-shrink-0 overflow-x-auto md:overflow-visible no-scrollbar">
+        <div className={`flex items-center gap-2 px-4 md:px-6 py-3 border-b border-[var(--cine-glass-border)] flex-shrink-0 no-scrollbar ${inviteOpen ? 'overflow-visible' : 'overflow-x-auto md:overflow-visible'}`}>
           <button onClick={() => handleLeave(false)} className="cine-icon-btn cine-icon-btn--sm flex-shrink-0"  aria-label="Leave room">
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -1749,7 +1768,9 @@ export default function RoomView({ code, onLeave, onToast }) {
             <h2 className="text-sm font-bold truncate">{room.title}</h2>
             <p className="text-[11px] text-white/60">
               {members.length} watching • {statusText}
-              {hostClock}
+              {showHostClock && (
+                <> • Host <LiveClock pos={hostPos.second} baseAt={hostPos.at} paused={false} /></>
+              )}
               {room.state === 'paused' && !pausedBy ? ' • paused' : ''}
             </p>
           </div>
@@ -2290,9 +2311,9 @@ export default function RoomView({ code, onLeave, onToast }) {
                 : m.watching === false
                   ? 'Not started'
                   : m.paused
-                    ? `Paused • ${formatClock(m.pos || 0)}`
+                    ? <>Paused • <LiveClock pos={m.pos} baseAt={m.at} paused /></>
                     : m.pos != null && m.pos > 0
-                      ? `Watching • ${formatClock(m.pos)}`
+                      ? <>Watching • <LiveClock pos={m.pos} baseAt={m.at} paused={false} /></>
                       : 'In the room';
               return (
                 <div
@@ -2321,7 +2342,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                       {m.device === device && <span className="text-white/40 font-medium"> (you)</span>}
                     </p>
                     <p className="text-[10px] text-white/50 truncate">
-                      {memberIsHost ? `Host • ${stateText}` : stateText}
+                      {memberIsHost ? <>Host • {stateText}</> : stateText}
                     </p>
                   </div>
                   {memberIsHost && <Crown className="w-3.5 h-3.5 text-[var(--cine-accent)] flex-shrink-0" />}

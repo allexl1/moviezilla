@@ -36,8 +36,9 @@ const TRUSTED_PLAYER_ORIGINS = [
 // No allow-popups, no allow-top-navigation — when armed, popups and page
 // hijacks die in the frame (VidLink console: "Blocked opening
 // 'about:blank' ... 'allow-popups' permission is not set").
-// Providers outside vidy.st / vidlink.pro are never armed (unverified).
-const SBX_TOKENS = 'allow-scripts allow-same-origin allow-forms allow-presentation';
+// allow-presentation dropped: not a recognized Safari token (console
+// error noise) and no provider path uses the presentation API.
+const SBX_TOKENS = 'allow-scripts allow-same-origin allow-forms';
 const SBX_MIN_MS = 4000;
 const SBX_FALLBACK_MS = 6000;
 
