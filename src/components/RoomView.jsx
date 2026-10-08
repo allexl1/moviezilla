@@ -368,6 +368,11 @@ export default function RoomView({ code, onLeave, onToast }) {
     []
   );
   const waitingForHost = hostGone && !canControl;
+  // Realtime socket health: false from CLOSED/ERROR until SUBSCRIBED
+  // again. While down the roster freezes (stale cache must neither
+  // refresh nor prune) and the status line says so honestly.
+  const [chanUp, setChanUp] = useState(true);
+  const chanUpRef = useRef(true);
 
   const pushMsg = (m) =>
     setMessages((prev) => [...prev.slice(-119), m]);
@@ -627,9 +632,16 @@ export default function RoomView({ code, onLeave, onToast }) {
   useEffect(() => {
     if (!code || !nameRef.current) return;
     // Async open (drains stale channel instances first — see rooms.js).
-    // A superseded open is closed on arrival instead of stored.
+    // A superseded open is closed on arrival instead of stored. A dead
+    // socket (CLOSED/ERROR) reopens with backoff while the room stays
+    // open: a dead socket looks exactly like everyone leaving, so it
+    // must heal itself instead of poisoning the roster.
     let ch = null;
     let cancelled = false;
+    let gen = 0;
+    let fails = 0;
+    const startOpen = () => {
+    const myGen = ++gen;
     openRoomChannel({
       code,
       name: nameRef.current,
@@ -871,9 +883,27 @@ export default function RoomView({ code, onLeave, onToast }) {
           lastSeenRef.current.set(key, Date.now() - (PRUNE_AFTER_MS - 3000));
         }
       },
+      onStatus: (s) => {
+        presenceLog('channel-status', s);
+        const up = s === 'SUBSCRIBED';
+        chanUpRef.current = up;
+        setChanUp(up);
+        if (up) {
+          fails = 0;
+          return;
+        }
+        if ((s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') && !cancelled && myGen === gen) {
+          const delay = Math.min(2000 * (fails + 1), 10000);
+          fails += 1;
+          presenceLog('reopen-scheduled', `${delay}ms`);
+          setTimeout(() => {
+            if (!cancelled && myGen === gen) startOpen();
+          }, delay);
+        }
+      },
     })
       .then((opened) => {
-        if (cancelled) {
+        if (cancelled || myGen !== gen) {
           try {
             opened.close();
           } catch {
@@ -887,8 +917,11 @@ export default function RoomView({ code, onLeave, onToast }) {
       .catch((err) => {
         console.error('[rooms] channel open failed:', err);
       });
+    };
+    startOpen();
     return () => {
       cancelled = true;
+      gen += 1;
       try {
         ch?.close?.();
       } catch {
@@ -921,6 +954,10 @@ export default function RoomView({ code, onLeave, onToast }) {
   // I explicitly close the channel.
   useEffect(() => {
     const t = setInterval(() => {
+      // Offline freeze: with a dead socket the poll reads stale cache and
+      // no syncs arrive. Neither refresh nor prune while down (pruning
+      // here would blame everyone else for my broken connection).
+      if (!chanUpRef.current) return;
       // Authoritative refresh first: syncs are change-driven, so a quiet
       // room sends none. Poll the server state and treat listing as
       // liveness (never as removal — that stays timeout-only below).
@@ -1047,12 +1084,16 @@ export default function RoomView({ code, onLeave, onToast }) {
       // stamp keeps the track unique so the diff actually flows.
       reportState({ pos: Math.floor(p.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
       presenceLog('track', 'host-beat', `pos ${Math.floor(p.second || 0)}`);
-      patchRoom(code, {
-        position: Math.floor(p.second || 0),
-        season: p.season || roomRef.current?.season || 1,
-        episode: p.episode || roomRef.current?.episode || 1,
-        server: p.server || roomRef.current?.server || 'vidy',
-      }).catch(() => {});
+      // Row stamp only once started: pre-start wall accrual must never
+      // inflate the followers view (phantom 1:15 before pressing play).
+      if (startedRef.current) {
+        patchRoom(code, {
+          position: Math.floor(p.second || 0),
+          season: p.season || roomRef.current?.season || 1,
+          episode: p.episode || roomRef.current?.episode || 1,
+          server: p.server || roomRef.current?.server || 'vidy',
+        }).catch(() => {});
+      }
     }, 10000);
     const tick = setInterval(() => {
       if (pausedByRef.current) return;
@@ -1636,7 +1677,9 @@ export default function RoomView({ code, onLeave, onToast }) {
   // Single status line (T1/N2): not-started is explicit, and a pause
   // carries the frozen host second — "Paused by host • 0:38". The live
   // clock below only runs while playing (never alongside the pause time).
-  const statusText = !roomStarted
+  const statusText = !chanUp
+    ? 'Reconnecting'
+    : !roomStarted
     ? (canControl ? 'Press play to start' : 'Waiting to start')
     : pausedBy
       ? `Paused by ${pausedBy}${hostPos ? ` • ${formatClock(hostPos.second)}` : ''}`

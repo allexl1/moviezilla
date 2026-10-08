@@ -301,7 +301,7 @@ export async function deleteRoom(code) {
 // fast room switches), and realtime-js throws when `.on()` runs on an
 // already-subscribed instance. So any stale channel for this topic is
 // removed first, then a fresh one is built.
-export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave }) {
+export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave, onStatus }) {
   const sb = getSupabase();
   if (!sb) throw new Error('Rooms not configured.');
   const clean = String(code || '').trim().toUpperCase();
@@ -330,6 +330,9 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
   let tracked = { device, name: name || 'Guest' };
   let pendingMeta = null;
   let liveChannel = null;
+  // Last channel status (SUBSCRIBED / CLOSED / CHANNEL_ERROR / TIMED_OUT).
+  // The room watches it to reopen dead sockets (see RoomView).
+  let lastStatus = 'JOINING';
   const applyPresence = (state) => {
     try {
       const members = Object.entries(state).map(([deviceId, metas]) => ({
@@ -374,6 +377,12 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
       }
     })
     .subscribe(async (status) => {
+      lastStatus = status;
+      try {
+        onStatus?.(status);
+      } catch (err) {
+        console.error('[rooms] status handler failed:', err);
+      }
       try {
         console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), 'channel-status', clean, status);
       } catch {
@@ -395,6 +404,9 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
       } catch {
         return {};
       }
+    },
+    status() {
+      return lastStatus;
     },
     send(type, payload) {
       // Message kind must be 'broadcast' — `type` collision meant nothing
