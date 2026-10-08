@@ -1649,27 +1649,23 @@ export default function RoomView({ code, onLeave, onToast }) {
     }
   };
 
-  const handleLeave = async (deleteIfHost = false) => {
+  const handleLeave = (deleteIfHost = false) => {
+    // Instant: navigate first, network best-effort after. Awaiting the
+    // row patch and channel close here hung the back button on slow or
+    // dead connections (leaving must never wait on the network).
+    onLeave();
     if (isHost && !deleteIfHost) {
-      try {
-        await patchRoom(code, { state: 'paused' });
-      } catch {
-        // best effort
-      }
+      patchRoom(code, { state: 'paused' }).catch(() => {});
     }
     if (isHost && deleteIfHost) {
-      try {
-        await deleteRoom(code);
-      } catch {
-        // best effort
-      }
+      deleteRoom(code).catch(() => {});
     }
     try {
-      await channelRef.current?.close();
+      const p = channelRef.current?.close();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch {
       // ignore
     }
-    onLeave();
   };
   leaveRef.current = () => handleLeave(false);
 
