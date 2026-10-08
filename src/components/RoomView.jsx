@@ -955,7 +955,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       .then((opened) => {
         if (cancelled || myGen !== gen) {
           try {
-            opened.close();
+            opened.close('superseded');
           } catch {
             // ignore
           }
@@ -973,7 +973,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       cancelled = true;
       gen += 1;
       try {
-        ch?.close?.();
+        ch?.close?.('effect-cleanup');
       } catch {
         // ignore
       }
@@ -1730,7 +1730,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       deleteRoom(code).catch(() => {});
     }
     try {
-      const p = channelRef.current?.close();
+      const p = channelRef.current?.close('user-leave');
       if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch {
       // ignore

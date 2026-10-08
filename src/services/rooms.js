@@ -352,14 +352,17 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
     config: { broadcast: { self: false }, presence: { key: device } },
   });
   liveChannel = channel;
-  // DEBUG-ONLY (socket diagnosis, temporary): capture the raw socket close
-  // code with each channel. 1006 = killed mid-flight (network/firewall),
-  // 1000 = closed cleanly (our code or the server hung up normally).
-  try {
-    const sock = channel.socket;
-    if (sock && !sock.__mzCloseTap) {
-      sock.__mzCloseTap = true;
-      sock.addEventListener('close', (e) => {
+  // DEBUG-ONLY (socket diagnosis, temporary): tap the shared realtime
+  // socket. 1006 = killed mid-flight (network/firewall), 1000 = hung up
+  // cleanly. Re-tapped on every status (the client swaps the socket on
+  // auto-reconnect). The channel.socket attempt was a dead end (wrong
+  // object — that tap never attached, which is why no line ever printed).
+  const tapSocket = () => {
+    try {
+      const conn = sb && sb.realtime && sb.realtime.conn;
+      if (!conn || conn.__mzCloseTap || typeof conn.addEventListener !== 'function') return;
+      conn.__mzCloseTap = true;
+      conn.addEventListener('close', (e) => {
         try {
           console.debug(
             '[rooms-presence]',
@@ -372,6 +375,12 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
         } catch {
           // logging never breaks the room
         }
+      });
+    } catch {
+      // socket internals unavailable — channel-status lines still apply
+    }
+  };
+  tapSocket();
       });
     }
   } catch {
@@ -403,6 +412,7 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
     })
     .subscribe(async (status) => {
       lastStatus = status;
+      tapSocket();
       try {
         onStatus?.(status);
       } catch (err) {
@@ -453,7 +463,12 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
         // presence unavailable — states just read stale
       }
     },
-    async close() {
+    async close(reason) {
+      try {
+        console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), 'channel-close-called', String(reason || 'no-reason'));
+      } catch {
+        // logging never breaks the room
+      }
       try {
         await channel.untrack();
       } catch {
