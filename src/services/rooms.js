@@ -352,6 +352,31 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
     config: { broadcast: { self: false }, presence: { key: device } },
   });
   liveChannel = channel;
+  // DEBUG-ONLY (socket diagnosis, temporary): capture the raw socket close
+  // code with each channel. 1006 = killed mid-flight (network/firewall),
+  // 1000 = closed cleanly (our code or the server hung up normally).
+  try {
+    const sock = channel.socket;
+    if (sock && !sock.__mzCloseTap) {
+      sock.__mzCloseTap = true;
+      sock.addEventListener('close', (e) => {
+        try {
+          console.debug(
+            '[rooms-presence]',
+            new Date().toISOString().slice(11, 23),
+            'socket-close',
+            `code ${e && e.code}`,
+            `clean ${e && e.wasClean}`,
+            String((e && e.reason) || '').slice(0, 120) || '(no reason)'
+          );
+        } catch {
+          // logging never breaks the room
+        }
+      });
+    }
+  } catch {
+    // socket internals unavailable — channel-status lines still apply
+  }
   channel
     .on('broadcast', { event: '*' }, ({ event, payload }) => {
       try {
