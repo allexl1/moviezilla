@@ -381,6 +381,16 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
       }
     });
   return {
+    // Authoritative snapshot for the roster poller: listing is liveness,
+    // never removal (a quiet room sends no syncs, which must not read as
+    // leaving — see RoomView pruner).
+    presenceState() {
+      try {
+        return channel.presenceState();
+      } catch {
+        return {};
+      }
+    },
     send(type, payload) {
       // Message kind must be 'broadcast' — `type` collision meant nothing
       // was ever routed (chat/seeks silently lost). Event name rides along.

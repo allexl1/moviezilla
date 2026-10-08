@@ -90,6 +90,26 @@ function pickedOfItem(item) {
   return { kind: 'tmdb', id: item.id, media_type: item.type, title: item.title, poster_path: item.poster };
 }
 
+// Roster equality: device order is stable (merge-add only), so an
+// index-wise compare skips no-op renders from periodic presence syncs.
+function sameRoster(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.device !== y.device ||
+      x.name !== y.name ||
+      (x.pos ?? null) !== (y.pos ?? null) ||
+      (x.paused ?? null) !== (y.paused ?? null) ||
+      (x.watching ?? null) !== (y.watching ?? null)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export default function RoomView({ code, onLeave, onToast }) {
   const device = myDeviceId();
   // Identity: account display name wins when signed in (device nickname
@@ -105,12 +125,13 @@ export default function RoomView({ code, onLeave, onToast }) {
   nameRef.current = name;
   const membersRef = useRef([]);
   // Flap-proof roster: every device's last-seen timestamp. Syncs only
-  // ADD/refresh — removals belong to the pruner below after 15s unseen
+  // ADD/refresh — removals belong to the pruner below after 30s unseen
   // (one partial sync must never read as everyone leaving; broadcast
   // chat is independent of presence, which is exactly why the old code
-  // showed "alone" while messages still flowed).
+  // showed "alone" while messages still flowed). 30s tolerates two
+  // missed 10s beats; real leaves still drop fast via onLeave.
   const lastSeenRef = useRef(new Map());
-  const PRUNE_AFTER_MS = 15000;
+  const PRUNE_AFTER_MS = 30000;
   const [room, setRoom] = useState(null);
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -320,7 +341,7 @@ export default function RoomView({ code, onLeave, onToast }) {
   canControlRef.current = canControl;
   const hostPresent = room ? members.some((m) => m.device === room.hostDevice) : true;
   // T18 debounced host absence: presence flaps must never unmount the
-  // video. The pruner owns truth (drops after 15s unseen), this debounce
+  // video. The pruner owns truth (drops after 30s unseen), this debounce
   // is render timing only — except on first sync, which reports immediately.
   const [hostGone, setHostGone] = useState(false);
   const hostGoneTimer = useRef(null);
@@ -331,7 +352,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       setHostGone(false);
       return;
     }
-    // Post-prune truth: members only drop after 15s unseen, so this
+    // Post-prune truth: members only drop after 30s unseen, so this
     // debounce is render timing only, not a second absence window.
     if (!hostGoneTimer.current) {
       hostGoneTimer.current = setTimeout(() => {
@@ -352,6 +373,41 @@ export default function RoomView({ code, onLeave, onToast }) {
     setMessages((prev) => [...prev.slice(-119), m]);
 
   const pushSys = (text) => pushMsg({ id: msgId(), sys: true, text });
+
+  // Merge-add a presence list into the roster (no removals, no spam).
+  // Returns the merged array; callers guard setMembers with sameRoster.
+  const absorbList = (list) => {
+    const byDevice = new Map(membersRef.current.map((m) => [m.device, m]));
+    for (const m of list || []) {
+      if (!m || !m.device) continue;
+      lastSeenRef.current.set(m.device, Date.now());
+      byDevice.set(m.device, m);
+    }
+    // Local truth: I am here until I explicitly leave, so my own clock
+    // refreshes even when the server list omits me (quiet-room flap).
+    lastSeenRef.current.set(device, Date.now());
+    if (!byDevice.has(device)) {
+      const prev = membersRef.current.find((m) => m.device === device);
+      byDevice.set(device, prev || { device, name: nameRef.current || 'Guest' });
+    }
+    return [...byDevice.values()];
+  };
+
+  // Silent liveness touch: any broadcast from a device proves it is here.
+  // Chat flows even when a presence sync was lost, which used to read as
+  // leaving. Never announces, never spams.
+  const touchMember = (id, nm) => {
+    if (!id || id === device) return;
+    lastSeenRef.current.set(id, Date.now());
+    const cur = membersRef.current;
+    const prev = cur.find((m) => m.device === id);
+    if (!prev) {
+      seenDevices.current.add(id);
+      setMembers([...cur, { device: id, name: nm || 'Guest' }]);
+    } else if (nm && nm !== prev.name) {
+      setMembers(cur.map((m) => (m.device === id ? { ...m, name: nm } : m)));
+    }
+  };
 
   // The room's picture of my clock (T2): a drift note is only honest when
   // this is fresh — adoptMedia resets it so a just-moved follower never
@@ -568,6 +624,9 @@ export default function RoomView({ code, onLeave, onToast }) {
       name: nameRef.current,
       onEvent: ({ type, payload }) => {
         if (!payload || payload.device === device) return;
+        // Liveness first: any broadcast proves the sender is still here
+        // (chat flows even when a presence sync was lost).
+        touchMember(payload.device, payload.name);
         const yt = roomRef.current?.media?.kind === 'youtube';
         if (type === 'chat') {
           pushMsg({
@@ -756,16 +815,9 @@ export default function RoomView({ code, onLeave, onToast }) {
         }
       },
       onPresence: (list) => {
-        const now = Date.now();
-        // Refresh clocks + last-seen; merge-add newcomers while keeping
-        // existing order (never remove here — that's the pruner's job).
-        const byDevice = new Map(membersRef.current.map((m) => [m.device, m]));
-        for (const m of list) {
-          lastSeenRef.current.set(m.device, now);
-          byDevice.set(m.device, m);
-        }
-        const merged = [...byDevice.values()];
-        setMembers(merged);
+        // Merge-add only (never remove here — that's the pruner's job).
+        const merged = absorbList(list);
+        if (!sameRoster(merged, membersRef.current)) setMembers(merged);
         // First sync is the baseline (no "X joined" spam for everyone
         // already here — including the host-absent truth, immediately).
         if (firstSyncRef.current) {
@@ -797,7 +849,11 @@ export default function RoomView({ code, onLeave, onToast }) {
       onLeave: ({ key } = {}) => {
         // Server-sent untrack: fast-track collection (the pruner drops it
         // within ~5s). A missing key in a plain sync stays a flap.
-        if (key && lastSeenRef.current.has(key)) {
+        // My own key is never fast-tracked: local truth wins until I
+        // explicitly leave (spurious self-leave events caused the
+        // paused self-prune).
+        if (!key || key === device) return;
+        if (lastSeenRef.current.has(key)) {
           lastSeenRef.current.set(key, Date.now() - (PRUNE_AFTER_MS - 3000));
         }
       },
@@ -844,22 +900,52 @@ export default function RoomView({ code, onLeave, onToast }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
-  // Roster pruner: owns ALL removals. Drops devices unseen for 15s,
-  // announces leaves, and unsticks the room when the pauser is truly
-  // gone (moved here from onPresence — a pauser missing from one sync
-  // is a flap, not a leave).
+  // Roster pruner: owns ALL removals except self. Drops devices unseen
+  // for 30s, announces leaves, and unsticks the room when the pauser is
+  // truly gone (moved here from onPresence — a pauser missing from one
+  // sync is a flap, not a leave). Self is never pruned: I am here until
+  // I explicitly close the channel.
   useEffect(() => {
     const t = setInterval(() => {
+      // Authoritative refresh first: syncs are change-driven, so a quiet
+      // room sends none. Poll the server state and treat listing as
+      // liveness (never as removal — that stays timeout-only below).
+      try {
+        const state = channelRef.current?.presenceState?.();
+        if (state && typeof state === 'object') {
+          const list = Object.entries(state).map(([deviceId, metas]) => ({
+            device: deviceId,
+            name: metas?.[0]?.name || 'Guest',
+            pos: metas?.[0]?.pos ?? null,
+            paused: metas?.[0]?.paused ?? null,
+            watching: metas?.[0]?.watching ?? null,
+          }));
+          const merged = absorbList(list);
+          if (!sameRoster(merged, membersRef.current)) setMembers(merged);
+        }
+      } catch {
+        // presence unreadable — timeouts below still apply
+      }
       const now = Date.now();
       const cur = membersRef.current;
       if (cur.length === 0) return;
-      const gone = cur.filter((m) => now - (lastSeenRef.current.get(m.device) ?? now) > PRUNE_AFTER_MS);
-      if (gone.length === 0) return;
+      const gone = cur.filter(
+        (m) => m.device !== device && now - (lastSeenRef.current.get(m.device) ?? now) > PRUNE_AFTER_MS
+      );
+      if (gone.length === 0) {
+        // Self-heal: if a flap ever dropped my own entry, re-add it.
+        if (!cur.some((m) => m.device === device)) {
+          const prev = cur.find((m) => m.device === device);
+          setMembers([...cur, prev || { device, name: nameRef.current || 'Guest' }]);
+          lastSeenRef.current.set(device, now);
+        }
+        return;
+      }
       for (const g of gone) {
         lastSeenRef.current.delete(g.device);
         pushSys(`${g.name} left`);
       }
-      const next = cur.filter((m) => lastSeenRef.current.has(m.device));
+      const next = cur.filter((m) => m.device === device || lastSeenRef.current.has(m.device));
       setMembers(next);
       if (pausedByDeviceRef.current && !next.some((m) => m.device === pausedByDeviceRef.current)) {
         pausedByDeviceRef.current = null;
@@ -870,6 +956,25 @@ export default function RoomView({ code, onLeave, onToast }) {
     }, 5000);
     return () => clearInterval(t);
   }, []);
+
+  // Presence liveness: re-track my meta every 10s on every device, in
+  // every state (pre-start, paused, granted controller). The host beat
+  // and follower poll already carry pos meta; this is the floor that
+  // keeps quiet rooms alive so no device times itself out. The beat
+  // stamp keeps every track unique so syncs actually flow (identical
+  // re-tracks send no diff, which used to read as leaving).
+  useEffect(() => {
+    const t = setInterval(() => {
+      try {
+        lastSeenRef.current.set(device, Date.now());
+        channelRef.current?.update?.({ beat: Date.now() });
+      } catch {
+        // presence unavailable — next beat retries
+      }
+    }, 10000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
 
   // My position reports: broadcast jumps (seeks / episode changes) when
   // I'm allowed to drive. Normal playback (<12s steps) stays silent.
@@ -913,15 +1018,16 @@ export default function RoomView({ code, onLeave, onToast }) {
   // on the exact S/E/second even with no recent seek event. Frozen while
   // the room is paused (see above). Plus a 2.5s realtime tick so followers
   // trail by seconds instead of poll intervals.
-  // Gated on started (T1): nobody's clock runs before the first real play
-  // — the row position stays 0 and followers keep inferring "not started".
+  // Runs even before the first real play and while paused: presence must
+  // never starve (the paused self-prune was this gate plus the pruner).
   useEffect(() => {
-    if (!room || !isHost || !roomStarted) return;
+    if (!room || !isHost) return;
     const beat = setInterval(() => {
       const p = frozenPosRef.current || myPos.current;
       // People-tab clock (B2): presence rides the same beat, so the host's
-      // time ticks live instead of freezing at the start second.
-      reportState({ pos: Math.floor(p.second || 0), paused: Boolean(pausedByRef.current) });
+      // time ticks live instead of freezing at the start second. Beat
+      // stamp keeps the track unique so the diff actually flows.
+      reportState({ pos: Math.floor(p.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
       patchRoom(code, {
         position: Math.floor(p.second || 0),
         season: p.season || roomRef.current?.season || 1,
@@ -962,8 +1068,8 @@ export default function RoomView({ code, onLeave, onToast }) {
         if (!r) return;
         setRoom((prev) => (prev ? { ...prev, position: r.position, state: r.state, grants: r.grants, hostDevice: r.hostDevice } : prev));
         // Follower clock (B2): report my own position on the same poll so
-        // my row ticks for the host too.
-        reportState({ pos: Math.floor(myPos.current.second || 0), paused: Boolean(pausedByRef.current) });
+        // my row ticks for the host too. Beat stamp keeps it unique.
+        reportState({ pos: Math.floor(myPos.current.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
         // Heal missed pause/resume broadcasts off the stamped row state
         // (broadcasts are ephemeral — a late subscriber misses them). The
         // timestamp guard keeps us from clearing an overlay the host set
