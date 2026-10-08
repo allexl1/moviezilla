@@ -374,6 +374,11 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
       }
     })
     .subscribe(async (status) => {
+      try {
+        console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), 'channel-status', clean, status);
+      } catch {
+        // logging never breaks the room
+      }
       if (status === 'SUBSCRIBED') {
         tracked = { device, name: name || 'Guest', ...(pendingMeta || {}) };
         pendingMeta = null;

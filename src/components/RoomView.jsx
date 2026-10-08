@@ -374,6 +374,17 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   const pushSys = (text) => pushMsg({ id: msgId(), sys: true, text });
 
+  // DEBUG-ONLY (presence diagnosis, temporary): verbose presence trace.
+  // Filter the console on [rooms-presence]. Delete this block plus all
+  // presenceLog calls once diagnosed.
+  const presenceLog = (...args) => {
+    try {
+      console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), ...args);
+    } catch {
+      // logging never breaks the room
+    }
+  };
+
   // Merge-add a presence list into the roster (no removals, no spam).
   // Returns the merged array; callers guard setMembers with sameRoster.
   const absorbList = (list) => {
@@ -627,6 +638,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         // Liveness first: any broadcast proves the sender is still here
         // (chat flows even when a presence sync was lost).
         touchMember(payload.device, payload.name);
+        presenceLog('event', type, 'from', String(payload.device || '').slice(-4), payload.name || '');
         const yt = roomRef.current?.media?.kind === 'youtube';
         if (type === 'chat') {
           pushMsg({
@@ -817,6 +829,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       onPresence: (list) => {
         // Merge-add only (never remove here — that's the pruner's job).
         const merged = absorbList(list);
+        presenceLog('sync', (list || []).map((m) => `${String(m.device || '').slice(-4)}:${m.name || ''}`).join(',') || '(empty)');
         if (!sameRoster(merged, membersRef.current)) setMembers(merged);
         // First sync is the baseline (no "X joined" spam for everyone
         // already here — including the host-absent truth, immediately).
@@ -853,6 +866,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         // explicitly leave (spurious self-leave events caused the
         // paused self-prune).
         if (!key || key === device) return;
+        presenceLog('leave-event', String(key).slice(-4));
         if (lastSeenRef.current.has(key)) {
           lastSeenRef.current.set(key, Date.now() - (PRUNE_AFTER_MS - 3000));
         }
@@ -921,6 +935,7 @@ export default function RoomView({ code, onLeave, onToast }) {
             watching: metas?.[0]?.watching ?? null,
           }));
           const merged = absorbList(list);
+          presenceLog('poll', list.map((m) => `${String(m.device || '').slice(-4)}:${m.name || ''}`).join(',') || '(empty)');
           if (!sameRoster(merged, membersRef.current)) setMembers(merged);
         }
       } catch {
@@ -942,6 +957,8 @@ export default function RoomView({ code, onLeave, onToast }) {
         return;
       }
       for (const g of gone) {
+        const age = Math.round((now - (lastSeenRef.current.get(g.device) ?? now)) / 1000);
+        presenceLog('prune', `${String(g.device).slice(-4)}:${g.name}`, `unseen ${age}s`);
         lastSeenRef.current.delete(g.device);
         pushSys(`${g.name} left`);
       }
@@ -968,6 +985,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       try {
         lastSeenRef.current.set(device, Date.now());
         channelRef.current?.update?.({ beat: Date.now() });
+        presenceLog('track', 'universal-heartbeat');
       } catch {
         // presence unavailable — next beat retries
       }
@@ -1028,6 +1046,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       // time ticks live instead of freezing at the start second. Beat
       // stamp keeps the track unique so the diff actually flows.
       reportState({ pos: Math.floor(p.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
+      presenceLog('track', 'host-beat', `pos ${Math.floor(p.second || 0)}`);
       patchRoom(code, {
         position: Math.floor(p.second || 0),
         season: p.season || roomRef.current?.season || 1,
@@ -1070,6 +1089,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         // Follower clock (B2): report my own position on the same poll so
         // my row ticks for the host too. Beat stamp keeps it unique.
         reportState({ pos: Math.floor(myPos.current.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
+        presenceLog('track', 'follower-poll');
         // Heal missed pause/resume broadcasts off the stamped row state
         // (broadcasts are ephemeral — a late subscriber misses them). The
         // timestamp guard keeps us from clearing an overlay the host set
