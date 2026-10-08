@@ -463,10 +463,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('beforeunload', onPageHide);
-      if (!suspended) {
-        accumulateWallClock();
-        saveNowRef.current();
-      }
+      // Always persist on the way out, even while suspended: leaving mid
+      // pause used to drop the pause point from history. No accrue here —
+      // the frozen estimate is saved as-is (saveNow guards 0s clobbers).
+      saveNowRef.current();
     };
   }, [mediaId, suspended]);
 

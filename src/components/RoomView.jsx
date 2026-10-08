@@ -327,6 +327,24 @@ export default function RoomView({ code, onLeave, onToast }) {
     for (const t of pauseRetryRef.current) clearTimeout(t);
     pauseRetryRef.current = [];
   };
+  // Offline outbox: chat/gif composed while the socket is down. Shown
+  // locally at once, sent on reconnect in order (the first-message loss
+  // was a send into a dead channel with no retry).
+  const outboxRef = useRef([]);
+  const flushOutbox = () => {
+    const ch = channelRef.current;
+    if (!ch || outboxRef.current.length === 0) return;
+    const queued = outboxRef.current;
+    outboxRef.current = [];
+    for (const q of queued) {
+      try {
+        ch.send('chat', q);
+      } catch {
+        outboxRef.current.push(q);
+      }
+    }
+    if (outboxRef.current.length === 0) presenceLog('outbox-flushed', `${queued.length} queued`);
+  };
   // Mirrors pausedBy for channel callbacks (their closures go stale).
   const pausedByRef = useRef(null);
   // Which device froze the room (me vs someone else) — only the pauser's
@@ -437,7 +455,8 @@ export default function RoomView({ code, onLeave, onToast }) {
     const cur = membersRef.current;
     const prev = cur.find((m) => m.device === id);
     if (!prev) {
-      seenDevices.current.add(id);
+      // Silent add; the next sync announces "joined" (seenDevices is
+      // intentionally untouched here so the announce still fires).
       setMembers([...cur, { device: id, name: nm || 'Guest', at: Date.now() }]);
     } else if (nm && nm !== prev.name) {
       setMembers(cur.map((m) => (m.device === id ? { ...m, name: nm } : m)));
@@ -909,6 +928,18 @@ export default function RoomView({ code, onLeave, onToast }) {
         setChanUp(up);
         if (up) {
           fails = 0;
+          // Healed: flush queued chat, and re-assert my pause (a pause sent
+          // into the dead window never reached anyone).
+          flushOutbox();
+          if (pausedByRef.current === nameRef.current) {
+            const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
+            try {
+              channelRef.current?.send('pause', { device, name: nameRef.current, second, at: Date.now() });
+              presenceLog('pause-reasserted', `pos ${second}`);
+            } catch {
+              // next beat carries presence state regardless
+            }
+          }
           return;
         }
         if ((s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') && !cancelled && myGen === gen) {
@@ -1016,6 +1047,8 @@ export default function RoomView({ code, onLeave, onToast }) {
         const age = Math.round((now - (lastSeenRef.current.get(g.device) ?? now)) / 1000);
         presenceLog('prune', `${String(g.device).slice(-4)}:${g.name}`, `unseen ${age}s`);
         lastSeenRef.current.delete(g.device);
+        // Forget so a later return announces "joined" again.
+        seenDevices.current.delete(g.device);
         pushSys(`${g.name} left`);
       }
       const next = cur.filter((m) => m.device === device || lastSeenRef.current.has(m.device));
@@ -1052,15 +1085,13 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   // My position reports: broadcast jumps (seeks / episode changes) when
   // I'm allowed to drive. Normal playback (<12s steps) stays silent.
+  // Started comes ONLY from explicit signals (provider play event, my own
+  // Play/Sync-all, or a remote started event): wall-clock accrual from an
+  // idle embed used to "start" untouched rooms and leak phantom seconds
+  // to followers. Mute providers are opened via Sync-all instead.
   const handlePosition = (pos) => {
     myPos.current = pos;
     lastReportAt.current = Date.now();
-    // Someone really watching past 3s means started (T1) — providers that
-    // never emit a play event. Gated on LIVE provider telemetry: the wall
-    // estimate accrues from mount and must never open the room by itself.
-    if (!startedRef.current && pos.live === true && (pos.second || 0) > 3 && canControlRef.current) {
-      markStarted(pos.second, pos.season, pos.episode, pos.server);
-    }
     if (!canControlRef.current) return;
     const last = lastSeekSent.current;
     const jumped =
@@ -1115,7 +1146,9 @@ export default function RoomView({ code, onLeave, onToast }) {
       }
     }, 10000);
     const tick = setInterval(() => {
-      if (pausedByRef.current) return;
+      // No clock before the first real play, and none while offline: both
+      // leaked phantom seconds to followers (Sync 0:35 on a fresh room).
+      if (pausedByRef.current || !startedRef.current || !chanUpRef.current) return;
       const p = myPos.current;
       channelRef.current?.send('tick', {
         device,
@@ -1479,7 +1512,17 @@ export default function RoomView({ code, onLeave, onToast }) {
         ? { id: reply.id, name: reply.name, text: (reply.text || '').slice(0, 140), kind: reply.kind || 'text' }
         : null,
     };
-    channelRef.current?.send('chat', { ...msg });
+    if (!chanUpRef.current) {
+      // Socket down: queue for the reconnect flush, still show locally.
+      outboxRef.current.push({ ...msg });
+      presenceLog('outbox-queued', msg.id);
+    } else {
+      try {
+        channelRef.current?.send('chat', { ...msg });
+      } catch {
+        outboxRef.current.push({ ...msg });
+      }
+    }
     pushMsg({ ...msg, mine: true });
     setInputCached('');
   };
@@ -1487,7 +1530,15 @@ export default function RoomView({ code, onLeave, onToast }) {
   const sendGif = (url, preview) => {
     if (!url || chatMuted) return;
     const msg = { id: msgId(), device, name: name, kind: 'gif', url, preview, at: Date.now() };
-    channelRef.current?.send('chat', { ...msg });
+    if (!chanUpRef.current) {
+      outboxRef.current.push({ ...msg });
+    } else {
+      try {
+        channelRef.current?.send('chat', { ...msg });
+      } catch {
+        outboxRef.current.push({ ...msg });
+      }
+    }
     pushMsg({ ...msg, mine: true });
   };
 
@@ -1593,7 +1644,9 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
 
   const broadcastPlay = async () => {
-    const second = Math.floor(myPos.current.second || 0);
+    // Resume from the frozen pause second (preferred) — myPos may be stale
+    // after suspension, and the stale 0 used to restart from the beginning.
+    const second = Math.floor((frozenPosRef.current?.second ?? myPos.current.second) || 0);
     // Driving means started (T1) — Sync-all doubles as the opener.
     markStarted(second, myPos.current.season, myPos.current.episode, myPos.current.server);
     channelRef.current?.send('play', {
@@ -1604,13 +1657,10 @@ export default function RoomView({ code, onLeave, onToast }) {
     pausedByDeviceRef.current = null;
     reportState({ paused: false, watching: true, pos: second });
     // Resume remounts suspended followers at the frozen second — and resets
-    // my clock so no phantom "seek" fires on the way back up. (My own frame
-    // was never unmounted: the pauser keeps their player, so no reload and
-    // no blank time on my side — embeds skip self roomTarget entirely.)
-    const isYt = room?.media?.kind === 'youtube';
-    if (isYt) {
-      setRoomTarget({ key: `me:${Date.now()}`, action: 'play', second });
-    }
+    // my clock so no phantom "seek" fires on the way back up. My own frame
+    // was unmounted too while suspended, so embeds take a self roomTarget
+    // at the frozen second (skipping it restarted from the beginning).
+    setRoomTarget({ key: `me:${Date.now()}`, action: 'play', second });
     followGraceRef.current = Date.now();
     followAppliedRef.current = Date.now();
     frozenPosRef.current = null;
