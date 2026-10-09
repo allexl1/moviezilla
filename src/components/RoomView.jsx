@@ -1063,25 +1063,12 @@ export default function RoomView({ code, onLeave, onToast }) {
     return () => clearInterval(t);
   }, []);
 
-  // Presence liveness: re-track my meta every 10s on every device, in
-  // every state (pre-start, paused, granted controller). The host beat
-  // and follower poll already carry pos meta; this is the floor that
-  // keeps quiet rooms alive so no device times itself out. The beat
-  // stamp keeps every track unique so syncs actually flow (identical
-  // re-tracks send no diff, which used to read as leaving).
-  useEffect(() => {
-    const t = setInterval(() => {
-      try {
-        lastSeenRef.current.set(device, Date.now());
-        channelRef.current?.update?.({ beat: Date.now() });
-        presenceLog('track', 'universal-heartbeat');
-      } catch {
-        // presence unavailable — next beat retries
-      }
-    }, 10000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  // No periodic presence heartbeat: re-tracking every 10s tripped
+  // Supabase's presence rate limiter (ClientPresenceRateLimitReached),
+  // which closed the channel every ~20s. Presence entries never expire
+  // server-side, so tracks happen on discrete transitions only
+  // (join/pause/play/seek/swap/rename below); LiveClock extrapolates the
+  // display between real updates.
 
   // My position reports: broadcast jumps (seeks / episode changes) when
   // I'm allowed to drive. Normal playback (<12s steps) stays silent.
@@ -1132,11 +1119,9 @@ export default function RoomView({ code, onLeave, onToast }) {
     if (!room || !isHost) return;
     const beat = setInterval(() => {
       const p = frozenPosRef.current || myPos.current;
-      // People-tab clock (B2): presence rides the same beat, so the host's
-      // time ticks live instead of freezing at the start second. Beat
-      // stamp keeps the track unique so the diff actually flows.
-      reportState({ pos: Math.floor(p.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
-      presenceLog('track', 'host-beat', `pos ${Math.floor(p.second || 0)}`);
+      // Row stamp only (no presence re-track — see the note above the
+      // removed heartbeat). Ticks below carry the live clock.
+      presenceLog('beat', 'host-row', `pos ${Math.floor(p.second || 0)}`);
       // Row stamp only once started: pre-start wall accrual must never
       // inflate the followers view (phantom 1:15 before pressing play).
       if (startedRef.current) {
@@ -1182,10 +1167,8 @@ export default function RoomView({ code, onLeave, onToast }) {
         const r = await fetchRoom(code);
         if (!r) return;
         setRoom((prev) => (prev ? { ...prev, position: r.position, state: r.state, grants: r.grants, hostDevice: r.hostDevice } : prev));
-        // Follower clock (B2): report my own position on the same poll so
-        // my row ticks for the host too. Beat stamp keeps it unique.
-        reportState({ pos: Math.floor(myPos.current.second || 0), paused: Boolean(pausedByRef.current), beat: Date.now() });
-        presenceLog('track', 'follower-poll');
+        // Row only: my presence meta travels on discrete events, never on
+        // this poll (rate limiter, see above).
         // Heal missed pause/resume broadcasts off the stamped row state
         // (broadcasts are ephemeral — a late subscriber misses them). The
         // timestamp guard keeps us from clearing an overlay the host set

@@ -291,9 +291,10 @@ export async function deleteRoom(code) {
 
 // Live channel per room: broadcast (actions/chat, self excluded) +
 // presence (who's here + their playback state). Returns { send, close,
-// update }. `update` re-tracks presence meta (pos/paused/started) so the
-// People tab can show everyone's state — call it on discrete transitions
-// and the 10s beats (clocks tick), never per tick. Roster code must treat
+// update, presenceState, status }. `update` re-tracks presence meta
+// (pos/paused/started) on DISCRETE transitions only (pause/play/seek/
+// swap/rename) — never on a timer: periodic re-tracks trip Supabase's
+// presence rate limiter, which closes the channel. Roster code must treat
 // syncs as ADD/refresh-only (see RoomView pruner): one partial sync must
 // never read as everyone leaving.
 //
