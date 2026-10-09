@@ -242,7 +242,8 @@ export async function patchRoom(code, patch) {
   }
   // Room playlist queue: capped + field-sanitized so a hostile client
   // can't stuff the row. Items: {key,kind,title,by,id,type,poster |
-  // youtubeId}. Empty/missing key or title drops the item.
+  // youtubeId} plus playback resume (season/episode/startAt, tmdb only).
+  // Empty/missing key or title drops the item.
   if (Array.isArray(p.queue)) {
     out.queue = p.queue.slice(0, 50).map((it) => {
       if (!it || typeof it !== 'object') return null;
@@ -257,6 +258,9 @@ export async function patchRoom(code, patch) {
         clean.id = Math.floor(Number(it.id)) || 0;
         clean.type = it.type === 'tv' ? 'tv' : 'movie';
         clean.poster = String(it.poster || '').slice(0, 200);
+        clean.season = Math.max(1, Math.min(99, Math.floor(Number(it.season)) || 1));
+        clean.episode = Math.max(1, Math.min(99, Math.floor(Number(it.episode)) || 1));
+        clean.startAt = Math.max(0, Math.min(24 * 3600, Math.floor(Number(it.startAt)) || 0));
       }
       return clean;
     }).filter(Boolean);
@@ -378,11 +382,6 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
         onStatus?.(status);
       } catch (err) {
         console.error('[rooms] status handler failed:', err);
-      }
-      try {
-        console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), 'channel-status', clean, status);
-      } catch {
-        // logging never breaks the room
       }
       if (status === 'SUBSCRIBED') {
         tracked = { device, name: name || 'Guest', ...(pendingMeta || {}) };

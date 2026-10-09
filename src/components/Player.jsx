@@ -224,6 +224,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     const pos = estimatedPosition();
     const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
     if (pos.time <= 0 && (prev?.currentTime || 0) > 0) return;
+    // Room mode: never write from the wall estimate alone. An idle room
+    // player (provider silent) must not overwrite a real resume point
+    // with seconds it never played (a 7:00 resume wiped by 0:05 of
+    // sitting in the room). Only provider-verified time may write.
+    if (framed && !pmSeenRef.current) return;
+    // Room mode: never move the resume point backwards. Joining a fresh
+    // room at 0:00 (or rejoining mid-title) must not erase where I
+    // stopped; forward progress still records. 5s tolerance for noise.
+    if (framed && (prev?.currentTime || 0) - pos.time > 5) return;
     // Don't spam History with 0s opens: first meaningful save happens
     // after ~5s of actual watching (see heartbeat below).
     if (pos.time <= 0 && !pmSeenRef.current && activeMsRef.current < 4000) return;
@@ -351,6 +360,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       // Real provider telemetry (not the wall estimate): the room trusts
       // this — and only this — as "someone is really watching".
       live: pmSeenRef.current === true,
+      // Provider-declared pause (sticky until play/rebuild): the room
+      // must not treat an accruing wall clock as movement while the
+      // provider itself says paused. Kills phantom seeks + drift notes.
+      ppaused: pausedProvRef.current === true,
       // Real provider clock: provider-reported time, null while idle or on
       // mute providers. Wall accrual never qualifies (an untouched embed
       // sitting at 0:00 must not read as watching).

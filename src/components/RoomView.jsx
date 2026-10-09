@@ -34,7 +34,7 @@ import {
   roomLink,
 } from '../services/rooms';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
-import { formatClock } from '../services/storage';
+import { formatClock, storage } from '../services/storage';
 import Player from './Player';
 import { ChatView, FloatingRoomChat } from './chat';
 import {
@@ -68,6 +68,8 @@ function keyOfMedia(m) {
 
 // Normalized queue item from a TMDB search hit or YouTube meta.
 // Module scope (not render scope) so the timestamp never trips purity.
+// TMDB items carry playback resume (season/episode/startAt) so Continue
+// Watching entries replay exactly where they stopped.
 function makeQueueItem(picked, by) {
   const base =
     picked.kind === 'youtube'
@@ -78,6 +80,9 @@ function makeQueueItem(picked, by) {
           type: picked.media_type || 'movie',
           title: picked.title || '',
           poster: picked.poster_path || '',
+          season: Math.max(1, Math.floor(picked.season || 1)),
+          episode: Math.max(1, Math.floor(picked.episode || 1)),
+          startAt: Math.max(0, Math.floor(picked.startAt || 0)),
         };
   return { ...base, key: keyOfMedia(base.kind === 'youtube' ? base : { ...base, media_type: base.type }), by: by || '', at: Date.now() };
 }
@@ -166,12 +171,141 @@ function MemberRow({ m, memberIsHost, roomStarted, isSelf, canAct, onMakeHost, o
   );
 }
 
-// Queue item back into the {kind,...} shape doSwap expects.
+// Queue item back into the {kind,...} shape doSwap expects (resume
+// fields ride along so queued Continue Watching entries keep S/E/time).
 function pickedOfItem(item) {
   if (item.kind === 'youtube') {
     return { kind: 'youtube', youtubeId: item.youtubeId, title: item.title, thumb: item.poster };
   }
-  return { kind: 'tmdb', id: item.id, media_type: item.type, title: item.title, poster_path: item.poster };
+  return {
+    kind: 'tmdb',
+    id: item.id,
+    media_type: item.type,
+    title: item.title,
+    poster_path: item.poster,
+    season: item.season || 1,
+    episode: item.episode || 1,
+    startAt: item.startAt || 0,
+  };
+}
+
+// My List → picked shapes. CW entries resume at this room server's slot
+// (strict: never another provider's seconds), falling back to the
+// top-level clock. Adding/playing writes no history — the Player records
+// only genuinely watched seconds afterwards.
+function pickedOfCwEntry(entry) {
+  const slot = storage.getServerProgress(entry.type, entry.mediaId, 'vidy');
+  return {
+    kind: 'tmdb',
+    id: entry.mediaId,
+    media_type: entry.type,
+    title: entry.title || '',
+    poster_path: entry.poster || '',
+    season: entry.season || 1,
+    episode: entry.episode || 1,
+    startAt: Math.floor(slot?.currentTime ?? entry.currentTime ?? 0),
+  };
+}
+
+function pickedOfWlItem(item) {
+  return {
+    kind: 'tmdb',
+    id: item.id,
+    media_type: item.media_type || item.type || (item.first_air_date ? 'tv' : 'movie'),
+    title: item.title || item.name || '',
+    poster_path: item.poster_path || item.poster || '',
+  };
+}
+
+// From-my-list picker for the playlist drawer (host only): Continue
+// Watching (with resume points) or Watch Later, same Add / Play-now pair
+// as search results.
+function MyListPicker({ onAdd, onPlay, swapBusy }) {
+  const [tab, setTab] = useState('cw');
+  const cw = tab === 'cw' ? storage.getAllContinueWatching().slice(0, 8) : [];
+  const wl = tab === 'wl' ? storage.getWatchlist().slice(0, 8) : [];
+  const rows = tab === 'cw'
+    ? cw.map((e) => {
+        const t = Math.floor(e.currentTime || 0);
+        return {
+          key: `cw:${e.type}:${e.mediaId}`,
+          title: e.title || 'Untitled',
+          poster: e.poster || '',
+          sub: `${e.type === 'tv' ? `S${e.season || 1} E${e.episode || 1} • ` : ''}Resume ${formatClock(t)}`,
+          picked: pickedOfCwEntry(e),
+        };
+      })
+    : wl.map((item) => ({
+        key: `wl:${item.id}`,
+        title: item.title || item.name || 'Untitled',
+        poster: item.poster_path || item.poster || '',
+        sub: item.media_type === 'tv' || item.type === 'tv' || item.first_air_date ? 'Show' : 'Movie',
+        picked: pickedOfWlItem(item),
+      }));
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">From my list</p>
+      <div className="flex gap-1.5" role="group" aria-label="My list source">
+        {[
+          { id: 'cw', name: 'Continue Watching' },
+          { id: 'wl', name: 'Watch Later' },
+        ].map((o) => (
+          <button
+            key={o.id}
+            onClick={() => setTab(o.id)}
+            aria-pressed={tab === o.id}
+            className={`cine-pill cine-pill--sm ${tab === o.id ? 'cine-pill--active' : ''}`}
+          >
+            {o.name}
+          </button>
+        ))}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-[11px] text-white/40">
+          {tab === 'cw' ? 'No continue-watching titles yet.' : 'Watch Later is empty.'}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.key} className="mat-row p-2 flex items-center gap-2.5">
+              <div className="w-10 h-14 rounded-xl overflow-hidden bg-black/50 flex-shrink-0">
+                <img
+                  src={r.poster ? tmdb.getImageUrl(r.poster, 'w185') : FALLBACK_POSTER}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-white/90 truncate">{r.title}</p>
+                <p className="text-[10px] text-white/50 mt-0.5 truncate">{r.sub}</p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => onAdd(r.picked)}
+                  disabled={swapBusy}
+                  className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                  aria-label={`Add ${r.title} to playlist`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="cine-tip" aria-hidden="true">Add to playlist</span>
+                </button>
+                <button
+                  onClick={() => onPlay(r.picked)}
+                  disabled={swapBusy}
+                  className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                  aria-label={`Play ${r.title} now`}
+                >
+                  <Play className="w-3.5 h-3.5" fill="currentColor" />
+                  <span className="cine-tip" aria-hidden="true">Play now</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Roster equality: device order is stable (merge-add only), so an
@@ -197,6 +331,18 @@ function sameRoster(a, b) {
 // Pure roster merge (no removals, no spam): folds a presence list into the
 // current roster and stamps arrival times for LiveClock. Returns { merged,
 // touched }; the caller owns lastSeen clocks and feeds them from touched.
+// The arrival stamp moves ONLY when the meta actually changed: re-stamping
+// every absorb kept paused clocks ticking forever (nothing ever froze).
+function sameMeta(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.name === b.name &&
+    (a.pos ?? null) === (b.pos ?? null) &&
+    (a.paused ?? null) === (b.paused ?? null) &&
+    (a.watching ?? null) === (b.watching ?? null)
+  );
+}
+
 function mergePresenceList(prevMembers, list, selfDevice, selfName) {
   const now = Date.now();
   const byDevice = new Map(prevMembers.map((m) => [m.device, m]));
@@ -204,7 +350,10 @@ function mergePresenceList(prevMembers, list, selfDevice, selfName) {
   for (const m of list || []) {
     if (!m || !m.device) continue;
     touched.push(m.device);
-    byDevice.set(m.device, { ...m, at: now });
+    const prev = byDevice.get(m.device);
+    // New or changed meta: adopt with a fresh stamp. Unchanged: keep the
+    // old entry (and its old stamp) so frozen clocks stay frozen.
+    byDevice.set(m.device, prev && sameMeta(prev, m) ? prev : { ...m, at: now });
   }
   // Local truth: I am here until I explicitly leave, so my own clock
   // refreshes even when the server list omits me (quiet-room flap).
@@ -444,7 +593,6 @@ export default function RoomView({ code, onLeave, onToast }) {
         outboxRef.current.push(q);
       }
     }
-    if (outboxRef.current.length === 0) presenceLog('outbox-flushed', `${queued.length} queued`);
   };
   // Mirrors pausedBy for channel callbacks (their closures go stale).
   const pausedByRef = useRef(null);
@@ -514,17 +662,6 @@ export default function RoomView({ code, onLeave, onToast }) {
     setMessages((prev) => [...prev.slice(-119), m]);
 
   const pushSys = (text) => pushMsg({ id: msgId(), sys: true, text });
-
-  // DEBUG-ONLY (presence diagnosis, temporary): verbose presence trace.
-  // Filter the console on [rooms-presence]. Delete this block plus all
-  // presenceLog calls once diagnosed.
-  const presenceLog = (...args) => {
-    try {
-      console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), ...args);
-    } catch {
-      // logging never breaks the room
-    }
-  };
 
   // Thin closures over the pure roster core above (refs in, setState out).
   const absorbList = (list) => {
@@ -679,13 +816,17 @@ export default function RoomView({ code, onLeave, onToast }) {
   const leaveRef = useRef(() => {});
 
   // Host swapped what's playing (local host action or a remote 'media'
-  // event): adopt wholesale, restart un-started at 0:00, clear every lock.
-  // Player keys include the media id, so frames remount exactly once.
-  function adoptMedia(mediaObj, server, title, sysName) {
+  // event): adopt wholesale at the given resume point, un-started, clear
+  // every lock. Player keys include the media id, so frames remount
+  // exactly once, on purpose.
+  function adoptMedia(mediaObj, server, title, sysName, opts = {}) {
     const m = mediaObj || {};
+    const season = Math.max(1, Math.floor(opts.season || 1));
+    const episode = Math.max(1, Math.floor(opts.episode || 1));
+    const startAt = Math.max(0, Math.floor(opts.startAt || 0));
     setRoom((prev) =>
       prev
-        ? { ...prev, media: m, title: title || m.title || prev.title, season: 1, episode: 1, server, position: 0, state: 'live', started: false }
+        ? { ...prev, media: m, title: title || m.title || prev.title, season, episode, server, position: startAt, state: 'live', started: false }
         : prev
     );
     startedRef.current = false;
@@ -694,11 +835,11 @@ export default function RoomView({ code, onLeave, onToast }) {
     pausedByDeviceRef.current = null;
     pausedAtRef.current = 0;
     frozenPosRef.current = null;
-    myPos.current = { second: 0, season: 1, episode: 1, server };
+    myPos.current = { second: startAt, season, episode, server };
     lastReportAt.current = 0;
     setHostPos(null);
     lastSeekSent.current = { at: 0, second: -1, season: -1, episode: -1 };
-    reportState({ watching: false, paused: false, pos: 0 });
+    reportState({ watching: false, paused: false, pos: startAt });
     if (m.kind === 'youtube') {
       setDetails(null);
     } else if (m.id && m.type) {
@@ -708,7 +849,7 @@ export default function RoomView({ code, onLeave, onToast }) {
     }
     followGraceRef.current = Date.now();
     followAppliedRef.current = Date.now();
-    setRoomTarget({ key: `media:${Date.now()}`, second: 0, season: 1, episode: 1, server });
+    setRoomTarget({ key: `media:${Date.now()}`, second: startAt, season, episode, server });
     setSyncNote('In sync');
     if (sysName) pushSys(`${sysName} changed what's playing`);
   }
@@ -935,11 +1076,15 @@ export default function RoomView({ code, onLeave, onToast }) {
           // Embeds: no remote orders exist — the overlay + unmount in the
           // render path below IS the pause (see `suspended`).
         } else if (type === 'media') {
-          // Host swapped what's playing: adopt wholesale and restart at
-          // 0:00 for everyone. The Player/YouTube keys below include the
+          // Host swapped what's playing: adopt wholesale at the carried
+          // resume point. The Player/YouTube keys below include the
           // media id, so frames remount exactly once, on purpose.
           if (Array.isArray(payload.queue)) setQueue(payload.queue);
-          adoptMedia(payload.media || {}, payload.server || 'vidy', payload.title || '', payload.name || 'Host');
+          adoptMedia(payload.media || {}, payload.server || 'vidy', payload.title || '', payload.name || 'Host', {
+            season: payload.season || 1,
+            episode: payload.episode || 1,
+            startAt: payload.startAt || 0,
+          });
         } else if (type === 'seen') {
           if (payload.device && payload.msgId) {
             setSeenMap((prev) => ({ ...prev, [payload.device]: { msgId: payload.msgId, name: payload.name || 'Someone' } }));
@@ -958,7 +1103,6 @@ export default function RoomView({ code, onLeave, onToast }) {
       onPresence: (list) => {
         // Merge-add only (never remove here — that's the pruner's job).
         const merged = absorbList(list);
-        presenceLog('sync', (list || []).map((m) => `${String(m.device || '').slice(-4)}:${m.name || ''}`).join(',') || '(empty)');
         if (!sameRoster(merged, membersRef.current)) setMembers(merged);
         // First sync is the baseline (no "X joined" spam for everyone
         // already here — including the host-absent truth, immediately).
@@ -995,13 +1139,11 @@ export default function RoomView({ code, onLeave, onToast }) {
         // explicitly leave (spurious self-leave events caused the
         // paused self-prune).
         if (!key || key === device) return;
-        presenceLog('leave-event', String(key).slice(-4));
         if (lastSeenRef.current.has(key)) {
           lastSeenRef.current.set(key, Date.now() - (PRUNE_AFTER_MS - 3000));
         }
       },
       onStatus: (s) => {
-        presenceLog('channel-status', s);
         const up = s === 'SUBSCRIBED';
         chanUpRef.current = up;
         setChanUp(up);
@@ -1014,7 +1156,6 @@ export default function RoomView({ code, onLeave, onToast }) {
             const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
             try {
               channelRef.current?.send('pause', { device, name: nameRef.current, second, at: Date.now() });
-              presenceLog('pause-reasserted', `pos ${second}`);
             } catch {
               // next beat carries presence state regardless
             }
@@ -1024,7 +1165,6 @@ export default function RoomView({ code, onLeave, onToast }) {
         if ((s === 'CLOSED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') && !cancelled && myGen === gen) {
           const delay = Math.min(2000 * (fails + 1), 10000);
           fails += 1;
-          presenceLog('reopen-scheduled', `${delay}ms`);
           setTimeout(() => {
             if (!cancelled && myGen === gen) startOpen();
           }, delay);
@@ -1101,7 +1241,6 @@ export default function RoomView({ code, onLeave, onToast }) {
             watching: metas?.[0]?.watching ?? null,
           }));
           const merged = absorbList(list);
-          presenceLog('poll', list.map((m) => `${String(m.device || '').slice(-4)}:${m.name || ''}`).join(',') || '(empty)');
           if (!sameRoster(merged, membersRef.current)) setMembers(merged);
         }
       } catch {
@@ -1123,8 +1262,6 @@ export default function RoomView({ code, onLeave, onToast }) {
         return;
       }
       for (const g of gone) {
-        const age = Math.round((now - (lastSeenRef.current.get(g.device) ?? now)) / 1000);
-        presenceLog('prune', `${String(g.device).slice(-4)}:${g.name}`, `unseen ${age}s`);
         lastSeenRef.current.delete(g.device);
         // Forget so a later return announces "joined" again.
         seenDevices.current.delete(g.device);
@@ -1158,10 +1295,17 @@ export default function RoomView({ code, onLeave, onToast }) {
   const handlePosition = (pos) => {
     myPos.current = pos;
     lastReportAt.current = Date.now();
+    // Provider says paused: hold everything. The wall clock may still
+    // accrue (silent providers), but it must never open the room, move
+    // followers, or print drift while the picture stands still.
+    if (pos.ppaused) return;
     if (!startedRef.current && pos.pt != null && pos.pt > 3 && canControlRef.current) {
       markStarted(pos.pt, pos.season, pos.episode, pos.server);
     }
     if (!canControlRef.current) return;
+    // Nothing playing yet: wall accrual on an un-started room must never
+    // broadcast seeks (followers would chase seconds nobody watches).
+    if (!startedRef.current) return;
     const last = lastSeekSent.current;
     const jumped =
       Math.abs(pos.second - last.second) > 12 ||
@@ -1399,7 +1543,9 @@ export default function RoomView({ code, onLeave, onToast }) {
     };
   }, [swapYt]);
 
-  // Host-only: swap what's playing mid-room. Resets to 0:00, live.
+  // Host-only: swap what's playing mid-room. Starts at the picked
+  // resume point (Continue Watching entries carry S/E/seconds, fresh
+  // picks start at 0:00), un-started until someone really plays.
   // queueNext carries the playlist along so followers adopt both in one
   // round trip (media event carries the queue with it).
   const doSwap = async (picked, queueNext = null) => {
@@ -1418,14 +1564,29 @@ export default function RoomView({ code, onLeave, onToast }) {
             };
       const server = picked.kind === 'youtube' ? 'youtube' : 'vidy';
       const title = picked.title || 'Room';
+      const season = Math.max(1, Math.floor(picked.season || 1));
+      const episode = Math.max(1, Math.floor(picked.episode || 1));
+      const startAt = Math.max(0, Math.floor(picked.startAt || 0));
       // Keep-what-plays: the outgoing title joins the queue front (if not
       // already queued), so switching never loses it — rewatch later.
+      // It carries the row's S/E plus where we left (my clock), so the
+      // queued copy resumes instead of restarting.
       const curMedia = roomRef.current?.media;
+      const curRow = roomRef.current;
       const curPicked =
         curMedia?.kind === 'youtube' && curMedia?.youtubeId
           ? { kind: 'youtube', youtubeId: curMedia.youtubeId, title: curMedia.title, thumb: curMedia.poster }
           : curMedia?.kind !== 'youtube' && curMedia?.id
-            ? { kind: 'tmdb', id: curMedia.id, media_type: curMedia.type || 'movie', title: curMedia.title, poster_path: curMedia.poster }
+            ? {
+                kind: 'tmdb',
+                id: curMedia.id,
+                media_type: curMedia.type || 'movie',
+                title: curMedia.title,
+                poster_path: curMedia.poster,
+                season: curRow?.season || 1,
+                episode: curRow?.episode || 1,
+                startAt: Math.floor(myPos.current.second || 0),
+              }
             : null;
       const baseQueue = queueNext || queue;
       let nextQueue = baseQueue;
@@ -1436,7 +1597,7 @@ export default function RoomView({ code, onLeave, onToast }) {
           nextQueue = [curItem, ...baseQueue];
         }
       }
-      const patch = { media, title, season: 1, episode: 1, server, position: 0, state: 'live', started: false };
+      const patch = { media, title, season, episode, server, position: startAt, state: 'live', started: false };
       patch.queue = nextQueue;
       const row = await patchRoom(code, patch);
       if (row) setRoom(row);
@@ -1453,12 +1614,19 @@ export default function RoomView({ code, onLeave, onToast }) {
         media,
         title,
         server,
+        season,
+        episode,
+        startAt,
         queue: nextQueue,
       });
-      adoptMedia(media, server, title, null);
+      adoptMedia(media, server, title, null, { season, episode, startAt });
       setSwapQuery('');
       setSwapYt('');
-      onToast?.('Changed what\'s playing. Restarted at 0:00');
+      onToast?.(
+        startAt > 2
+          ? `Changed what's playing. Resuming at ${formatClock(startAt)}`
+          : `Changed what's playing. Restarted at 0:00`
+      );
     } catch {
       onToast?.('Swap failed. Retry.');
     } finally {
@@ -1579,7 +1747,6 @@ export default function RoomView({ code, onLeave, onToast }) {
     if (!chanUpRef.current) {
       // Socket down: queue for the reconnect flush, still show locally.
       outboxRef.current.push({ ...msg });
-      presenceLog('outbox-queued', msg.id);
     } else {
       try {
         channelRef.current?.send('chat', { ...msg });
@@ -2579,7 +2746,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-white/90 truncate">{item.title}</p>
                       <p className="text-[10px] text-white/50 mt-0.5 truncate">
-                        {item.kind === 'youtube' ? 'YouTube' : item.type === 'tv' ? 'Show' : 'Movie'}
+                        {item.kind === 'youtube' ? 'YouTube' : item.type === 'tv' ? `Show • S${item.season || 1} E${item.episode || 1}` : 'Movie'}
                         {item.by ? ` • ${item.by}` : ''}
                       </p>
                     </div>
@@ -2632,7 +2799,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-white/80 truncate">{item.title}</p>
                       <p className="text-[10px] text-white/40 mt-0.5 truncate">
-                        {item.kind === 'youtube' ? 'YouTube' : item.type === 'tv' ? 'Show' : 'Movie'}
+                        {item.kind === 'youtube' ? 'YouTube' : item.type === 'tv' ? `Show • S${item.season || 1} E${item.episode || 1}` : 'Movie'}
                         {item.by ? ` • ${item.by}` : ''}
                       </p>
                     </div>
@@ -2753,6 +2920,14 @@ export default function RoomView({ code, onLeave, onToast }) {
                     </button>
                   </div>
                 )}
+                {/* From my list: the host's own Continue Watching (with
+                    resume points) or Watch Later. Same Add / Play-now
+                    pair as search results. */}
+                <MyListPicker
+                  onAdd={(picked) => queueAdd(picked, false)}
+                  onPlay={(picked) => queueAdd(picked, true)}
+                  swapBusy={swapBusy}
+                />
               </div>
             ) : (
               <p className="text-[11px] text-white/40">Only the host can edit the playlist.</p>
