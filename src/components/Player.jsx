@@ -351,6 +351,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       // Real provider telemetry (not the wall estimate): the room trusts
       // this — and only this — as "someone is really watching".
       live: pmSeenRef.current === true,
+      // Real provider clock: provider-reported time, null while idle or on
+      // mute providers. Wall accrual never qualifies (an untouched embed
+      // sitting at 0:00 must not read as watching).
+      pt: pmSeenRef.current && playbackRef.current.currentTime > 0
+        ? Math.floor(playbackRef.current.currentTime)
+        : null,
     });
   };
 

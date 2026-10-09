@@ -1085,13 +1085,16 @@ export default function RoomView({ code, onLeave, onToast }) {
 
   // My position reports: broadcast jumps (seeks / episode changes) when
   // I'm allowed to drive. Normal playback (<12s steps) stays silent.
-  // Started comes ONLY from explicit signals (provider play event, my own
-  // Play/Sync-all, or a remote started event): wall-clock accrual from an
-  // idle embed used to "start" untouched rooms and leak phantom seconds
-  // to followers. Mute providers are opened via Sync-all instead.
+  // Started from real provider progress (never wall accrual): the
+  // provider clock passing 3s means actual playback. An idle embed
+  // reports 0/nothing and must never open the room (that phantom is what
+  // leaked fake seconds to followers); mute providers open via Sync-all.
   const handlePosition = (pos) => {
     myPos.current = pos;
     lastReportAt.current = Date.now();
+    if (!startedRef.current && pos.pt != null && pos.pt > 3 && canControlRef.current) {
+      markStarted(pos.pt, pos.season, pos.episode, pos.server);
+    }
     if (!canControlRef.current) return;
     const last = lastSeekSent.current;
     const jumped =
