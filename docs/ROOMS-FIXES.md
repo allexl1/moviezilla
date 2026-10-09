@@ -9,12 +9,10 @@ do not start building them unprompted.
 
 ## P0 — rooms hardening leftovers (not all done)
 
-1. [OPEN] Socket CLOSED every ~20s, cause still open. Neither our close
-   paths nor the socket tap ever fired, which leans server-side (Supabase
-   realtime). Next leads, in order: Supabase dashboard realtime logs
-   during a room session; one room on mobile data with WiFi off (rules
-   the home router/ISP in or out). The reconnect healer masks it, so
-   this is diagnosis, not firefighting.
+1. [DROPPED by owner] Socket CLOSED every ~20s, cause unknown.
+   Deliberately no longer pursued: the reconnect healer masks it in
+   ~2s and the roster holds. Reopen only if it ever becomes visible
+   to users again.
 2. [MITIGATED, environmental] Phone socket flapping (mobile Safari
    background kill suspected). Mitigation for tests: phone awake +
    foregrounded. If real background presence is ever wanted, that is
