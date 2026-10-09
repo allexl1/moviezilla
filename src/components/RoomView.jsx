@@ -99,6 +99,73 @@ function LiveClock({ pos, baseAt, paused }) {
   return <>{formatClock(shown)}</>;
 }
 
+// One People-tab row: avatar, name, live playback state (T14), host
+// crown, and host-only crown/kick actions. Pure view of its props.
+function MemberRow({ m, memberIsHost, roomStarted, isSelf, canAct, onMakeHost, onKick }) {
+  const stateText = !roomStarted
+    ? (memberIsHost ? "Hasn't started" : 'Waiting to start')
+    : m.watching === false
+      ? 'Not started'
+      : m.paused
+        ? <>Paused • <LiveClock pos={m.pos} baseAt={m.at} paused /></>
+        : m.pos != null && m.pos > 0
+          ? <>Watching • <LiveClock pos={m.pos} baseAt={m.at} paused={false} /></>
+          : 'In the room';
+  return (
+    <div
+      className="mat-row flex items-center gap-3 p-2.5"
+      style={
+        memberIsHost
+          ? { background: 'color-mix(in srgb, var(--cine-accent) 7%, transparent)' }
+          : undefined
+      }
+    >
+      <span
+        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-black flex-shrink-0"
+        style={{
+          backgroundColor: nameColor(m.name),
+          boxShadow: memberIsHost
+            ? '0 0 0 2px var(--cine-accent)'
+            : '0 0 0 2px rgba(255, 255, 255, 0.15)',
+        }}
+      >
+        {(m.name || '?').slice(0, 1).toUpperCase()}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-bold text-white truncate">
+          {m.name}
+          {isSelf && <span className="text-white/40 font-medium"> (you)</span>}
+        </p>
+        <p className="text-[10px] text-white/50 truncate">
+          {memberIsHost ? <>Host • {stateText}</> : stateText}
+        </p>
+      </div>
+      {memberIsHost && <Crown className="w-3.5 h-3.5 text-[var(--cine-accent)] flex-shrink-0" />}
+      {/* T15: no more Control/Chat grant pills — the host crowns
+          (transfer) or removes. Grants stay readable for old
+          rows, but nothing sets them anymore. */}
+      {canAct && !memberIsHost && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => onMakeHost({ device: m.device, name: m.name })}
+            className="cine-pill cine-pill--sm"
+            aria-label={`Make ${m.name} the host (you step down)`}
+          >
+            <Crown className="w-3 h-3" /> Host
+          </button>
+          <button
+            onClick={() => onKick({ device: m.device, name: m.name })}
+            className="cine-icon-btn cine-icon-btn--sm"
+            aria-label={`Remove ${m.name} from the room`}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Queue item back into the {kind,...} shape doSwap expects.
 function pickedOfItem(item) {
   if (item.kind === 'youtube') {
@@ -125,6 +192,40 @@ function sameRoster(a, b) {
     }
   }
   return true;
+}
+
+// Pure roster merge (no removals, no spam): folds a presence list into the
+// current roster and stamps arrival times for LiveClock. Returns { merged,
+// touched }; the caller owns lastSeen clocks and feeds them from touched.
+function mergePresenceList(prevMembers, list, selfDevice, selfName) {
+  const now = Date.now();
+  const byDevice = new Map(prevMembers.map((m) => [m.device, m]));
+  const touched = [];
+  for (const m of list || []) {
+    if (!m || !m.device) continue;
+    touched.push(m.device);
+    byDevice.set(m.device, { ...m, at: now });
+  }
+  // Local truth: I am here until I explicitly leave, so my own clock
+  // refreshes even when the server list omits me (quiet-room flap).
+  touched.push(selfDevice);
+  if (!byDevice.has(selfDevice)) {
+    const prev = prevMembers.find((m) => m.device === selfDevice);
+    byDevice.set(selfDevice, prev || { device: selfDevice, name: selfName || 'Guest' });
+  }
+  return { merged: [...byDevice.values()], touched };
+}
+
+// Pure silent touch: any broadcast proves the sender is here. Returns the
+// next roster, or null when nothing changed (no name drift, already here).
+function touchRosterMember(prevMembers, id, nm) {
+  if (!id) return null;
+  const prev = prevMembers.find((m) => m.device === id);
+  if (!prev) return [...prevMembers, { device: id, name: nm || 'Guest', at: Date.now() }];
+  if (nm && nm !== prev.name) {
+    return prevMembers.map((m) => (m.device === id ? { ...m, name: nm } : m));
+  }
+  return null;
 }
 
 export default function RoomView({ code, onLeave, onToast }) {
@@ -425,25 +526,11 @@ export default function RoomView({ code, onLeave, onToast }) {
     }
   };
 
-  // Merge-add a presence list into the roster (no removals, no spam).
-  // Returns the merged array; callers guard setMembers with sameRoster.
+  // Thin closures over the pure roster core above (refs in, setState out).
   const absorbList = (list) => {
-    const now = Date.now();
-    const byDevice = new Map(membersRef.current.map((m) => [m.device, m]));
-    for (const m of list || []) {
-      if (!m || !m.device) continue;
-      lastSeenRef.current.set(m.device, now);
-      // Stamp arrival time: LiveClock extrapolates pos from here.
-      byDevice.set(m.device, { ...m, at: now });
-    }
-    // Local truth: I am here until I explicitly leave, so my own clock
-    // refreshes even when the server list omits me (quiet-room flap).
-    lastSeenRef.current.set(device, Date.now());
-    if (!byDevice.has(device)) {
-      const prev = membersRef.current.find((m) => m.device === device);
-      byDevice.set(device, prev || { device, name: nameRef.current || 'Guest' });
-    }
-    return [...byDevice.values()];
+    const { merged, touched } = mergePresenceList(membersRef.current, list, device, nameRef.current);
+    for (const id of touched) lastSeenRef.current.set(id, Date.now());
+    return merged;
   };
 
   // Silent liveness touch: any broadcast from a device proves it is here.
@@ -452,15 +539,8 @@ export default function RoomView({ code, onLeave, onToast }) {
   const touchMember = (id, nm) => {
     if (!id || id === device) return;
     lastSeenRef.current.set(id, Date.now());
-    const cur = membersRef.current;
-    const prev = cur.find((m) => m.device === id);
-    if (!prev) {
-      // Silent add; the next sync announces "joined" (seenDevices is
-      // intentionally untouched here so the announce still fires).
-      setMembers([...cur, { device: id, name: nm || 'Guest', at: Date.now() }]);
-    } else if (nm && nm !== prev.name) {
-      setMembers(cur.map((m) => (m.device === id ? { ...m, name: nm } : m)));
-    }
+    const next = touchRosterMember(membersRef.current, id, nm);
+    if (next) setMembers(next);
   };
 
   // The room's picture of my clock (T2): a drift note is only honest when
@@ -688,7 +768,6 @@ export default function RoomView({ code, onLeave, onToast }) {
         // Liveness first: any broadcast proves the sender is still here
         // (chat flows even when a presence sync was lost).
         touchMember(payload.device, payload.name);
-        presenceLog('event', type, 'from', String(payload.device || '').slice(-4), payload.name || '');
         const yt = roomRef.current?.media?.kind === 'youtube';
         if (type === 'chat') {
           pushMsg({
@@ -955,7 +1034,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       .then((opened) => {
         if (cancelled || myGen !== gen) {
           try {
-            opened.close('superseded');
+            opened.close();
           } catch {
             // ignore
           }
@@ -973,7 +1052,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       cancelled = true;
       gen += 1;
       try {
-        ch?.close?.('effect-cleanup');
+        ch?.close?.();
       } catch {
         // ignore
       }
@@ -1121,7 +1200,6 @@ export default function RoomView({ code, onLeave, onToast }) {
       const p = frozenPosRef.current || myPos.current;
       // Row stamp only (no presence re-track — see the note above the
       // removed heartbeat). Ticks below carry the live clock.
-      presenceLog('beat', 'host-row', `pos ${Math.floor(p.second || 0)}`);
       // Row stamp only once started: pre-start wall accrual must never
       // inflate the followers view (phantom 1:15 before pressing play).
       if (startedRef.current) {
@@ -1716,7 +1794,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       deleteRoom(code).catch(() => {});
     }
     try {
-      const p = channelRef.current?.close('user-leave');
+      const p = channelRef.current?.close();
       if (p && typeof p.catch === 'function') p.catch(() => {});
     } catch {
       // ignore
@@ -2338,74 +2416,18 @@ export default function RoomView({ code, onLeave, onToast }) {
                 )}
               </div>
             )}
-            {members.map((m) => {
-              const memberIsHost = m.device === room.hostDevice;
-              // Playback state of that device (T14): the host reads here
-              // whether everyone is actually with them.
-              const stateText = !roomStarted
-                ? (memberIsHost ? "Hasn't started" : 'Waiting to start')
-                : m.watching === false
-                  ? 'Not started'
-                  : m.paused
-                    ? <>Paused • <LiveClock pos={m.pos} baseAt={m.at} paused /></>
-                    : m.pos != null && m.pos > 0
-                      ? <>Watching • <LiveClock pos={m.pos} baseAt={m.at} paused={false} /></>
-                      : 'In the room';
-              return (
-                <div
-                  key={m.device}
-                  className="mat-row flex items-center gap-3 p-2.5"
-                  style={
-                    memberIsHost
-                      ? { background: 'color-mix(in srgb, var(--cine-accent) 7%, transparent)' }
-                      : undefined
-                  }
-                >
-                  <span
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-black flex-shrink-0"
-                    style={{
-                      backgroundColor: nameColor(m.name),
-                      boxShadow: memberIsHost
-                        ? '0 0 0 2px var(--cine-accent)'
-                        : '0 0 0 2px rgba(255, 255, 255, 0.15)',
-                    }}
-                  >
-                    {(m.name || '?').slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-white truncate">
-                      {m.name}
-                      {m.device === device && <span className="text-white/40 font-medium"> (you)</span>}
-                    </p>
-                    <p className="text-[10px] text-white/50 truncate">
-                      {memberIsHost ? <>Host • {stateText}</> : stateText}
-                    </p>
-                  </div>
-                  {memberIsHost && <Crown className="w-3.5 h-3.5 text-[var(--cine-accent)] flex-shrink-0" />}
-                  {/* T15: no more Control/Chat grant pills — the host crowns
-                      (transfer) or removes. Grants stay readable for old
-                      rows, but nothing sets them anymore. */}
-                  {isHost && !memberIsHost && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => setPendingHost({ device: m.device, name: m.name })}
-                        className="cine-pill cine-pill--sm"
-                        aria-label={`Make ${m.name} the host (you step down)`}
-                      >
-                        <Crown className="w-3 h-3" /> Host
-                      </button>
-                      <button
-                        onClick={() => setPendingKick({ device: m.device, name: m.name })}
-                        className="cine-icon-btn cine-icon-btn--sm"
-                        aria-label={`Remove ${m.name} from the room`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {members.map((m) => (
+              <MemberRow
+                key={m.device}
+                m={m}
+                memberIsHost={m.device === room.hostDevice}
+                roomStarted={roomStarted}
+                isSelf={m.device === device}
+                canAct={isHost}
+                onMakeHost={setPendingHost}
+                onKick={setPendingKick}
+              />
+            ))}
             {isHost && (
               <button
                 onClick={() => {

@@ -290,18 +290,15 @@ export async function deleteRoom(code) {
 }
 
 // Live channel per room: broadcast (actions/chat, self excluded) +
-// presence (who's here + their playback state). Returns { send, close,
-// update, presenceState, status }. `update` re-tracks presence meta
-// (pos/paused/started) on DISCRETE transitions only (pause/play/seek/
-// swap/rename) — never on a timer: periodic re-tracks trip Supabase's
-// presence rate limiter, which closes the channel. Roster code must treat
-// syncs as ADD/refresh-only (see RoomView pruner): one partial sync must
-// never read as everyone leaving.
+// presence (who's here + playback state). Handle: send/close/update/
+// presenceState/status. `update` re-tracks meta on discrete transitions
+// only (pause/play/seek/swap/rename) — never on a timer, or Supabase's
+// presence rate limiter closes the channel. Syncs are ADD/refresh-only
+// (see RoomView pruner): one partial sync never reads as leaving.
 //
-// Async: Supabase reuses channel instances by topic (StrictMode remounts,
-// fast room switches), and realtime-js throws when `.on()` runs on an
-// already-subscribed instance. So any stale channel for this topic is
-// removed first, then a fresh one is built.
+// Async: Supabase reuses channel instances by topic, and realtime-js
+// throws on `.on()` for a subscribed instance — stale topic channels are
+// drained first, then a fresh one is built.
 export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave, onStatus }) {
   const sb = getSupabase();
   if (!sb) throw new Error('Rooms not configured.');
@@ -330,7 +327,6 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
   // flush on subscribe (the room-load report always races the handshake).
   let tracked = { device, name: name || 'Guest' };
   let pendingMeta = null;
-  let liveChannel = null;
   // Last channel status (SUBSCRIBED / CLOSED / CHANNEL_ERROR / TIMED_OUT).
   // The room watches it to reopen dead sockets (see RoomView).
   let lastStatus = 'JOINING';
@@ -352,41 +348,6 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
   const channel = sb.channel(`room:${code}`, {
     config: { broadcast: { self: false }, presence: { key: device } },
   });
-  liveChannel = channel;
-  // DEBUG-ONLY (socket diagnosis, temporary): tap the shared realtime
-  // socket. 1006 = killed mid-flight (network/firewall), 1000 = hung up
-  // cleanly. Re-tapped on every status (the client swaps the socket on
-  // auto-reconnect). The channel.socket attempt was a dead end (wrong
-  // object — that tap never attached, which is why no line ever printed).
-  const tapSocket = () => {
-    try {
-      const conn = sb && sb.realtime && sb.realtime.conn;
-      if (!conn || conn.__mzCloseTap || typeof conn.addEventListener !== 'function') return;
-      conn.__mzCloseTap = true;
-      conn.addEventListener('close', (e) => {
-        try {
-          console.debug(
-            '[rooms-presence]',
-            new Date().toISOString().slice(11, 23),
-            'socket-close',
-            `code ${e && e.code}`,
-            `clean ${e && e.wasClean}`,
-            String((e && e.reason) || '').slice(0, 120) || '(no reason)'
-          );
-        } catch {
-          // logging never breaks the room
-        }
-      });
-    } catch {
-      // socket internals unavailable — channel-status lines still apply
-    }
-  };
-  tapSocket();
-      });
-    }
-  } catch {
-    // socket internals unavailable — channel-status lines still apply
-  }
   channel
     .on('broadcast', { event: '*' }, ({ event, payload }) => {
       try {
@@ -413,7 +374,6 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
     })
     .subscribe(async (status) => {
       lastStatus = status;
-      tapSocket();
       try {
         onStatus?.(status);
       } catch (err) {
@@ -454,7 +414,7 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
       tracked = { ...tracked, ...(patch || {}) };
       pendingMeta = { ...(pendingMeta || {}), ...(patch || {}) };
       try {
-        const r = liveChannel?.track(tracked);
+        const r = channel.track(tracked);
         if (r?.catch) {
           r.catch(() => {
             // pre-subscribe: the SUBSCRIBED flush carries pendingMeta
@@ -464,12 +424,7 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
         // presence unavailable — states just read stale
       }
     },
-    async close(reason) {
-      try {
-        console.debug('[rooms-presence]', new Date().toISOString().slice(11, 23), 'channel-close-called', String(reason || 'no-reason'));
-      } catch {
-        // logging never breaks the room
-      }
+    async close() {
       try {
         await channel.untrack();
       } catch {
