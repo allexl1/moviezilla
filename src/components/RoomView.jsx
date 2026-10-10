@@ -1299,13 +1299,18 @@ export default function RoomView({ code, onLeave, onToast }) {
     // accrue (silent providers), but it must never open the room, move
     // followers, or print drift while the picture stands still.
     if (pos.ppaused) return;
-    if (!startedRef.current && pos.pt != null && pos.pt > 3 && canControlRef.current) {
+    // Voice check is legacy-tolerant: old cached clients send no flags
+    // (undefined) and keep legacy behavior; only an explicit false
+    // (provider silent) blocks auto-start and follower-moving seeks.
+    if (!startedRef.current && pos.live !== false && pos.pt != null && pos.pt > 3 && canControlRef.current) {
       markStarted(pos.pt, pos.season, pos.episode, pos.server);
     }
     if (!canControlRef.current) return;
     // Nothing playing yet: wall accrual on an un-started room must never
     // broadcast seeks (followers would chase seconds nobody watches).
     if (!startedRef.current) return;
+    // Wall-only accrual (no provider voice) never moves followers.
+    if (pos.live === false) return;
     const last = lastSeekSent.current;
     const jumped =
       Math.abs(pos.second - last.second) > 12 ||
@@ -1388,7 +1393,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       try {
         const r = await fetchRoom(code);
         if (!r) return;
-        setRoom((prev) => (prev ? { ...prev, position: r.position, state: r.state, grants: r.grants, hostDevice: r.hostDevice } : prev));
+        setRoom((prev) => (prev ? { ...prev, position: r.position, state: r.state, grants: r.grants, hostDevice: r.hostDevice, season: r.season, episode: r.episode, started: r.started ?? prev.started } : prev));
         // Row only: my presence meta travels on discrete events, never on
         // this poll (rate limiter, see above).
         // Heal missed pause/resume broadcasts off the stamped row state

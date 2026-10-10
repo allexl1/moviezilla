@@ -39,6 +39,9 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
   const pendingSeek = useRef(null);
   const pollRef = useRef(null);
   const lastSentRef = useRef({ at: 0, second: -1 });
+  // True only while the YT player reports PLAYING (pause/buffer/end all
+  // read false): position reports carry it as their voice flags.
+  const playingRef = useRef(false);
   const onPositionRef = useRef(onPosition);
   onPositionRef.current = onPosition;
   // Room auto-pause callbacks (stable mirrors — props change identity).
@@ -61,11 +64,15 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
     } catch {
       return;
     }
+    // The YT API is real telemetry by construction (never a wall
+    // estimate): voice flags mirror the player state so room logic
+    // treats playing as authoritative and paused as held.
+    const playing = playingRef.current === true;
     const now = Date.now();
     const last = lastSentRef.current;
     if (now - last.at < 4000 && Math.abs(second - last.second) < 10) return;
     lastSentRef.current = { at: now, second };
-    cb({ second, duration, season: 1, episode: 1, server: 'youtube' });
+    cb({ second, duration, season: 1, episode: 1, server: 'youtube', live: playing, pt: second, ppaused: !playing });
   };
 
   // Mount once per video.
@@ -95,6 +102,7 @@ export default function YouTubeRoomPlayer({ videoId, roomTarget = null, onPositi
             },
             onStateChange: (e) => {
               if (!window.YT) return;
+              playingRef.current = e.data === window.YT.PlayerState.PLAYING;
               if (e.data === window.YT.PlayerState.PLAYING) {
                 if (pollRef.current) clearInterval(pollRef.current);
                 report();
