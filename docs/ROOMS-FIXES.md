@@ -317,10 +317,13 @@ test script permanently.
     on Composer (smaller buttons, input unchanged) used only by the
     floating panel; GIF picker constrains to the panel
     (left/right anchored instead of fixed width that clips).
-35. Resizable floating panel. Yes, feasible, moderate: drag handle
-    on the panel corner (pointer events, mouse + touch), clamps
-    w 260–560 / h 320–90vh, size persisted per device
-    (`mz_float_chat_size`). One corner handle only, not all edges.
+35. Resizable + movable floating panel. Yes, feasible, moderate:
+    drag handle on the panel corner resizes (pointer events, mouse +
+    touch; clamps w 260–560 / h 320–90vh), and the panel drags by its
+    header to anywhere over the video (position clamped to the
+    viewport so it can't be lost off-screen). Size + position persist
+    per device (`mz_float_chat_size`, `mz_float_chat_pos`). One
+    corner handle only, not all edges.
 36. Button audit (after the current batch, owner-queued). Every room
     surface to the current system: white primary circle (send/play),
     standard icon buttons, segmented pills, 14px secondary radius.
