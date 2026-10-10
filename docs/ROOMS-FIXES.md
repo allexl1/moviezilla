@@ -115,7 +115,7 @@ text/gif + reply + reactions + receipts); photo messages add one new
     Shift+Enter makes a newline. Verify main composer already does
     this; bring floating to parity.
 18. Telegram-style quick reactions (screenshot 1:
-    `rooms-assets/chat-telegram-reactions.png`). A separated emoji
+    `rooms-assets/chat-telegram-reactions.jpg`). A separated emoji
     strip floating above the message action menu, one tap to react —
     no menu diving. Add 👀 and 🥴 to the set. Check current reaction
     UI in `chat.jsx` at build, then replace.
@@ -163,15 +163,15 @@ text/gif + reply + reactions + receipts); photo messages add one new
     photo), message menu (react, reply, edit, delete), receipts line,
     timestamps, unread badge.
 26. Composer placeholder (screenshot 5:
-    `rooms-assets/chat-composer-placeholder.png`): "Message as ..."
+    `rooms-assets/chat-composer-placeholder.jpg`): "Message as ..."
     → "Send message". Keep the per-room name in the aria-label only.
     Check both composers (main + floating) for the old string.
 27. "1 new" pill position (screenshot 4:
-    `rooms-assets/chat-new-pill.png`). It overlaps the composer bar
+    `rooms-assets/chat-new-pill.jpg`). It overlaps the composer bar
     today. Float it ABOVE the input/GIF/send row, Telegram-style
     (detached pill, never covering controls).
 28. Fullscreen control sizes (screenshot 6:
-    `rooms-assets/chat-fullscreen-buttons.png`). The floating chat +
+    `rooms-assets/chat-fullscreen-buttons.jpg`). The floating chat +
     fullscreen buttons are tiny in fullscreen. Scale to the basic
     (solo) player chrome — verify what that scale is at build
     (user suggests ~3x, confirm against solo, do not eyeball).
@@ -190,8 +190,8 @@ Headline item this round (user: stop layering fixes, make ONE time
 system that works). Evidence: host changes resolution mid-watch →
 follower sees "the host hasn't started yet" while the host is active;
 paused at 3:33 shows "Watching • 4:08" ticking (screenshot 2:
-`rooms-assets/time-paused-drift.png`); idle 0:00 shows "Watching •
-4:58" ticking (screenshot 3: `rooms-assets/time-idle-drift.png`).
+`rooms-assets/time-paused-drift.jpg`); idle 0:00 shows "Watching •
+4:58" ticking (screenshot 3: `rooms-assets/time-idle-drift.jpg`).
 Preliminary diagnosis to verify at build (not conclusions):
 (a) provider reloads reset telemetry, and "started" is still partly
 inferred — carry started explicitly on the row, never infer it from
