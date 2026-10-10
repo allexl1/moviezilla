@@ -186,6 +186,38 @@ text/gif + reply + reactions + receipts); photo messages add one new
 
 ## P0 — rooms time: one system (specified, not built)
 
+Time audit (static: full read of Player/RoomView/YouTubeRoomPlayer +
+session logs — six clocks, four pause signals, all counted):
+- Clocks today: (1) Player wall (wallBase + activeMs, 8+ write
+  sites); (2) Player provider truth (playbackRef + pmSeen +
+  pausedProv + lastPm); (3) RoomView myPos mirror; (4) frozenPos
+  pause snapshot; (5) Supabase row.position (host beat + stamps);
+  (6) presence pos meta. Five copies of "where", updated on
+  different triggers — every drift bug lives in the gaps.
+- Pause signals today: room pausedBy, provider pausedProv,
+  derived suspended, absence waitingForHost. No written precedence.
+- Started is still inferred in 2+ places (startedRef, roomStarted,
+  hostWatching fallback): any telemetry reset (resolution change
+  reload) flips the inference. Must be carried explicitly, never
+  inferred.
+Rewrite plan (one pass, rooms test script after):
+- One clock owner per device inside Player: a single `now()`
+  returning {second, playing, source} with source =
+  provider | wall | frozen. Wall accrual stays as fallback, but
+  every consumer reads the same snapshot — no per-consumer accrual.
+- One pause precedence, written down: ROOM_PAUSED (pausedBy) >
+  PROVIDER_PAUSED (pausedProv) > ABSENT (waitingForHost) >
+  PLAYING. Overlay copy, MemberRow text, header, ticks, history
+  gating, seek gating all resolve through it.
+- Started explicit only (row + ref). Provider reload falls back
+  to last-known + row position until telemetry returns — no
+  inference flip, which kills the resolution-change bug class.
+- Presence pos, row position, LiveClock derive from the snapshot.
+  myPos becomes a plain last-snapshot mirror; frozenPos merges
+  into snapshot {frozen:true}.
+- History keeps current rules, formalized: room writes only
+  source==='provider' snapshots (the guards already do this —
+  name it so the next change can't unpick it).
 Headline item this round (user: stop layering fixes, make ONE time
 system that works). Evidence: host changes resolution mid-watch →
 follower sees "the host hasn't started yet" while the host is active;
@@ -234,18 +266,29 @@ test script permanently.
 
 ## Open questions for owner (discuss, then spec)
 
-- Q1. Site-wide keyboard shortcuts (Ctrl+F style)? Default: no —
-  rooms chat ships mouse/touch only unless owner says otherwise.
-- Q2. Photo messages: Supabase storage bucket OK? Per-file cap?
-  (Proposal: 5MB, URLs only in payload, delete removes file.)
-- Q3. GIF still-frame toggle on tap: worth it, or skip to keep
-  favorites lean?
-- Q4. "Send message" placeholder: name in aria-label only — OK?
-- Q5. Fullscreen button scale: match solo player exactly — confirm
-  target at build.
-- Q6. Watched-here replay start point: stored startAt (same as
-  up-next) or force 0:00? Specified startAt; flip only with test
-  evidence.
+- Q1. [DECIDED: no] Site-wide keyboard shortcuts — owner declined.
+  Only the Enter-to-send composer behavior (item 17) ships.
+- Q2. [DECIDED: Supabase bucket] Photo messages use a Supabase
+  storage bucket (free tier includes storage; chat-scale photos are
+  nowhere near its caps). 5MB per-file proposal stands, payloads
+  carry URLs only, delete-for-everyone removes the file too. Photos
+  open in a fullscreen viewer like the actors-page photo viewer —
+  no in-chat library, no permanent gallery.
+- Q3. [DECIDED: yes, both] GIF favorites + tap-to-freeze. Favorites
+  tab in the picker (localStorage), tap a sent gif toggles animated
+  / still (verify still URLs in the Giphy payload at build).
+- Q4. [DECIDED: yes] "Send message" placeholder; name in
+  aria-label only. Both composers.
+- Q5. [DECIDED: try solo-player match first] Fullscreen buttons
+  scale to the solo player chrome; verify size at build.
+- Q6. [OPEN, details below] Watched-here replay start point.
+  Stored startAt (one path with up-next play) vs force 0:00.
+  Stored-point edge: a fully-watched title replays from near the
+  credits (player clamp lands it 20s before the end). Force-0 edge:
+  a title swapped away mid-watch loses its swap point on replay.
+  Current spec keeps stored startAt; flip only with test evidence
+  or an owner call now.
+- [DECIDED] Paused copy: `Paused • {time}` (owner: "paused is ok").
 
 ## Incoming (friend test session — first batch filed above as P3/P0)
 
