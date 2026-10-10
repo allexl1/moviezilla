@@ -159,6 +159,15 @@ h1, h2, h3 {
   text-wrap: balance;
 }
 
+/* Single-line room title: beats the balanced h1-h3 rule above (same
+   file, higher specificity) so the header row never wraps on phones. */
+.cine-room-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-wrap: nowrap;
+}
+
 /* ─── Custom Scrollbar (Glass Style) ────────────────────────────────────── */
 /* Slim overlay-style page scrollbar: transparent track so no dark gutter
    edge reads as a "black line" against the background. */

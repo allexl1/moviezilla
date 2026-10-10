@@ -2271,8 +2271,8 @@ export default function RoomView({ code, onLeave, onToast }) {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-bold truncate">{room.title}</h2>
-            <p className="text-[11px] text-white/60">
+            <h2 className="text-sm font-bold cine-room-title">{room.title}</h2>
+            <p className="text-[11px] text-white/60 truncate">
               {members.length} watching • {statusText}
               {showHostClock && (
                 <> • Host <LiveClock pos={hostPos.second} baseAt={hostPos.at} paused={false} /></>
@@ -2281,9 +2281,11 @@ export default function RoomView({ code, onLeave, onToast }) {
             </p>
           </div>
           {/* Invite (B5): hover/tap opens copy choices — full link or the
-              code alone. The menu labels carry the meaning, so no tip here. */}
+              code alone. The menu labels carry the meaning, so no tip here.
+              Hidden on phones (room code + copy link live in Settings) so
+              the title keeps its row. */}
           <div
-            className="relative"
+            className="relative hidden sm:block"
             onMouseEnter={() => setInviteOpen(true)}
             onMouseLeave={() => setInviteOpen(false)}
           >
@@ -2365,7 +2367,7 @@ export default function RoomView({ code, onLeave, onToast }) {
               aria-label="Open room playlist"
               aria-expanded={playlistOpen}
             >
-              <ListMusic className="w-3.5 h-3.5" /> Playlist
+              <ListMusic className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Playlist</span>
               <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Room playlist</span>
               {queue.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-[var(--cine-accent)] text-black text-[10px] font-black flex items-center justify-center">
@@ -2391,10 +2393,10 @@ export default function RoomView({ code, onLeave, onToast }) {
                 broadcastPlay();
                 onToast?.('Room synced to your position');
               }}
-              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0 cine-has-tip"
+              className="cine-control-btn h-9 px-4 text-xs sm:min-w-[132px] flex-shrink-0 cine-has-tip"
               aria-label="Pull everyone to your second right now"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Sync all
+              <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Sync all</span>
               <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Pull everyone to your second</span>
             </button>
           )}
@@ -2429,10 +2431,10 @@ export default function RoomView({ code, onLeave, onToast }) {
           {!canControl && (
             <button
               onClick={syncToHost}
-              className="cine-control-btn h-9 px-4 text-xs min-w-[132px] flex-shrink-0 cine-has-tip"
+              className="cine-control-btn h-9 px-4 text-xs sm:min-w-[132px] flex-shrink-0 cine-has-tip"
               aria-label={hostPos ? `Jump to the host's ${formatClock(hostPos.second)} right now` : "Jump to the host's second right now"}
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Sync{hostPos ? ` ${formatClock(hostPos.second)}` : ''}
+              <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Sync</span>{hostPos ? ` ${formatClock(hostPos.second)}` : ''}
               <span className="cine-tip cine-tip--below cine-tip--top" aria-hidden="true">Jump to the host's second</span>
             </button>
           )}
