@@ -610,6 +610,31 @@ export default function RoomView({ code, onLeave, onToast }) {
   // Freeze at the pause moment; resume unfreezes.
   const frozenPosRef = useRef(null);
   const myPos = useRef({ second: 0, season: 1, episode: 1, server: 'vidy' });
+  // Single clock read: the frozen pause snapshot wins, else the live
+  // mirror. Every action (pause/play/sync/beat/row) reads here — never
+  // myPos or frozenPos directly — so there is exactly one "where" per
+  // device. Writers (handlePosition mirror, pause freeze, adopt/swap
+  // resets) stay where they are.
+  const roomClock = () => {
+    const f = frozenPosRef.current;
+    if (f) {
+      return {
+        second: f.second || 0,
+        season: f.season ?? 1,
+        episode: f.episode ?? 1,
+        server: f.server || 'vidy',
+        frozen: true,
+      };
+    }
+    const p = myPos.current || {};
+    return {
+      second: p.second || 0,
+      season: p.season ?? 1,
+      episode: p.episode ?? 1,
+      server: p.server || 'vidy',
+      frozen: false,
+    };
+  };
   const lastSeekSent = useRef({ at: 0, second: -1, season: -1, episode: -1 });
   const canControlRef = useRef(false);
   const seenDevices = useRef(new Set([device]));
@@ -762,7 +787,7 @@ export default function RoomView({ code, onLeave, onToast }) {
   const reportState = (patch) => {
     try {
       channelRef.current?.update?.({
-        pos: Math.floor(myPos.current.second || 0),
+        pos: Math.floor(roomClock().second || 0),
         ...(patch || {}),
       });
     } catch {
@@ -1011,7 +1036,7 @@ export default function RoomView({ code, onLeave, onToast }) {
               // Drift note (T2): honest only with a fresh local clock. A
               // stale myPos (just moved, just loaded) printed phantom gaps
               // like "Host +26s" while 3s apart.
-              const mine = myPos.current.second || 0;
+              const mine = roomClock().second || 0;
               const fresh = Date.now() - lastReportAt.current < 15000;
               const behind = Math.floor(s - mine);
               if (!pausedByRef.current && fresh && s > 5 && behind > 15) {
@@ -1127,7 +1152,7 @@ export default function RoomView({ code, onLeave, onToast }) {
           // hand them the paused state directly (else they play until the
           // next heartbeat/poll notices).
           if (newcomers.length > 0 && pausedByRef.current === nameRef.current) {
-            const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
+            const second = Math.floor(roomClock().second || 0);
             channelRef.current?.send('pause', { device, name: nameRef.current, second, at: Date.now() });
           }
         }
@@ -1153,7 +1178,7 @@ export default function RoomView({ code, onLeave, onToast }) {
           // into the dead window never reached anyone).
           flushOutbox();
           if (pausedByRef.current === nameRef.current) {
-            const second = Math.floor((frozenPosRef.current || myPos.current).second || 0);
+            const second = Math.floor(roomClock().second || 0);
             try {
               channelRef.current?.send('pause', { device, name: nameRef.current, second, at: Date.now() });
             } catch {
@@ -1346,7 +1371,7 @@ export default function RoomView({ code, onLeave, onToast }) {
   useEffect(() => {
     if (!room || !isHost) return;
     const beat = setInterval(() => {
-      const p = frozenPosRef.current || myPos.current;
+      const p = roomClock();
       // Row stamp only (no presence re-track — see the note above the
       // removed heartbeat). Ticks below carry the live clock.
       // Row stamp only once started: pre-start wall accrual must never
@@ -1364,7 +1389,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       // No clock before the first real play, and none while offline: both
       // leaked phantom seconds to followers (Sync 0:35 on a fresh room).
       if (pausedByRef.current || !startedRef.current || !chanUpRef.current) return;
-      const p = myPos.current;
+      const p = roomClock();
       channelRef.current?.send('tick', {
         device,
         name: nameRef.current,
@@ -1425,7 +1450,7 @@ export default function RoomView({ code, onLeave, onToast }) {
         if (Date.now() - followAppliedRef.current < 6000) return;
         const elapsed = r.updatedAt ? Math.max(0, (Date.now() - new Date(r.updatedAt).getTime()) / 1000) : 0;
         const expected = (r.position || 0) + Math.min(elapsed, 30);
-        const mine = myPos.current.second || 0;
+        const mine = roomClock().second || 0;
         // Same honesty rule as live ticks (T2): a stale local clock prints
         // no delta — "Host +26s" while 3s apart was this exact bug.
         const fresh = Date.now() - lastReportAt.current < 15000;
@@ -1590,7 +1615,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                 poster_path: curMedia.poster,
                 season: curRow?.season || 1,
                 episode: curRow?.episode || 1,
-                startAt: Math.floor(myPos.current.second || 0),
+                startAt: Math.floor(roomClock().second || 0),
               }
             : null;
       const baseQueue = queueNext || queue;
@@ -1801,7 +1826,7 @@ export default function RoomView({ code, onLeave, onToast }) {
   };
 
   const broadcastPause = async () => {
-    const second = Math.floor(myPos.current.second || 0);
+    const second = Math.floor(roomClock().second || 0);
     // Pause is the one event that must not be lost: a follower who misses
     // it plays on. Triple-send (idempotent) + presence resend for late
     // joiners + row-state poll healing on the follower side. Retries die
@@ -1832,7 +1857,7 @@ export default function RoomView({ code, onLeave, onToast }) {
       setRoomTarget({ key: `me:${Date.now()}`, action: 'pause', second });
     }
     try {
-      await patchRoom(code, { state: 'paused', position: Math.floor(myPos.current.second || 0) });
+      await patchRoom(code, { state: 'paused', position: second });
     } catch {
       // broadcast already told the room
     }
@@ -1882,9 +1907,10 @@ export default function RoomView({ code, onLeave, onToast }) {
   const broadcastPlay = async () => {
     // Resume from the frozen pause second (preferred) — myPos may be stale
     // after suspension, and the stale 0 used to restart from the beginning.
-    const second = Math.floor((frozenPosRef.current?.second ?? myPos.current.second) || 0);
+    const second = Math.floor(roomClock().second || 0);
     // Driving means started (T1) — Sync-all doubles as the opener.
-    markStarted(second, myPos.current.season, myPos.current.episode, myPos.current.server);
+    const here = roomClock();
+    markStarted(second, here.season, here.episode, here.server);
     channelRef.current?.send('play', {
       device, name: name, second, at: Date.now(), force: true,
     });
@@ -1925,7 +1951,8 @@ export default function RoomView({ code, onLeave, onToast }) {
   // un-started also opens the room (T1).
   const handleProviderPlay = () => {
     if (!startedRef.current && canControlRef.current) {
-      markStarted(myPos.current.second || 0, myPos.current.season, myPos.current.episode, myPos.current.server);
+      const here = roomClock();
+      markStarted(here.second || 0, here.season, here.episode, here.server);
     }
     if (pausedByDeviceRef.current === device) broadcastPlay();
   };
@@ -1978,15 +2005,29 @@ export default function RoomView({ code, onLeave, onToast }) {
   // Single status line (T1/N2): not-started is explicit, and a pause
   // carries the frozen host second — "Paused by host • 0:38". The live
   // clock below only runs while playing (never alongside the pause time).
+  // One pause precedence for display: room lock > provider-declared pause
+  // > host absence > playing. A provider-paused picture with an open room
+  // reads "Paused", never "In sync".
+  const pauseKind = pausedBy
+    ? 'room'
+    : !roomStarted
+      ? 'idle'
+      : waitingForHost && !canControl
+        ? 'absent'
+        : myPos.current.ppaused
+          ? 'provider'
+          : 'playing';
   const statusText = !chanUp
     ? 'Reconnecting'
-    : !roomStarted
-    ? (canControl ? 'Press play to start' : 'Waiting to start')
-    : pausedBy
+    : pauseKind === 'room'
       ? `Paused by ${pausedBy}${hostPos ? ` • ${formatClock(hostPos.second)}` : ''}`
-      : waitingForHost && !canControl
-        ? 'Waiting for host'
-        : syncNote;
+      : pauseKind === 'idle'
+        ? (canControl ? 'Press play to start' : 'Waiting to start')
+        : pauseKind === 'absent'
+          ? 'Waiting for host'
+          : pauseKind === 'provider'
+            ? `Paused • ${formatClock(roomClock().second)}`
+            : syncNote;
   const showHostClock = !canControl && !pausedBy && hostPos && roomStarted;
 
   // Playlist derivation: the room's current media splits the queue into
