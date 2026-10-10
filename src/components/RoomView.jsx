@@ -50,6 +50,7 @@ import {
   playNotifyTone,
 } from '../services/notify';
 import { useAccount } from '../services/account';
+import { letterboxd } from '../services/letterboxd';
 import YouTubeRoomPlayer, { parseYouTubeId, fetchYouTubeMeta } from './YouTubeRoomPlayer';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
@@ -218,30 +219,107 @@ function pickedOfWlItem(item) {
 }
 
 // From-my-list picker for the playlist drawer (host only): Continue
-// Watching (with resume points) or Watch Later, same Add / Play-now pair
-// as search results.
-function MyListPicker({ onAdd, onPlay, swapBusy }) {
+// Watching (with resume points) or Watch Later (site rows, then the
+// Letterboxd group), same Add / Play-now pair as search results.
+// Rows hide while their title sits in the room queue (display filter
+// only — the real lists are never touched) and return if unqueued.
+function MyListPicker({ onAdd, onPlay, swapBusy, queuedKeys, onToast }) {
   const [tab, setTab] = useState('cw');
-  const cw = tab === 'cw' ? storage.getAllContinueWatching().slice(0, 8) : [];
-  const wl = tab === 'wl' ? storage.getWatchlist().slice(0, 8) : [];
-  const rows = tab === 'cw'
-    ? cw.map((e) => {
-        const t = Math.floor(e.currentTime || 0);
-        return {
-          key: `cw:${e.type}:${e.mediaId}`,
-          title: e.title || 'Untitled',
-          poster: e.poster || '',
-          sub: `${e.type === 'tv' ? `S${e.season || 1} E${e.episode || 1} • ` : ''}Resume ${formatClock(t)}`,
-          picked: pickedOfCwEntry(e),
-        };
+  const [lbUser] = useState(() => {
+    try {
+      return localStorage.getItem('mz_letterboxd_user') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [lbList, setLbList] = useState([]);
+  const [lbState, setLbState] = useState('idle');
+  const [resolvingKey, setResolvingKey] = useState(null);
+  // Resolved TMDB picks per Letterboxd id: lets queued LB rows hide
+  // like every other row (picked key known only after resolving).
+  const resolvedLb = useRef({});
+  useEffect(() => {
+    if (tab !== 'wl' || !lbUser || lbState !== 'idle') return;
+    let alive = true;
+    setLbState('loading');
+    letterboxd
+      .fetchUserWatchlist(lbUser)
+      .then((list) => {
+        if (!alive) return;
+        const hidden = new Set(storage.getHiddenLetterboxd());
+        setLbList((list || []).filter((r) => !hidden.has(r.id)));
+        setLbState('ready');
       })
-    : wl.map((item) => ({
-        key: `wl:${item.id}`,
-        title: item.title || item.name || 'Untitled',
-        poster: item.poster_path || item.poster || '',
-        sub: item.media_type === 'tv' || item.type === 'tv' || item.first_air_date ? 'Show' : 'Movie',
-        picked: pickedOfWlItem(item),
-      }));
+      .catch(() => {
+        if (alive) setLbState('error');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tab, lbUser, lbState]);
+  const queued = new Set(queuedKeys || []);
+  const hideQueued = (rows) => rows.filter((r) => !queued.has(keyOfMedia(r.picked)));
+  const cwRows = hideQueued(
+    (tab === 'cw' ? storage.getAllContinueWatching().slice(0, 8) : []).map((e) => {
+      const t = Math.floor(e.currentTime || 0);
+      return {
+        key: `cw:${e.type}:${e.mediaId}`,
+        title: e.title || 'Untitled',
+        poster: e.poster || '',
+        sub: `${e.type === 'tv' ? `S${e.season || 1} E${e.episode || 1} • ` : ''}Resume ${formatClock(t)}`,
+        picked: pickedOfCwEntry(e),
+      };
+    })
+  );
+  const wlRows = hideQueued(
+    (tab === 'wl' ? storage.getWatchlist().slice(0, 8) : []).map((item) => ({
+      key: `wl:${item.id}`,
+      title: item.title || item.name || 'Untitled',
+      poster: item.poster_path || item.poster || '',
+      sub: item.media_type === 'tv' || item.type === 'tv' || item.first_air_date ? 'Show' : 'Movie',
+      picked: pickedOfWlItem(item),
+    }))
+  );
+  const lbRows = (tab === 'wl' && lbState === 'ready' ? lbList : [])
+    .map((item) => ({
+      key: `lb:${item.id}`,
+      title: item.title || 'Untitled',
+      poster: '',
+      sub: `${item.release_date || ''} • Letterboxd`.trim(),
+      lb: item,
+    }))
+    .filter((r) => {
+      const picked = resolvedLb.current[r.lb.id];
+      if (!picked) return true;
+      return !queued.has(keyOfMedia(picked));
+    });
+  // Letterboxd rows carry URL ids, not TMDB ids: resolve on action.
+  const resolveLb = async (item) => {
+    const hit = await tmdb.resolveTitle(item.title, item.release_date);
+    if (!hit) throw new Error('No TMDB match.');
+    return {
+      kind: 'tmdb',
+      id: hit.id,
+      media_type: hit.media_type || 'movie',
+      title: hit.title || hit.name || item.title,
+      poster_path: hit.poster_path || '',
+    };
+  };
+  const actLb = async (item, play) => {
+    const key = `lb:${item.id}`;
+    setResolvingKey(key);
+    try {
+      const picked = await resolveLb(item);
+      resolvedLb.current[item.id] = picked;
+      if (play) onPlay(picked);
+      else onAdd(picked);
+    } catch {
+      onToast?.(`Could not match "${item.title}" on TMDB.`);
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+  const rows = tab === 'cw' ? cwRows : wlRows;
   return (
     <div className="space-y-2">
       <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">From my list</p>
@@ -260,9 +338,22 @@ function MyListPicker({ onAdd, onPlay, swapBusy }) {
           </button>
         ))}
       </div>
-      {rows.length === 0 ? (
+      {rows.length === 0 && lbRows.length === 0 ? (
         <p className="text-[11px] text-white/40">
-          {tab === 'cw' ? 'No continue-watching titles yet.' : 'Watch Later is empty.'}
+          {tab === 'cw' ? (
+            'No continue-watching titles yet.'
+          ) : lbState === 'loading' ? (
+            'Loading Letterboxd…'
+          ) : lbState === 'error' ? (
+            <>
+              Letterboxd did not load.{' '}
+              <button onClick={() => setLbState('idle')} className="underline">
+                Retry
+              </button>
+            </>
+          ) : (
+            'Watch Later is empty.'
+          )}
         </p>
       ) : (
         <div className="space-y-2">
@@ -302,6 +393,53 @@ function MyListPicker({ onAdd, onPlay, swapBusy }) {
               </div>
             </div>
           ))}
+          {tab === 'wl' && (lbRows.length > 0 || lbState === 'loading' || lbState === 'error') && (
+            <div className="space-y-2 pt-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+                Letterboxd{lbRows.length > 0 ? ` • ${lbRows.length}` : ''}
+              </p>
+              {lbState === 'loading' && <p className="text-[11px] text-white/40">Loading Letterboxd…</p>}
+              {lbState === 'error' && (
+                <p className="text-[11px] text-white/40">
+                  Letterboxd did not load.{' '}
+                  <button onClick={() => setLbState('idle')} className="underline">
+                    Retry
+                  </button>
+                </p>
+              )}
+              {lbRows.map((r) => (
+                <div key={r.key} className="mat-row p-2 flex items-center gap-2.5">
+                  <div className="w-10 h-14 rounded-xl overflow-hidden bg-black/50 flex-shrink-0">
+                    <img src={FALLBACK_POSTER} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-white/90 truncate">{r.title}</p>
+                    <p className="text-[10px] text-white/50 mt-0.5 truncate">{r.sub}</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => actLb(r.lb, false)}
+                      disabled={swapBusy || resolvingKey === r.key}
+                      className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                      aria-label={`Add ${r.title} to playlist`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="cine-tip" aria-hidden="true">Add to playlist</span>
+                    </button>
+                    <button
+                      onClick={() => actLb(r.lb, true)}
+                      disabled={swapBusy || resolvingKey === r.key}
+                      className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                      aria-label={`Play ${r.title} now`}
+                    >
+                      <Play className="w-3.5 h-3.5" fill="currentColor" />
+                      <span className="cine-tip" aria-hidden="true">Play now</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2851,14 +2989,24 @@ export default function RoomView({ code, onLeave, onToast }) {
                     </div>
                     <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0" />
                     {isHost && (
-                      <button
-                        onClick={() => queueRemove(item.key)}
-                        className="cine-icon-btn cine-icon-btn--sm flex-shrink-0"
-                        
-                        aria-label={`Remove ${item.title} from playlist`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => queuePlay(item.key)}
+                          disabled={swapBusy}
+                          className="cine-icon-btn cine-icon-btn--sm cine-has-tip"
+                          aria-label={`Play ${item.title} again`}
+                        >
+                          <Play className="w-3.5 h-3.5" fill="currentColor" />
+                          <span className="cine-tip" aria-hidden="true">Play again</span>
+                        </button>
+                        <button
+                          onClick={() => queueRemove(item.key)}
+                          className="cine-icon-btn cine-icon-btn--sm flex-shrink-0"
+                          aria-label={`Remove ${item.title} from playlist`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -2973,6 +3121,8 @@ export default function RoomView({ code, onLeave, onToast }) {
                   onAdd={(picked) => queueAdd(picked, false)}
                   onPlay={(picked) => queueAdd(picked, true)}
                   swapBusy={swapBusy}
+                  queuedKeys={queue.map((q) => q.key)}
+                  onToast={onToast}
                 />
               </div>
             ) : (
