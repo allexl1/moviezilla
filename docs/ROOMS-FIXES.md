@@ -106,8 +106,9 @@ receipts render headless-green. NEEDS Supabase `room-chat` bucket
 live 2-device check for: photo send/receive, GIF favorites, reaction
 strip, reply autofocus feel, notification sound, fullscreen sizes.
 
-Reference screenshots live in `docs/rooms-assets/` (filenames below).
-To attach: save each screenshot under its name, paths already wired.
+Reference screenshots were attached in chat during discussion and then
+removed from the repo (no binary junk in git). Screenshot numbers below
+are labels pointing at that chat history.
 Chat actions reuse the existing message shape (`chat.jsx` contract:
 text/gif + reply + reactions + receipts); photo messages add one new
 `kind` (see 19).
@@ -120,8 +121,7 @@ text/gif + reply + reactions + receipts); photo messages add one new
 17. Enter-to-send in both composers (main + floating). Enter sends,
     Shift+Enter makes a newline. Verify main composer already does
     this; bring floating to parity.
-18. Telegram-style quick reactions (screenshot 1:
-    `rooms-assets/chat-telegram-reactions.jpg`). A separated emoji
+18. Telegram-style quick reactions. A separated emoji
     strip floating above the message action menu, one tap to react —
     no menu diving. Add 👀 and 🥴 to the set. Check current reaction
     UI in `chat.jsx` at build, then replace.
@@ -168,16 +168,13 @@ text/gif + reply + reactions + receipts); photo messages add one new
     Audit list at build: composer (reply chip, Enter-send, GIF,
     photo), message menu (react, reply, edit, delete), receipts line,
     timestamps, unread badge.
-26. Composer placeholder (screenshot 5:
-    `rooms-assets/chat-composer-placeholder.jpg`): "Message as ..."
+26. Composer placeholder: "Message as ..."
     → "Send message". Keep the per-room name in the aria-label only.
     Check both composers (main + floating) for the old string.
-27. "1 new" pill position (screenshot 4:
-    `rooms-assets/chat-new-pill.jpg`). It overlaps the composer bar
+27. "1 new" pill position. It overlaps the composer bar
     today. Float it ABOVE the input/GIF/send row, Telegram-style
     (detached pill, never covering controls).
-28. Fullscreen control sizes (screenshot 6:
-    `rooms-assets/chat-fullscreen-buttons.jpg`). The floating chat +
+28. Fullscreen control sizes. The floating chat +
     fullscreen buttons are tiny in fullscreen. Scale to the basic
     (solo) player chrome — verify what that scale is at build
     (user suggests ~3x, confirm against solo, do not eyeball).
@@ -227,9 +224,8 @@ Rewrite plan (one pass, rooms test script after):
 Headline item this round (user: stop layering fixes, make ONE time
 system that works). Evidence: host changes resolution mid-watch →
 follower sees "the host hasn't started yet" while the host is active;
-paused at 3:33 shows "Watching • 4:08" ticking (screenshot 2:
-`rooms-assets/time-paused-drift.jpg`); idle 0:00 shows "Watching •
-4:58" ticking (screenshot 3: `rooms-assets/time-idle-drift.jpg`).
+paused at 3:33 shows "Watching • 4:08" ticking; idle 0:00 shows "Watching •
+4:58" ticking.
 Preliminary diagnosis to verify at build (not conclusions):
 (a) provider reloads reset telemetry, and "started" is still partly
 inferred — carry started explicitly on the row, never infer it from
@@ -296,7 +292,47 @@ test script permanently.
   or an owner call now.
 - [DECIDED] Paused copy: `Paused • {time}` (owner: "paused is ok").
 
-## Incoming (friend test session — first batch filed above as P3/P0)
+## P6 — second batch (specified, not built)
+
+31. Paste / drag-drop photos into the composer (Telegram-style, the
+    screenshot flow). Clipboard paste (screenshot → copy → paste) and
+    file drop onto the composer produce a preview strip above the
+    input: thumbnail + remove (X) + Send. Single file MVP. Notes:
+    read `clipboardData.files` (image/*) on paste, `dataTransfer` on
+    drop; preview via object URL, revoked after send; send reuses the
+    photo upload path with the active reply attached; remove clears
+    without sending. No bucket or payload changes (same URL-only
+    messages as the attach button).
+32. Floating popup action-button clip. The message … button sits
+    outside the bubble (-left-8/-right-8) and the floating panel's
+    overflow-hidden cuts it off — that is why actions look missing
+    in the popup. Fix: overlay the … button on the bubble corner
+    (bottom, sender side) on both surfaces. Kills the clip everywhere,
+    matches the Telegram hover-arrow pattern.
+33. Reaction strip scroll. 12 emoji overflow the 320px popup:
+    horizontal scroll, max width of the container, no wrap. Rail
+    keeps the full row.
+34. Composer compact mode in the floating panel. Placeholder wrap and
+    cramped pills come from full-size controls in 320px: compact prop
+    on Composer (smaller buttons, input unchanged) used only by the
+    floating panel; GIF picker constrains to the panel
+    (left/right anchored instead of fixed width that clips).
+35. Resizable floating panel. Yes, feasible, moderate: drag handle
+    on the panel corner (pointer events, mouse + touch), clamps
+    w 260–560 / h 320–90vh, size persisted per device
+    (`mz_float_chat_size`). One corner handle only, not all edges.
+36. Button audit (after the current batch, owner-queued). Every room
+    surface to the current system: white primary circle (send/play),
+    standard icon buttons, segmented pills, 14px secondary radius.
+    Surfaces: RoomView header/rail/drawer/modals/playlist, chat
+    bubbles/menus/composer (rail + floating), Player floating
+    controls, NickGate (screenshot 1: old pill input + check button),
+    RoomsView lobby. No new styles — map old ones onto existing
+    tokens, delete stragglers.
+37. Nickname gate restyle (part of 36, listed explicitly): current
+    old-style pills → current input + white primary button.
+
+## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 
 - Next batches append here, still nothing built until owner says so.
 
