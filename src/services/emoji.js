@@ -24,8 +24,9 @@ const EMOJI_UNIT =
   '(?:\\u00a9|\\u00ae|[\\u2000-\\u3300]|\\ud83c[\\ud000-\\udfff]|\\ud83d[\\ud000-\\udfff]|\\ud83e[\\ud000-\\udfff])(?:\\u200d(?:\\u00a9|\\u00ae|[\\u2000-\\u3300]|\\ud83c[\\ud000-\\udfff]|\\ud83d[\\ud000-\\udfff]|\\ud83e[\\ud000-\\udfff]))*[\\ufe0f\\u200d]?';
 
 // Telegram-style quick reaction set (their default row order, plus the
-// two requested extras: snowman and whale are both in Telegram's set).
-export const QUICK_REACTIONS = ['👍', '❤️', '🔥', '🎉', '😁', '👏', '😱', '👎', '☃️', '🐳'];
+// requested extras: snowman and whale are both in Telegram's set, and
+// 👀 🥴 came from room feedback).
+export const QUICK_REACTIONS = ['👍', '❤️', '🔥', '🎉', '😁', '👏', '😱', '👎', '☃️', '🐳', '👀', '🥴'];
 
 // Splits text into plain/emoji segments for rendering. Fresh regexes per
 // call — global-flag regexes are stateful and must never be shared.

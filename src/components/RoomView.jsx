@@ -27,6 +27,8 @@ import {
   fetchRoom,
   patchRoom,
   deleteRoom,
+  uploadRoomPhoto,
+  deleteRoomPhoto,
   openRoomChannel,
   clearLocalUnstarted,
   localRoomUnstarted,
@@ -648,6 +650,8 @@ export default function RoomView({ code, onLeave, onToast }) {
   const [swapYt, setSwapYt] = useState('');
   const [swapYtMeta, setSwapYtMeta] = useState(null);
   const [swapBusy, setSwapBusy] = useState(false);
+  // Photo upload in flight (composer attach button state).
+  const [photoBusy, setPhotoBusy] = useState(false);
   // (Reactions live with the chat cache above: broadcast-only like chat
   // itself — same lifetime as messages, late joiners miss both equally.)
   // Floating chat (fullscreen overlay): open state + unread count. Unread
@@ -1912,6 +1916,13 @@ export default function RoomView({ code, onLeave, onToast }) {
         ? { id: reply.id, name: reply.name, text: (reply.text || '').slice(0, 140), kind: reply.kind || 'text' }
         : null,
     };
+    deliverChat(msg);
+    setInputCached('');
+  };
+
+  // One delivery path for every chat payload (text/gif/photo): offline
+  // queues for the reconnect flush, local echo shows at once.
+  const deliverChat = (msg) => {
     if (!chanUpRef.current) {
       // Socket down: queue for the reconnect flush, still show locally.
       outboxRef.current.push({ ...msg });
@@ -1923,22 +1934,50 @@ export default function RoomView({ code, onLeave, onToast }) {
       }
     }
     pushMsg({ ...msg, mine: true });
-    setInputCached('');
   };
 
-  const sendGif = (url, preview) => {
+  const sendGif = (url, preview, reply = null) => {
     if (!url || chatMuted) return;
-    const msg = { id: msgId(), device, name: name, kind: 'gif', url, preview, at: Date.now() };
-    if (!chanUpRef.current) {
-      outboxRef.current.push({ ...msg });
-    } else {
-      try {
-        channelRef.current?.send('chat', { ...msg });
-      } catch {
-        outboxRef.current.push({ ...msg });
-      }
+    deliverChat({
+      id: msgId(),
+      device,
+      name: name,
+      kind: 'gif',
+      url,
+      preview,
+      at: Date.now(),
+      reply: reply
+        ? { id: reply.id, name: reply.name, text: (reply.text || '').slice(0, 140), kind: reply.kind || 'text' }
+        : null,
+    });
+  };
+
+  // Photo messages: picked in the composer, uploaded to the room bucket,
+  // sent as URL-only payloads (the 120-message local cache stays tiny).
+  // Bucket `room-chat` must exist (dashboard, free tier) with an anon
+  // insert policy, or uploads fail with a toast instead of silence.
+  const sendPhoto = async (file, reply = null) => {
+    if (!file || chatMuted) return;
+    setPhotoBusy(true);
+    try {
+      const url = await uploadRoomPhoto(code, file);
+      deliverChat({
+        id: msgId(),
+        device,
+        name: name,
+        kind: 'image',
+        url,
+        title: String(file.name || 'Photo').slice(0, 120),
+        at: Date.now(),
+        reply: reply
+          ? { id: reply.id, name: reply.name, text: (reply.text || '').slice(0, 140), kind: reply.kind || 'text' }
+          : null,
+      });
+    } catch (err) {
+      onToast?.(err?.message || 'Photo upload failed.');
+    } finally {
+      setPhotoBusy(false);
     }
-    pushMsg({ ...msg, mine: true });
   };
 
   // T13 session edit/delete (option A): live members converge; the sender
@@ -1950,9 +1989,11 @@ export default function RoomView({ code, onLeave, onToast }) {
     applyEdit(editId, clean, device);
   };
 
-  const deleteMessage = (delId) => {
+  const deleteMessage = (delId, m = null) => {
     channelRef.current?.send('del', { msgId: delId, device, name: name, host: isHost });
     applyDelete(delId, device, isHost);
+    // Image messages: best-effort file removal (orphans never break it).
+    if (m?.kind === 'image' && m?.url) deleteRoomPhoto(m.url);
   };
 
   // T15 crown + remove (control/chat grant pills are gone — see below).
@@ -2470,6 +2511,8 @@ export default function RoomView({ code, onLeave, onToast }) {
                 muted={chatMuted}
                 onSend={sendChat}
                 onSendGif={sendGif}
+                onSendPhoto={sendPhoto}
+                photoBusy={photoBusy}
                 onToggleReact={toggleReact}
                 receipts={receipts}
                 replyTo={replyTo}
@@ -2506,6 +2549,8 @@ export default function RoomView({ code, onLeave, onToast }) {
                 muted: chatMuted,
                 onSend: sendChat,
                 onSendGif: sendGif,
+                onSendPhoto: sendPhoto,
+                photoBusy,
                 onToggleReact: toggleReact,
                 receipts,
                 replyTo,
@@ -2605,6 +2650,8 @@ export default function RoomView({ code, onLeave, onToast }) {
             muted={chatMuted}
             onSend={sendChat}
             onSendGif={sendGif}
+            onSendPhoto={sendPhoto}
+            photoBusy={photoBusy}
             onToggleReact={toggleReact}
             receipts={receipts}
             replyTo={replyTo}
@@ -2844,7 +2891,10 @@ export default function RoomView({ code, onLeave, onToast }) {
             </button>
             <button
               onClick={() => {
-                if (pendingDelete) deleteMessage(pendingDelete);
+                if (pendingDelete) {
+                  const m = messages.find((x) => x.id === pendingDelete);
+                  deleteMessage(pendingDelete, m);
+                }
                 else if (pendingHost) transferHost(pendingHost.device, pendingHost.name);
                 else if (pendingKick) kickMember(pendingKick.device, pendingKick.name);
                 setPendingDelete(null);

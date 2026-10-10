@@ -100,14 +100,7 @@ export function playNotifyTone(kind = 'chime', vol01 = 0.8) {
   // Audible headroom: the old fixed gains were whisper-quiet. Volume
   // scales 20%..100% of these bases.
   const vol = 0.2 + 0.8 * Math.max(0, Math.min(1, Number(vol01) || 0));
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    toneCtx = toneCtx || new AC();
-    if (toneCtx.state === 'suspended') {
-      toneCtx.resume().catch(() => {});
-      if (toneCtx.state === 'suspended') return;
-    }
+  const play = () => {
     const now = toneCtx.currentTime;
     const blip = (freq, at, dur, base, type = 'sine', slideTo = null) => {
       const o = toneCtx.createOscillator();
@@ -130,6 +123,19 @@ export function playNotifyTone(kind = 'chime', vol01 = 0.8) {
     } else {
       blip(540, 0, 0.11, 0.34, 'sine', 190);
     }
+  };
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    toneCtx = toneCtx || new AC();
+    // Suspended contexts (fresh tab, backgrounded Safari, silent-switch
+    // interruptions) used to drop the tone outright. Resume first and
+    // play on unlock instead of losing the notification.
+    if (toneCtx.state === 'suspended') {
+      toneCtx.resume().then(play).catch(() => {});
+      return;
+    }
+    play();
   } catch {
     // Audio unavailable — badge + pill still carry the signal.
   }

@@ -438,6 +438,45 @@ export async function openRoomChannel({ code, name, onEvent, onPresence, onLeave
   };
 }
 
+// Room chat photo uploads. Bucket `room-chat` must exist (dashboard;
+// free tier includes storage) with an anon insert policy, or uploads
+// fail with a message instead of silence. 5MB cap, URL-only payloads.
+export async function uploadRoomPhoto(code, file) {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Rooms not configured.');
+  if (!file || !String(file.type || '').startsWith('image/')) {
+    throw new Error('That is not an image.');
+  }
+  if (file.size > 5 * 1024 * 1024) throw new Error('Photos top out at 5MB.');
+  const ext = String(file.name || '').split('.').pop()?.slice(0, 8) || 'jpg';
+  const path = `${String(code || '').trim().toUpperCase()}/${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await sb.storage.from('room-chat').upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(error.message || 'Photo upload failed.');
+  const { data } = sb.storage.from('room-chat').getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('Photo upload failed.');
+  return data.publicUrl;
+}
+
+// Best-effort photo file removal on delete-for-everyone. Orphans never
+// break deletes (RLS may not allow anon deletes at all).
+export async function deleteRoomPhoto(url) {
+  try {
+    const sb = getSupabase();
+    if (!sb || !url) return;
+    const marker = '/room-chat/';
+    const idx = String(url).indexOf(marker);
+    if (idx < 0) return;
+    const path = String(url).slice(idx + marker.length).split('?')[0];
+    if (!path) return;
+    await sb.storage.from('room-chat').remove([path]);
+  } catch {
+    // ignore — the message tombstone is the delete that matters
+  }
+}
+
 // Shareable invite link: opening it lands straight in the room (the
 // nickname gate inside saves the name to that device on entry).
 // Canonical shape is /room/CODE (legacy ?room=CODE links still resolve).

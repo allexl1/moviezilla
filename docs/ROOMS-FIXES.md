@@ -38,7 +38,7 @@ do not start building them unprompted.
    stamp + live ticks) is the whole record. The YT player keeps no
    save path on purpose.
 
-## P2 — playlist changes (specified, not built)
+## P2 — playlist changes (built rooms-2.0, untested live)
 
 All host-only (followers see the playlist read-only, unchanged). All
 rows keep the existing Add (+) / Play-now (▶) pair. Nothing here
@@ -98,7 +98,13 @@ a view over them.
      comment is the contract: resolve via it before entering the
      detail/playback flow).
 
-## P3 — rooms chat (specified from friend test, not built)
+## P3 — rooms chat (built rooms-2.0, untested live)
+
+Live verification notes: message send, menu, reply-with-quote,
+receipts render headless-green. NEEDS Supabase `room-chat` bucket
+(dashboard, anon insert) or photo uploads fail with a toast. NEEDS
+live 2-device check for: photo send/receive, GIF favorites, reaction
+strip, reply autofocus feel, notification sound, fullscreen sizes.
 
 Reference screenshots live in `docs/rooms-assets/` (filenames below).
 To attach: save each screenshot under its name, paths already wired.

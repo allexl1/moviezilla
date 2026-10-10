@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Smile, X, Pencil, Trash2, CornerUpLeft, ChevronDown, MoreHorizontal } from 'lucide-react';
+import { Send, X, Pencil, Trash2, CornerUpLeft, ChevronDown, MoreHorizontal, ImagePlus } from 'lucide-react';
 import Emoji, { RichText } from './ui/Emoji';
 import { QUICK_REACTIONS } from '../services/emoji';
 import GifPicker from './GifPicker';
@@ -48,9 +48,62 @@ function QuoteSnippet({ reply, onJump }) {
         {reply.name}
       </span>
       <span className="cine-reply-quote-text">
-        {reply.kind === 'gif' ? 'GIF' : reply.text || ''}
+        {reply.kind === 'gif' ? 'GIF' : reply.kind === 'image' ? 'Photo' : reply.text || ''}
       </span>
     </button>
+  );
+}
+
+// Sent-gif bubble: plays animated, tap freezes the current frame
+// (canvas snapshot), tap again resumes. Falls back to a plain image
+// when no animated source exists.
+function GifBubble({ url, preview, title, time, mine }) {
+  const [frozen, setFrozen] = useState(false);
+  const imgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const canFreeze = Boolean(url && preview && url !== preview);
+  const freeze = () => {
+    try {
+      const img = imgRef.current;
+      const cv = canvasRef.current;
+      if (!img || !cv || !img.naturalWidth) return;
+      cv.width = img.naturalWidth;
+      cv.height = img.naturalHeight;
+      cv.getContext('2d').drawImage(img, 0, 0);
+      setFrozen(true);
+    } catch {
+      // tainted/undecodable frame — stay animated
+    }
+  };
+  return (
+    <span
+      className={`cine-gif-bubble${mine ? ' cine-gif-bubble--mine' : ''}`}
+      onClick={() => {
+        if (!canFreeze) return;
+        if (frozen) setFrozen(false);
+        else freeze();
+      }}
+      role={canFreeze ? 'button' : undefined}
+      aria-label={canFreeze ? (frozen ? 'Play GIF' : 'Pause GIF') : undefined}
+    >
+      <img
+        ref={imgRef}
+        src={url || preview}
+        alt={title || 'GIF'}
+        loading="lazy"
+        decoding="async"
+        className="cine-gif-img"
+        style={frozen ? { display: 'none' } : undefined}
+      />
+      {canFreeze && (
+        <canvas ref={canvasRef} className="cine-gif-img" style={frozen ? undefined : { display: 'none' }} aria-hidden="true" />
+      )}
+      {time && (
+        <span className="cine-gif-time">
+          {time}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -65,15 +118,15 @@ export function ChatMessage({
   onEdit,
   onDeleteRequest,
   onJump,
+  onViewPhoto,
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(m.text || '');
-  // One anchor, two surfaces (B6/B7): the … menu and the emoji picker share
-  // placement and are NEVER open together. Right click opens the menu
-  // directly. Default is BELOW the message (asks); only near the list
-  // bottom do they flip above to escape the scroller clip.
-  const [menuOpen, setMenuOpen] = useState(false);
+  // One anchor, one surface (B6/B7): the … button and right click open
+  // the menu with the quick-reaction strip fused on top (Telegram
+  // pattern — one tap reacts, no menu diving). Placement flips above
+  // near the list bottom to escape the scroller clip.
   const [pickerBelow, setPickerBelow] = useState(true);
   const msgRef = useRef(null);
   const placeBelow = () => {
@@ -88,30 +141,23 @@ export function ChatMessage({
       return true;
     }
   };
-  const togglePicker = () => {
-    if (!pickerOpen) setPickerBelow(placeBelow());
-    setPickerOpen((o) => !o);
-    setMenuOpen(false);
-  };
   const toggleMenu = () => {
     if (!menuOpen) setPickerBelow(placeBelow());
     setMenuOpen((o) => !o);
-    setPickerOpen(false);
   };
-  // Tap-anywhere dismissal: an open menu/picker closes when the pointer
-  // lands outside this message (it opens on right click, so it must also
+  // Tap-anywhere dismissal: an open menu closes when the pointer lands
+  // outside this message (it opens on right click, so it must also
   // close on any other click — a stuck menu is nonsense).
   useEffect(() => {
-    if (!menuOpen && !pickerOpen) return;
+    if (!menuOpen) return;
     const onDown = (e) => {
       if (msgRef.current && !msgRef.current.contains(e.target)) {
         setMenuOpen(false);
-        setPickerOpen(false);
       }
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [menuOpen, pickerOpen]);
+  }, [menuOpen]);
   if (m.sys) {
     return (
       <p className="text-center text-[11px] text-white/40">
@@ -145,7 +191,6 @@ export function ChatMessage({
       onContextMenu={(e) => {
         e.preventDefault();
         setPickerBelow(placeBelow());
-        setPickerOpen(false);
         setMenuOpen(true);
       }}
       className={`cine-msg-copy flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'} group/msg relative`}
@@ -156,14 +201,18 @@ export function ChatMessage({
       <div className="relative max-w-[85%]">
         <QuoteSnippet reply={m.reply} onJump={onJump} />
         {m.kind === 'gif' ? (
+          <GifBubble url={m.url} preview={m.preview} title={m.title} time={sentAt} mine={mine} />
+        ) : m.kind === 'image' ? (
           <span className={`cine-gif-bubble${mine ? ' cine-gif-bubble--mine' : ''}`}>
-            <img
-              src={m.preview || m.url}
-              alt={m.title || 'GIF'}
-              loading="lazy"
-              decoding="async"
-              className="cine-gif-img"
-            />
+            <button onClick={() => onViewPhoto?.(m.url, m.title)} aria-label={m.title ? `Open photo: ${m.title}` : 'Open photo'} className="block cursor-zoom-in">
+              <img
+                src={m.preview || m.url}
+                alt={m.title || 'Photo'}
+                loading="lazy"
+                decoding="async"
+                className="cine-gif-img"
+              />
+            </button>
             {sentAt && (
               <span className="cine-gif-time">
                 {sentAt}
@@ -243,16 +292,39 @@ export function ChatMessage({
           </button>
         )}
       </div>
-      {/* … menu (B6): Reply / React / Edit / Delete with labels. Shares the
-          edge-aware placement with the picker; the two never co-exist. */}
+      {/* … menu (B6): quick-reaction strip fused on top, then Reply /
+          Edit / Delete with labels. Shares edge-aware placement; the
+          strip is the react path, so no separate React row. */}
       {menuOpen && !editing && (
         <div
-          role="menu"
-          aria-label="Message actions"
-          className={`absolute z-10 w-44 rounded-2xl cine-glass-panel p-1.5 space-y-0.5 ${mine ? 'right-0' : 'left-0'} ${
+          className={`absolute z-10 ${mine ? 'right-0' : 'left-0'} ${
             pickerBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
           }`}
         >
+          <div
+            role="menu"
+            aria-label="Choose a reaction"
+            className="flex gap-0.5 p-1 rounded-full cine-glass-panel mb-1.5"
+          >
+            {QUICK_REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => {
+                  onToggleReact(m.id, emoji);
+                  setMenuOpen(false);
+                }}
+                aria-label={`React ${emoji}`}
+                className="w-7 h-7 rounded-full hover:bg-white/15 transition cursor-pointer flex items-center justify-center"
+              >
+                <Emoji char={emoji} size={18} />
+              </button>
+            ))}
+          </div>
+          <div
+            role="menu"
+            aria-label="Message actions"
+            className="w-44 rounded-2xl cine-glass-panel p-1.5 space-y-0.5"
+          >
           <button
             role="menuitem"
             onClick={() => {
@@ -263,14 +335,7 @@ export function ChatMessage({
           >
             <CornerUpLeft className="w-3.5 h-3.5" /> Reply
           </button>
-          <button
-            role="menuitem"
-            onClick={togglePicker}
-            className="cine-msg-menu-item"
-          >
-            <Smile className="w-3.5 h-3.5" /> React
-          </button>
-          {mine && m.kind !== 'gif' && (
+          {mine && m.kind !== 'gif' && m.kind !== 'image' && (
             <button
               role="menuitem"
               onClick={() => {
@@ -288,39 +353,14 @@ export function ChatMessage({
               role="menuitem"
               onClick={() => {
                 setMenuOpen(false);
-                onDeleteRequest?.(m.id);
+                onDeleteRequest?.(m.id, m);
               }}
               className="cine-msg-menu-item cine-msg-menu-item--danger"
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>
           )}
-        </div>
-      )}
-      {/* Reaction picker: below the message unless the list bottom is
-          near (then it flips above to escape the scroller clip). */}
-      {pickerOpen && (
-        <div
-          role="menu"
-          aria-label="Choose a reaction"
-          className={`absolute z-10 flex gap-0.5 p-1 rounded-full cine-glass-panel ${mine ? 'right-0' : 'left-0'} ${
-            pickerBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
-          }`}
-        >
-          {QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => {
-                onToggleReact(m.id, emoji);
-                setPickerOpen(false);
-              }}
-
-              aria-label={`React ${emoji}`}
-              className="w-7 h-7 rounded-full hover:bg-white/15 transition cursor-pointer flex items-center justify-center"
-            >
-              <Emoji char={emoji} size={18} />
-            </button>
-          ))}
+          </div>
         </div>
       )}
       <ReactionChips msgId={m.id} forMsg={reactions?.[m.id]} myDevice={myDevice} onToggleReact={onToggleReact} />
@@ -340,10 +380,12 @@ export function ChatMessage({
 
 // Autogrowing composer (T9): grows to 5 lines, Enter sends,
 // Shift+Enter breaks. Draft lives in the parent (survives tab switches,
-// reloads via the room's draft cache).
-function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSend, onSendGif }) {
+// reloads via the room's draft cache). focusKey nudges the keyboard open
+// whenever a reply starts (friend: answer writes immediately).
+function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSend, onSendGif, onSendPhoto, focusKey, photoBusy }) {
   const [gifOpen, setGifOpen] = useState(false);
   const areaRef = useRef(null);
+  const photoRef = useRef(null);
   const fit = () => {
     const el = areaRef.current;
     if (!el) return;
@@ -357,6 +399,10 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
       if (el) el.style.height = 'auto';
     }
   }, [input]);
+  useEffect(() => {
+    if (focusKey > 0) areaRef.current?.focus?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
   if (muted) {
     return (
       <div className="p-3 border-t border-[var(--cine-glass-border)] flex-shrink-0">
@@ -376,7 +422,8 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
         <GifPicker
           onPick={(g) => {
             setGifOpen(false);
-            onSendGif(g.url, g.preview);
+            onSendGif(g.url, g.preview, replyTo);
+            setReplyTo(null);
           }}
           onClose={() => setGifOpen(false)}
         />
@@ -410,8 +457,8 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
               setInput(e.target.value);
               fit();
             }}
-            placeholder={`Message as ${nickname}…`}
-            aria-label="Chat message"
+            placeholder="Send message"
+            aria-label={nickname ? `Send message as ${nickname}` : 'Send message'}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -429,6 +476,28 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
           className={`cine-control-btn flex-shrink-0 h-11 px-4 text-xs${gifOpen ? ' cine-pill--active' : ''}`}
         >
           GIF
+        </button>
+        <input
+          ref={photoRef}
+          type="file"
+          accept="image/*"
+          aria-hidden="true"
+          tabIndex={-1}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) onSendPhoto?.(f, replyTo);
+            setReplyTo(null);
+          }}
+        />
+        <button
+          onClick={() => photoRef.current?.click()}
+          disabled={photoBusy}
+          aria-label="Send a photo"
+          className="cine-control-btn flex-shrink-0 h-11 px-4 text-xs disabled:opacity-50"
+        >
+          <ImagePlus className="w-4 h-4" />
         </button>
         <button onClick={send} className="flex-shrink-0 w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-[#f2f2f5] active:scale-95 transition" aria-label="Send message">
           <Send className="w-4 h-4" />
@@ -452,6 +521,8 @@ export function ChatView({
   muted,
   onSend,
   onSendGif,
+  onSendPhoto,
+  photoBusy,
   onToggleReact,
   receipts,
   replyTo,
@@ -463,6 +534,19 @@ export function ChatView({
   const pinnedRef = useRef(true);
   const lenRef = useRef(0);
   const [newCount, setNewCount] = useState(0);
+  // Reply-to-write focus: selecting a reply bumps the key, the composer
+  // opens the keyboard at once (no second tap into the input).
+  const [focusKey, setFocusKey] = useState(0);
+  // Full-photo viewer (actors-page pattern): tap a photo message to open.
+  const [viewingPhoto, setViewingPhoto] = useState(null);
+  useEffect(() => {
+    if (!viewingPhoto) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setViewingPhoto(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewingPhoto]);
 
   const scrollToEnd = (smooth) => {
     const el = scrollerRef.current;
@@ -508,7 +592,18 @@ export function ChatView({
     if (!id) return;
     try {
       const el = scrollerRef.current?.querySelector(`[data-mid="${id}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight flash so the jumped-to message stands out among rest.
+      el.classList.remove('cine-flash');
+      requestAnimationFrame(() => {
+        try {
+          el.classList.add('cine-flash');
+          setTimeout(() => el.classList.remove('cine-flash'), 1700);
+        } catch {
+          // gone — stay put
+        }
+      });
     } catch {
       // gone (tombstoned/capped) — stay put
     }
@@ -518,6 +613,7 @@ export function ChatView({
     setReplyTo(
       m ? { id: m.id, name: m.name, text: (m.text || '').slice(0, 140), kind: m.kind || 'text' } : null
     );
+    if (m) setFocusKey((k) => k + 1);
   };
 
   return (
@@ -545,6 +641,7 @@ export function ChatView({
             onEdit={onEdit}
             onDeleteRequest={onDeleteRequest}
             onJump={jumpToMessage}
+            onViewPhoto={(url, title) => setViewingPhoto({ url, title })}
           />
         ))}
       </div>
@@ -563,7 +660,34 @@ export function ChatView({
         setReplyTo={setReplyTo}
         onSend={onSend}
         onSendGif={onSendGif}
+        onSendPhoto={onSendPhoto}
+        photoBusy={photoBusy}
+        focusKey={focusKey}
       />
+      {/* Full-photo viewer */}
+      {viewingPhoto && (
+        <div
+          onClick={() => setViewingPhoto(null)}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-md p-6 animate-in fade-in duration-200 cursor-zoom-out"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+        >
+          <button
+            onClick={() => setViewingPhoto(null)}
+            className="cine-icon-btn absolute top-5 right-5"
+            aria-label="Close photo viewer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <img
+            src={viewingPhoto.url}
+            alt={viewingPhoto.title || 'Photo'}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] max-w-full w-auto rounded-3xl border border-[var(--cine-glass-border)] shadow-2xl object-contain cursor-default"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -586,6 +710,8 @@ export function FloatingRoomChat({
   muted,
   onSend,
   onSendGif,
+  onSendPhoto,
+  photoBusy,
   onToggleReact,
   receipts,
   replyTo,
@@ -600,11 +726,10 @@ export function FloatingRoomChat({
         <p className="text-xs font-bold text-white">Room chat</p>
         <button
           onClick={onToggle}
-          className="cine-icon-btn cine-icon-btn--sm"
-
+          className="cine-icon-btn"
           aria-label="Close room chat"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
       <ChatView
@@ -618,6 +743,8 @@ export function FloatingRoomChat({
         muted={muted}
         onSend={onSend}
         onSendGif={onSendGif}
+        onSendPhoto={onSendPhoto}
+        photoBusy={photoBusy}
         onToggleReact={onToggleReact}
         receipts={receipts}
         replyTo={replyTo}

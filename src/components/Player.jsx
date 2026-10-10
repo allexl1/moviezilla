@@ -936,7 +936,15 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           muted={chat.muted}
           onSend={chat.onSend}
           onSendGif={chat.onSendGif}
+          onSendPhoto={chat.onSendPhoto}
+          photoBusy={chat.photoBusy}
           onToggleReact={chat.onToggleReact}
+          receipts={chat.receipts}
+          replyTo={chat.replyTo}
+          setReplyTo={chat.setReplyTo}
+          onEdit={chat.onEdit}
+          onDeleteRequest={chat.onDeleteRequest}
+          isHost={chat.isHost}
           endRef={floatEndRef}
           seenInfo={chat.seenInfo}
         />

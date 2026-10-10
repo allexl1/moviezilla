@@ -1095,7 +1095,7 @@ a.cine-pill {
 .cine-chat-jump {
   position: absolute;
   left: 50%;
-  bottom: 0.75rem;
+  bottom: 5rem;
   translate: -50% 0;
   display: inline-flex;
   align-items: center;
@@ -1120,6 +1120,22 @@ a.cine-pill {
 
 .cine-chat-jump:active {
   transform: scale(0.97);
+}
+
+/* Reply-jump flash: the quoted original pulses once so it stands out
+   among the rest after tapping a reply quote. */
+.cine-flash {
+  animation: cine-flash 1.6s ease;
+  border-radius: 1rem;
+}
+
+@keyframes cine-flash {
+  0%, 100% {
+    background: transparent;
+  }
+  15%, 55% {
+    background: rgba(255, 255, 255, 0.14);
+  }
 }
 
 /* ─── Static icon disc — bare glyph, no container ───────────────────────
