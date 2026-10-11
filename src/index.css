@@ -2521,6 +2521,12 @@ nav .cine-nav-btn {
   box-shadow: none;
 }
 
+/* Press state (motion P4 audit): squash like every other tappable.
+   Transition is already `all`. */
+.cine-nav-btn:active {
+  transform: scale(0.97);
+}
+
 /* Sliding active thumb: measured FLIP behind the active tab. */
 .cine-nav-tabs {
   position: relative;
@@ -2566,6 +2572,11 @@ nav .cine-nav-btn {
 .cine-nav-icon-btn:hover {
   color: var(--cine-white);
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Press state (motion P4 audit): .96 matches the icon-button family. */
+.cine-nav-icon-btn:active {
+  transform: scale(0.96);
 }
 
 /* ─── True refraction (Chromium-only liquid glass) ──────────────────────
@@ -3442,6 +3453,15 @@ img.cine-detail-melt-img {
   z-index: 5;
 }
 
+/* Press state (motion P4 audit): the whole card squashes; the avatar
+   keeps its own hover lift (different gesture, different element). */
+.cine-cast-card {
+  transition: transform var(--cine-duration-base) var(--cine-ease-out);
+}
+.cine-cast-card:active {
+  transform: scale(0.98);
+}
+
 /* Opt out of the global keyboard focus ring where the container already
    glows (big search fields) — the harsh box reads as a rendering bug. */
 .cine-focus-none:focus-visible {
@@ -3974,6 +3994,9 @@ body.mz-clean .cine-duo-btn {
   .cine-hero-duo-btn:active,
   .cine-hero-disc:active,
   .cine-seg-btn:active,
+  .cine-nav-btn:active,
+  .cine-nav-icon-btn:active,
+  .cine-cast-card:active,
   button.mat-row:active {
     transform: none;
   }

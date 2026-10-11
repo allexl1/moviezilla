@@ -1071,7 +1071,15 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 <div
                   key={actor.id}
                   onClick={() => onSelectPerson?.(actor.id)}
-                  
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectPerson?.(actor.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${actor.name}'s profile`}
                   className="cine-cast-card flex-shrink-0 w-32 text-center space-y-2 cursor-pointer group"
                 >
                   <div className="cine-cast-avatar w-28 h-28 mx-auto rounded-full overflow-hidden bg-[var(--cine-glass-tint)] border border-[var(--cine-glass-border)] shadow-lg">

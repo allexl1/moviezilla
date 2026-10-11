@@ -563,12 +563,16 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    gap-fill built (menu rows, reaction chips, button-rows at .98,
    slider thumbs affirm on grab, strip emoji via utility;
    reduced-motion collapses all press transforms to none) plus
-   outward round 1 (seg buttons, episode-drawer rows at .98) —
+   outward round 1 (seg buttons, episode-drawer rows at .98) plus
+   outward round 2, global completion (nav buttons, cast cards with
+   keyboard operability added, reduced-motion covers the family) —
    feel pass owed to owner devices. Left as media-hover language
-   on purpose: episode/cast/trailer/poster tiles and GIF cells
-   (press would fight the hover lift; cast cards need keyboard
-   support first). Queue/MyList rows are not tappable (their
-   buttons already press); text links are not press surfaces.
+   on purpose: episode/trailer/poster tiles and GIF cells
+   (press would fight the hover lift). Queue/MyList rows are not
+   tappable (their buttons already press); text links are not
+   press surfaces; hero dots/steppers and rail arrows are
+   micro/zone affordances with instant feedback (nothing
+   perceivable to squash).
 - P5 shimmer (keep + discipline): slow dim sweep only, layout
    mirrored everywhere it appears. Audit: Movies/Shows grids,
    Home rails, detail/person/studio loading states, search,
