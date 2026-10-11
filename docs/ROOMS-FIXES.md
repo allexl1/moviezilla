@@ -536,10 +536,12 @@ Reduced motion: all patterns collapse to instant opacity or nothing
   never both. Overlay fades (modal/drawer/viewer/toast) stay
   untouched; they are not route changes.
 - P2 stagger entrance: first paint only, never on scroll. UPGRADE,
-  not addition: `cine-card-in` already animates every poster card.
-  Extend it with a per-index delay variable (rails set `--i`,
-  capped ~12), same keyframes, same budget. RowRail/Card stay the
-  only owners of card entrance.
+   not addition: `cine-card-in` already animates every poster card.
+   Extend it with a per-index delay variable (rails set `--i`,
+   capped ~12), same keyframes, same budget. RowRail/Card stay the
+   only owners of card entrance. Status: built (RowRail passes capped
+   index, grids without index unchanged, reduced-motion kills the
+   entrance) — feel pass owed to owner devices.
 - P3 FLIP glide: segmented pills (rooms tabs, My List, settings
   On/Off, Watchlist segmented — shared with the arc pilot),
   navbar thumb (already glides? verify, else unify), toast stack

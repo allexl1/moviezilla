@@ -459,8 +459,13 @@ button.mat-row:active {
   0% { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
+/* Stagger (motion P2): rails set --i per index (capped ~12 at the
+   call site); same keyframes, same 200ms budget, ~30ms apart. No --i
+   means no delay — grids that don't pass an index behave exactly as
+   before. First paint only: nothing remounts on scroll. */
 .cine-card-in {
   animation: 0.2s ease-out both cine-card-in;
+  animation-delay: calc(var(--i, 0) * 30ms);
 }
 
 /* Skeleton shimmer (loading states). Killed by max-power mode via the

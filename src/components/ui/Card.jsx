@@ -5,7 +5,7 @@ import { tmdb, FALLBACK_POSTER } from '../../services/tmdb';
  * Shared MediaCard component — replaces all ad-hoc card implementations.
  * Used in: home grid, discovery pages, search results, "More Like This", etc.
  */
-export default function Card({ media, onClick, showRating = true, showRole = false, size = 'default', posterOnly = false, imdb = null }) {
+export default function Card({ media, onClick, showRating = true, showRole = false, size = 'default', posterOnly = false, imdb = null, index = null }) {
   const title = media?.title || media?.name || 'Untitled';
   // Fluid grid cards render up to ~210px wide — w500 keeps them crisp on
   // retina; rails stay on lighter w342, lg keeps w780.
@@ -36,7 +36,7 @@ export default function Card({ media, onClick, showRating = true, showRole = fal
       }}
       role="button"
       tabIndex={0}
-      
+      style={index == null ? undefined : { '--i': String(Math.min(index, 12)) }}
       aria-label={`View ${title}`}
       className={`cine-card cine-card-in flex-shrink-0 ${sizeClasses[size] || sizeClasses.default}`}
     >

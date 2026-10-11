@@ -93,7 +93,7 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
   };
 
   const cards = (size) =>
-    unique.map((media) => (
+    unique.map((media, idx) => (
       <Card
         key={`${title}_${media.media_type || mediaType || 'movie'}_${media.id}`}
         media={media}
@@ -102,6 +102,7 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
         showRole={showRole}
         posterOnly={!captioned}
         size={size}
+        index={idx}
       />
     ));
 
