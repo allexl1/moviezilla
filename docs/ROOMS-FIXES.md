@@ -389,7 +389,7 @@ the seam, do not layer. Upgrade neighboring controls to the same
 tokens while touching them (tooltip/tip unification, toast
 unification), but never redesign surfaces around a new component.
 
-## UI build plan (phases — starts after rooms test + push)
+## UI build plan (trimmed + cinema feel — specified, not built)
 
 Checked 2026-10-11: lucide-animated skill + play/pause/send/heart/
 refresh-ccw icon docs; arc segmented-control, hold-to-confirm,
@@ -398,6 +398,10 @@ dependency serves both libraries. All vendored (own the files, no
 runtime theme to fight); arc CSS modules get remapped onto cine
 tokens, never the reverse. PRIME RULE applies throughout: one piece
 per round, test after each, rework seams instead of layering.
+Owner trims (2026-10-11): no Ken Burns, ever. Toast-stack demoted
+to rainy-day (only real gain is Undo). Select unification deferred
+(invisible to users, Radix tax too high for now). Loader icon cut.
+Tooltip already cut. What remains is below.
 
 - Phase 0 — deps: `npm install motion` (lucide-react already in).
   No shadcn init, no components.json, no @/* alias: copy sources
@@ -405,12 +409,9 @@ per round, test after each, rework seams instead of layering.
   `src/components/arc/`, fix imports to relative paths.
 - Phase 1 — animated icons (vendored, zero structural risk):
   play + pause (rooms Pause/Resume + hero Play), send (chat
-  composer), refresh-ccw (Sync buttons), heart (GIF favorites),
-  loader-circle if a spinner survives the audit. Caveat from
-  their docs: hover animation needs hover — touch gets imperative
-  triggers or nothing; verify per icon at build, desktop delight
-  first, phone must at least not regress (static glyph = current
-  look).
+  composer), refresh-ccw (Sync buttons), heart (GIF favorites).
+  Hover-first delight per their docs; touch must at least not
+  regress (static glyph = current look), verified per icon.
 - Phase 2 — segmented-control (motion only): rooms Chat/People/
   Settings tabs, My List pills, settings On/Off groups, Watchlist
   segmented. Replaces `ui/SegmentedControl.jsx` + all manual pill
@@ -419,27 +420,49 @@ per round, test after each, rework seams instead of layering.
 - Phase 3 — hold-to-confirm (motion only): Delete room, Clear
   watch history, playlist Clear watched. Kills the `confirm()`
   calls and the delete-confirm modal branch.
-- Phase 4 — toast-stack (motion only): replaces App `showToast` +
-  all ~20 `onToast` call sites. Stacked, undo-capable (playlist
-  add/remove and message delete get Undo). Provider wraps App
-  once; call sites morph one by one.
-- Phase 5 — select unification (adds @radix-ui/react-select):
-  Picker vs ProviderPicker vs ServerSwitcher become one arc
-  select, remapped to cine tokens; delete dead `ui/Select.jsx`.
-  Radix is the only new runtime dep in the whole plan — accepted
-  here because dropdowns are the worst duplication (portal vs
-  fixed vs absolute, z 100/70/50).
-- Explicitly NOT adopted: arc tooltip (our cine-tip system is one
-  system already; Radix dep unjustified), arc chat-thread (our
-  ChatView is domain-fitted — presence-bound receipts, tombstones,
-  session cache, GIF/photo kinds, outbox; migrating would throw
-  away tested realtime logic for a prettier shell — borrow
-  patterns only, e.g. its attach-tray UX which already matches
-  ours), arc button/dialog/charts (our systems exist), anything
-  Pro-gated.
+- Phase 4 — cinema feel, ours (no library):
+  a. Route drift: one ~150ms fade-drift between screens on the
+  custom router. Screens cut today; cuts feel cheap.
+  b. Staggered rail entrances: cards rise with ~30ms stagger per
+  row on first paint only, never on scroll.
+  c. Backdrop fidelity: full-width backdrops, async decode, no
+  upscaled mush (finish the w780/w185 discipline as quality).
+  d. Title-logo sweep: every screen uses the official logo where
+  TMDB has one; plain text only as fallback. Audit, no new code.
+  e. Skeleton discipline: slow dim sweep, layout-mirrored,
+  never flashing.
+  Explicitly out: Ken Burns (owner veto), ambient washes
+  (audit-killed), serif display (hold stands), tap sounds,
+  parallax.
+- Explicitly NOT adopted: arc tooltip (cine-tip is one system),
+  arc chat-thread (domain-fitted ChatView wins — borrow patterns
+  only), arc button/dialog/charts (ours exist), anything Pro-gated.
 - Rejected libraries stay rejected (see UI pilot plan). Originkit
-  still unverified — check together only if a gap remains after
-  Phase 5.
+  still unverified — check together only if a gap remains.
+
+## Visual audit (2026-10-11, headless screenshots)
+
+Screens: home, movies, detail (Fight Club), watchlist desktop; home
++ rooms (chat/people/settings/playlist) at 390px. Zero console
+errors throughout. Motion notes are code-read (stills can't show
+motion): no route transitions, no rail entrances, no motion lib
+anywhere — screens cut, rails appear static.
+- Home hero: full-bleed art, official logo, white Play, meta row,
+  dots + steppers. Strong, nothing to change.
+- Movies: title voice consistent, filter row fits, rating chips
+  white per lime rule. "Coming Soon • 2026" still pill badges —
+  minor, quiet to plain meta when nearby code is touched.
+- Detail: logo, facts panel, IMDb-upgraded ratings, honours rail.
+  Strong. Mobile detail not shot — cover in the visual pass.
+- Watchlist: honest empty state, segmented tabs work. Segmented
+  is an arc pilot target (Phase 2).
+- Mobile home: hero stacks, dock nav fits, Play reachable. Good.
+- Rooms mobile: header fixed this round (truncate + icon-only +
+  chip hidden); rail tabs, composer, drawer verified per tab.
+- Opportunities (mapped): route drift (Phase 4a), rail stagger
+  (4b), backdrop fidelity (4c), logo sweep (4d — detail/home
+  already good, sweep remaining screens), skeleton discipline
+  (4e). No new items beyond the plan.
 
 ## Site-wide layering audit (playback/nav/UI surveyed)
 
