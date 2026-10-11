@@ -275,8 +275,10 @@ test script permanently.
 
 ## P5 — hygiene / publish
 
-13. Prod Supabase cleanup: junk probe room `GSMFZB` left in the lobby
-    (verify it is gone).
+13. Prod Supabase cleanup: junk probe rooms left in the lobby
+    (verify they are gone): `GSMFZB` (older) plus P6 headless-QA rooms
+    `RUMNPB` `VP5BET` `YXKUJ8` `W2AETJ` `MJAWPP` (host-only delete is
+    unreachable headless, so they were left standing).
 14. Push + publish discipline + Telegram/Vercel cache busts (`?v=` style)
     after the rooms release.
 15. Visual pass per page, desktop + 390px, reporter sends screenshots.
@@ -307,7 +309,19 @@ test script permanently.
   or an owner call now.
 - [DECIDED] Paused copy: `Paused • {time}` (owner: "paused is ok").
 
-## P6 — second batch (specified, not built)
+## P6 — second batch (built, untested live)
+
+Live verification notes (headless, build session): paste preview strip
+renders on synthetic paste, rail send + receipts green, … menu with
+12-emoji strip, reply strip, floating panel open + compact buttons +
+scrolling strip, panel-fit GIF picker with Favorites tab, drag/resize/
+clamps/persist + close/reopen restore, white send token, People danger
++ leave tokens, mobile 390px lobby Save fit. Zero JS errors throughout
+(sandbox embed DNS noise only).
+NEEDS live 2-device check for: real photo send/receive (needs the
+`room-chat` bucket first — file attach is hard headless, no run can
+cover it), drag + resize feel on touch, strip scroll feel in the
+panel, button look sign-off.
 
 31. Paste / drag-drop photos into the composer (Telegram-style, the
     screenshot flow). Clipboard paste (screenshot → copy → paste) and
@@ -618,9 +632,11 @@ follow the PRIME RULE (rewrite once, no layering).
   C1. [REAL, queued] Dropdowns: Picker vs ProviderPicker vs
   ServerSwitcher (+ dead `ui/Select`, 0 imports — delete it).
   Unify WITH the arc pilot (arc select), not separately.
-  C2. [REAL, queued] Buttons: white vs primary vs control-btn +
-  inline sizes + once-used danger + circle-vs-icon. This IS the
-  button audit (item 36) — no separate pass.
+   C2. [DONE by item 36] Buttons: white vs primary vs control-btn +
+   inline sizes + once-used danger + circle-vs-icon. Send circle,
+   Delete/Leave, lobby Save mapped onto tokens; tertiary text actions,
+   emoji strip buttons and mat-row rows intentionally left (not button
+   surfaces). No separate pass.
   C3. [REAL, queued] Dialogs: Modal (trapped) vs sheets/drawers/
   twin lightboxes/`confirm()`. Unify during button audit; twin
   chat/person lightboxes merge first (identical code).
