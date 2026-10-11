@@ -690,7 +690,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 mz-page-fade">
       {/* Poster tint: the artwork's palette at 30% across the whole page. */}
       <div className="cine-detail-bg" aria-hidden="true">
-        <img src={backdrop} alt="" className="cine-detail-bg-img" />
+        <img src={backdrop} alt="" decoding="async" className="cine-detail-bg-img" />
         <div className="cine-detail-bg-shade" />
       </div>
       {/* Hero: still backdrop dissolving straight into the tinted page
@@ -707,7 +707,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             allowFullScreen
           />
         ) : (
-          <img src={backdrop} alt={title} className="w-full h-full object-cover object-center cine-detail-melt-img" />
+          <img src={backdrop} alt={title} decoding="async" className="w-full h-full object-cover object-center cine-detail-melt-img" />
         )}
         <div className="absolute inset-0 cine-detail-hero-scrim pointer-events-none" />
 

@@ -198,6 +198,7 @@ export default function CleanHomeView({ onSelectMedia, onPlay, onToast, overlaid
                 alt=""
                 aria-hidden="true"
                 fetchPriority="high"
+                decoding="async"
                 className="clean-hero-fade clean-hero-img absolute inset-0 w-full h-full object-cover"
               />
               {/* Melt: the artwork itself dissolves into the page background

@@ -304,16 +304,17 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
       {/* Poster tint: the artwork's palette at 30% across the whole page. */}
       {heroItem && (
         <div className="cine-home-bg" aria-hidden="true">
-          <img
-            key={heroItem.id}
-            src={tmdb.getImageUrl(
-              heroItem.backdrop_path,
-              'w1280',
-              heroItem.backdrop_fallback
-            )}
-            alt=""
-            className="cine-home-bg-img cine-ghost-fade"
-          />
+            <img
+              key={heroItem.id}
+              src={tmdb.getImageUrl(
+                heroItem.backdrop_path,
+                'w1280',
+                heroItem.backdrop_fallback
+              )}
+              alt=""
+              decoding="async"
+              className="cine-home-bg-img cine-ghost-fade"
+            />
           <div className="cine-home-bg-shade" />
         </div>
       )}
@@ -340,6 +341,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 )}
                 alt=""
                 aria-hidden="true"
+                decoding="async"
                 className="cine-hero-prev"
               />
             )}
@@ -352,6 +354,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
               )}
               alt=""
               fetchPriority="high"
+              decoding="async"
               className="cine-hero-fade"
             />
             <div className="cine-hero-scrim" />

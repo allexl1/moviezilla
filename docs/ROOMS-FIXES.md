@@ -470,10 +470,19 @@ Tooltip already cut. What remains is below.
   custom router. Screens cut today; cuts feel cheap.
   b. Staggered rail entrances: cards rise with ~30ms stagger per
   row on first paint only, never on scroll.
-  c. Backdrop fidelity: full-width backdrops, async decode, no
-  upscaled mush (finish the w780/w185 discipline as quality).
-  d. Title-logo sweep: every screen uses the official logo where
-  TMDB has one; plain text only as fallback. Audit, no new code.
+   c. Backdrop fidelity: full-width backdrops, async decode, no
+   upscaled mush (finish the w780/w185 discipline as quality).
+   Status: audited + fixed — all heroes/ghosts full-bleed
+   object-cover at consistent w1280 (`original` reserved for
+   zoomed photos, w780 for suspended-player blur); async decode
+   added to the 7 hero/ghost imgs missing it (home x3, clean,
+   detail x2, suspended player). No mush-class disparity found.
+   d. Title-logo sweep: every screen uses the official logo where
+   TMDB has one; plain text only as fallback. Audit, no new code.
+   Status: audited clean — home/detail/clean heroes, studios and
+   search-studio rows all logo-first with text fallback; person
+   screens have no logos by nature; rooms/player stay text-only
+   (logo fetch there would be new code, explicitly out).
   e. Skeleton discipline: slow dim sweep, layout-mirrored,
   never flashing.
   Explicitly out: Ken Burns (owner veto), ambient washes

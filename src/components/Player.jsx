@@ -965,6 +965,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             <img
               src={tmdb.getImageUrl(media?.backdrop_path || details?.backdrop_path, 'w780', FALLBACK_BACKDROP)}
               alt=""
+              decoding="async"
               className="w-full h-full object-cover opacity-40 blur-md scale-105"
             />
             <div className="absolute inset-0 bg-black/55" />
