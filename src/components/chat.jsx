@@ -335,7 +335,7 @@ export function ChatMessage({
                   setMenuOpen(false);
                 }}
                 aria-label={`React ${emoji}`}
-                className={`w-7 h-7 rounded-full hover:bg-white/15 transition cursor-pointer flex items-center justify-center${compact ? ' flex-shrink-0' : ''}`}
+                className={`w-7 h-7 rounded-full hover:bg-white/15 active:scale-95 transition cursor-pointer flex items-center justify-center${compact ? ' flex-shrink-0' : ''}`}
               >
                 <Emoji char={emoji} size={18} />
               </button>

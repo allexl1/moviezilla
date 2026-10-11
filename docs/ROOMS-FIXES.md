@@ -555,9 +555,13 @@ Reduced motion: all patterns collapse to instant opacity or nothing
   NickGate save, RoomsView nickname save, Watchlist Letterboxd
   connect/save/change, search result rows, filter pills, episode
   rows + eye toggles, cast cards, provider/server menus, player
-  chrome, floating chat controls, modal buttons, empty-state
-  actions, error retry buttons. Anything tappable missing the
-  press token gets it; nothing gets a custom one.
+   chrome, floating chat controls, modal buttons, empty-state
+   actions, error retry buttons. Anything tappable missing the
+   press token gets it; nothing gets a custom one. Status: rooms
+   gap-fill built (menu rows, reaction chips, button-rows at .98,
+   slider thumbs affirm on grab, strip emoji via utility;
+   reduced-motion collapses all press transforms to none) — feel
+   pass owed to owner devices.
 - P5 shimmer (keep + discipline): slow dim sweep only, layout
   mirrored everywhere it appears. Audit: Movies/Shows grids,
   Home rails, detail/person/studio loading states, search,

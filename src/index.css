@@ -381,7 +381,16 @@ select:focus-visible,
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--cine-radius-lg);
   transition: background-color var(--cine-duration-base) var(--cine-ease-out),
-    border-color var(--cine-duration-base) var(--cine-ease-out);
+    border-color var(--cine-duration-base) var(--cine-ease-out),
+    transform var(--cine-duration-base) var(--cine-ease-out);
+}
+
+/* Press state (motion P4 audit) for rows that ARE buttons (search
+   results, menu rows, server rows): full-width rows squash less (.98)
+   than buttons (.97) so the list doesn't churn. Static div.mat-row
+   containers are untouched — the selector requires a button. */
+button.mat-row:active {
+  transform: scale(0.98);
 }
 
 .mat-row:hover {
@@ -918,6 +927,12 @@ a.cine-pill {
   border-color: rgba(255, 255, 255, 0.30);
 }
 
+/* Press state (motion P4 audit): squash like every other tappable.
+   Transition is already `all`, so no change needed there. */
+.cine-react:active {
+  transform: scale(0.97);
+}
+
 /* Mine = selected-WHITE language (nav/segment parity), never a color
    fill: any emoji — white snowman included — stays legible on dark
    glass over any backdrop. */
@@ -1085,11 +1100,17 @@ a.cine-pill {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background-color var(--cine-duration-base) var(--cine-ease-out);
+  transition: background-color var(--cine-duration-base) var(--cine-ease-out),
+    transform var(--cine-duration-base) var(--cine-ease-out);
 }
 
 .cine-msg-menu-item:hover {
   background: rgba(255, 255, 255, 0.09);
+}
+
+/* Press state (motion P4 audit): squash like every other tappable. */
+.cine-msg-menu-item:active {
+  transform: scale(0.97);
 }
 
 .cine-msg-menu-item--danger {
@@ -2698,6 +2719,12 @@ input[type='range'].cine-range {
   background: #fff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
+/* Press state (motion P4 audit): the thumb grows on grab — a drag
+   handle affirms grip by enlarging, never by flashing. Instant (no
+   transition) so it never lags the drag. */
+.cine-range::-webkit-slider-thumb:active {
+  transform: scale(1.12);
+}
 .cine-range::-moz-range-track {
   height: 4px;
   border-radius: 9999px;
@@ -2709,6 +2736,9 @@ input[type='range'].cine-range {
   border: none;
   border-radius: 9999px;
   background: #fff;
+}
+.cine-range::-moz-range-thumb:active {
+  transform: scale(1.12);
 }
 
 /* Room chat message type: size rides a per-device var (settings slider),
@@ -3904,5 +3934,21 @@ body.mz-clean .cine-duo-btn {
 @media (prefers-reduced-motion: reduce) {
   .clean-home .clean-dot-fill {
     display: none;
+  }
+  /* Press states collapse to nothing (motion P4 audit): no squash,
+     no hover lift — the action still works, it just doesn't move.
+     Covers the whole press family, existing rules included. */
+  .cine-btn-white:active,
+  .cine-control-btn:active,
+  .cine-icon-btn:active,
+  .cine-pill:active,
+  .cine-msg-menu-item:active,
+  .cine-react:active,
+  .cine-chat-jump:active,
+  .cine-duo-btn button:active,
+  .cine-hero-duo-btn:active,
+  .cine-hero-disc:active,
+  button.mat-row:active {
+    transform: none;
   }
 }
