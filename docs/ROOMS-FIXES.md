@@ -570,9 +570,16 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    support first). Queue/MyList rows are not tappable (their
    buttons already press); text links are not press surfaces.
 - P5 shimmer (keep + discipline): slow dim sweep only, layout
-  mirrored everywhere it appears. Audit: Movies/Shows grids,
-  Home rails, detail/person/studio loading states, search,
-  rooms lobby trending, chat history. No flashing variants.
+   mirrored everywhere it appears. Audit: Movies/Shows grids,
+   Home rails, detail/person/studio loading states, search,
+   rooms lobby trending, chat history. No flashing variants.
+   Status: audited clean — one `.skel` recipe (1.4s dim sweep),
+   all usages mirrored (SkelGrid/SkelRail/SkelRow/person inline/
+   hero blocks); zero duration overrides; `animate-pulse` only on
+   live-status dots (server/live/airing — purposeful, not loading);
+   spinners stay per C4 (explicitly not this project); detail fills
+   progressively with honest "Loading details..." text instead of
+   shimmer. Nothing to change.
 - P6 scroll-driven (no parallax, ever): IntersectionObserver
   section reveals (subtle rise, once each), back-to-top reveal
   (exists — verify threshold), collapsing room People header?
