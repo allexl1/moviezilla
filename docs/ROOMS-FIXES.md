@@ -392,6 +392,8 @@ panel, button look sign-off.
 - Solo keeps latest-wins + peek rule + per-server slots.
 - Finished stays finished (rewatching a completed title in a room
   does not un-complete it).
+- [OWNER CALL, do not build] ROADMAP §5.1 (Un-mark-watched) reads
+  against the locked rule above. Untouched until explicitly decided.
 - YT rooms write no personal history (decided, see P1.6).
 
 ## PRIME RULE (from rooms/time — outranks speed)
