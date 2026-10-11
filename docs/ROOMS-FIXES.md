@@ -348,3 +348,93 @@ test script permanently.
 - Finished stays finished (rewatching a completed title in a room
   does not un-complete it).
 - YT rooms write no personal history (decided, see P1.6).
+
+## PRIME RULE (from rooms/time — outranks speed)
+
+Never layer a fix on a mechanism that should be reworked. Symptom:
+three things doing one job, each patch compensating the previous
+one. Response: stop, audit the subsystem, rewrite once, verify with
+the test script. Layering wastes time and makes the site worse —
+rooms presence and rooms time both proved it. Any new fix that needs
+a second fix to survive is evidence the layer below is wrong.
+
+## UI pilot plan (post rooms-2.0 — specified, not built)
+
+What "expensive" means here: micro-interaction polish on the existing
+cinema identity, never a redesign. Photography stays the hero; chrome
+gets quieter and more physical. Measured against DESIGN.md dials +
+150–300ms motion budget, one piece per round with screenshots.
+
+Adopted:
+- lucide-animated (MIT, vendored single files, same Lucide glyphs):
+  Play/Pause morph (rooms header), Send, Sync spinner, Heart (GIF
+  favorites). Maybe Loader. 3–5 icons max.
+- arc-library (MIT, React 19 + Vite, calm motion, reduced-motion
+  paths, keyboard support): pilot segmented-control (rooms tabs, My
+  List pills), hold-to-confirm (Delete room), tooltip (replace
+  cine-tip), toast stack (replace onToast). Vendored + re-skinned
+  to cine tokens. One shared `motion` dependency serves both libs.
+Rejected: shaders.com (decorative gradients = the banned aesthetic,
+GPU budget belongs to video, presets behind Pro); lordicon +
+flaticon-animated (wrong style, Lottie weight, premium/attribution
+licensing); easyui (gooey/neon personality vs house rules,
+one-author risk). Originkit unverified (JS-only site, could not
+assess — verify together before any pick).
+How to implement arc (the rooms lesson applied): never adopt its
+theme/tokens/fonts/dark mechanics — vendor files, remap its CSS
+modules onto cine tokens, keep its reduced-motion paths. One
+component per round, rooms-style test after each. If a component
+needs a second patch to survive, the integration is wrong: rework
+the seam, do not layer. Upgrade neighboring controls to the same
+tokens while touching them (tooltip/tip unification, toast
+unification), but never redesign surfaces around a new component.
+
+## Site-wide layering audit (playback/nav/UI surveyed)
+
+Rooms/time already done (six clocks → one reader; presence to
+discrete-only). Queued areas below; findings append here, fixes
+follow the PRIME RULE (rewrite once, no layering).
+- A. Playback/history/resume across Player/storage/views.
+- B. Navigation/back-stack/tabs/routing.
+- C. UI primitives (buttons/pills/modals/toasts/tips/skeletons/
+  empty states/segmented controls).
+- Findings (surveyed, not yet fixed):
+  A1. [REAL, user-visible] Display second vs play second: hero/toast/
+  CW picker announce top-level (or hardcoded vidy) seconds while the
+  Player opens the strict current-server slot — same title can say
+  7:00 and open 0:00 after a server switch. Disposition: single
+  `resolveResume(type, id, server)` used by every announcer; fold
+  into the time rewrite.
+  A2. [REAL, contained] Two clocks, one row: wall estimate vs
+  provider time both write the same key. Priority/convergence/
+  20s-freeze contain it; the rewrite's single-owner rule finishes it.
+  A3. [REAL, contained] Slots vs top-level: divergent per-server
+  seconds under one latest-wins top-level; 3+ readers treat
+  top-level as resume truth. Same resolver as A1.
+  A4. [REAL, benign] Watched denominators differ (provider %,
+  runtime-anchored 95%, ended snap, manual 1/1, sync recompute).
+  Converge only if a wrong-Watched report arrives; today each path
+  is honest in its context.
+  A5. [REAL, by design] Local vs sync writer can disagree on resume
+  indefinitely (latest-wins vs newer-wins). Accepted, do not touch.
+  B1. [REAL, latent] Dual back truths: browser history vs in-app
+  backStack, reconciled by heuristics; player-close has 4 stacked
+  guards. No user complaint on record — do NOT rewrite unprompted;
+  reopen only on a back-button bug report.
+  B2. [REAL, latent] `resolveMediaType` central vs 6-branch inline
+  copy in `playMedia` (wrong branch = wrong URL/tab). Unify on
+  next touch of that code, not before.
+  C1. [REAL, queued] Dropdowns: Picker vs ProviderPicker vs
+  ServerSwitcher (+ dead `ui/Select`, 0 imports — delete it).
+  Unify WITH the arc pilot (arc select), not separately.
+  C2. [REAL, queued] Buttons: white vs primary vs control-btn +
+  inline sizes + once-used danger + circle-vs-icon. This IS the
+  button audit (item 36) — no separate pass.
+  C3. [REAL, queued] Dialogs: Modal (trapped) vs sheets/drawers/
+  twin lightboxes/`confirm()`. Unify during button audit; twin
+  chat/person lightboxes merge first (identical code).
+  C4. [BENIGN] Spinners ×5 sizes, raw empty-state stragglers,
+  `title=` tooltips in FootballView, ad-hoc skels. Fold into the
+  button audit opportunistically, never its own project.
+  Toasts, tips, skeletons, inputs, sliders: one system each —
+  leave alone.
