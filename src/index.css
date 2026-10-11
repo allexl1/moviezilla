@@ -3061,8 +3061,10 @@ button:hover .cine-provider-icon,
   transform: translateX(-50%);
   padding: 0.2rem 0.8rem;
   border-radius: 0.45rem;
-  background: rgba(74, 140, 40, 0.92);
-  color: #fff;
+  /* Quiet meta, not a loud green pill (visual audit): same dark chip
+     as the year tag — readable on any art, no color shouting. */
+  background: rgba(0, 0, 0, 0.68);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.6875rem;
   font-weight: var(--cine-font-bold);
   white-space: nowrap;

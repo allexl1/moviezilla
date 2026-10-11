@@ -512,8 +512,8 @@ anywhere — screens cut, rails appear static.
 - Home hero: full-bleed art, official logo, white Play, meta row,
   dots + steppers. Strong, nothing to change.
 - Movies: title voice consistent, filter row fits, rating chips
-  white per lime rule. "Coming Soon • 2026" still pill badges —
-  minor, quiet to plain meta when nearby code is touched.
+   white per lime rule. Coming Soon badges quieted to the dark
+   year-chip treatment (was loud green).
 - Detail: logo, facts panel, IMDb-upgraded ratings, honours rail.
   Strong. Mobile detail not shot — cover in the visual pass.
 - Watchlist: honest empty state, segmented tabs work. Segmented
@@ -703,9 +703,10 @@ follow the PRIME RULE (rewrite once, no layering).
   B2. [REAL, latent] `resolveMediaType` central vs 6-branch inline
   copy in `playMedia` (wrong branch = wrong URL/tab). Unify on
   next touch of that code, not before.
-  C1. [REAL, queued] Dropdowns: Picker vs ProviderPicker vs
-  ServerSwitcher (+ dead `ui/Select`, 0 imports — delete it).
-  Unify WITH the arc pilot (arc select), not separately.
+   C1. [PART DONE] Dropdowns: Picker vs ProviderPicker vs
+   ServerSwitcher (+ dead `ui/Select`, 0 imports — delete it).
+   Select deleted + barrel cleaned. Unify WITH the arc pilot
+   (arc select), not separately.
    C2. [DONE by item 36] Buttons: white vs primary vs control-btn +
    inline sizes + once-used danger + circle-vs-icon. Send circle,
    Delete/Leave, lobby Save mapped onto tokens; tertiary text actions,
