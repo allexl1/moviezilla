@@ -110,8 +110,11 @@ the app maps that error to plain words, other upload errors pass
 through raw):
 `create policy "room-chat anon insert" on storage.objects for insert
 to anon with check (bucket_id = 'room-chat');`
-NEEDS live 2-device check for: photo send/receive, GIF favorites, reaction
-strip, reply autofocus feel, notification sound, fullscreen sizes.
+Bucket + policy live (owner dashboard): headless photo send renders
+the image bubble with a receipt, no toast. Still NEEDS live 2-device
+check for: photo receive, real-photo render, delete-removes-file,
+GIF favorites, reaction strip, reply autofocus feel, notification
+sound, fullscreen sizes.
 
 Reference screenshots were attached in chat during discussion and then
 removed from the repo (no binary junk in git). Screenshot numbers below
