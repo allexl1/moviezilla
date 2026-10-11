@@ -697,6 +697,18 @@ export default function RoomView({ code, onLeave, onToast }) {
   // Room playlist queue (persisted on the row, broadcast live).
   const [queue, setQueue] = useState([]);
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  // The drawer is a dialog — Escape closes it like the modals do.
+  useEffect(() => {
+    if (!playlistOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPlaylistOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [playlistOpen]);
   // Invite copy menu (B5): hover/tap the code chip to choose.
   const [inviteOpen, setInviteOpen] = useState(false);
   // Delete confirm (B8): never vaporize on a single stray tap.

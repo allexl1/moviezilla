@@ -103,8 +103,14 @@ a view over them.
 
 Live verification notes: message send, menu, reply-with-quote,
 receipts render headless-green. NEEDS Supabase `room-chat` bucket
-(dashboard, anon insert) or photo uploads fail with a toast. NEEDS
-live 2-device check for: photo send/receive, GIF favorites, reaction
+(dashboard, anon insert) or photo uploads fail with a toast. Setup:
+new public bucket named exactly `room-chat`, then this policy on
+storage.objects (sends fail as "bucket not found" until both exist;
+the app maps that error to plain words, other upload errors pass
+through raw):
+`create policy "room-chat anon insert" on storage.objects for insert
+to anon with check (bucket_id = 'room-chat');`
+NEEDS live 2-device check for: photo send/receive, GIF favorites, reaction
 strip, reply autofocus feel, notification sound, fullscreen sizes.
 
 Reference screenshots were attached in chat during discussion and then
@@ -316,7 +322,13 @@ renders on synthetic paste, rail send + receipts green, … menu with
 12-emoji strip, reply strip, floating panel open + compact buttons +
 scrolling strip, panel-fit GIF picker with Favorites tab, drag/resize/
 clamps/persist + close/reopen restore, white send token, People danger
-+ leave tokens, mobile 390px lobby Save fit. Zero JS errors throughout
++ leave tokens, mobile 390px lobby Save fit. Escape closes menu, GIF
+picker (focus back on GIF), playlist drawer and viewer without closing
+the player (defaultPrevented contract; EpisodeDrawer, Picker and
+ProviderPicker mark theirs too). Grip resizes on arrow keys (+persist).
+Missing-bucket failure toasts plain words (DOM-asserted). Reaction chip
+renders on strip tap; drawer toggles; rail tabs switch; NickGate is
+Input + Cancel + white Join. Zero JS errors throughout
 (sandbox embed DNS noise only).
 NEEDS live 2-device check for: real photo send/receive (needs the
 `room-chat` bucket first — file attach is hard headless, no run can
@@ -332,12 +344,11 @@ panel, button look sign-off.
     photo upload path with the active reply attached; remove clears
     without sending. No bucket or payload changes (same URL-only
     messages as the attach button).
-32. Floating popup action-button clip. The message … button sits
-    outside the bubble (-left-8/-right-8) and the floating panel's
-    overflow-hidden cuts it off — that is why actions look missing
-    in the popup. Fix: overlay the … button on the bubble corner
-    (bottom, sender side) on both surfaces. Kills the clip everywhere,
-    matches the Telegram hover-arrow pattern.
+32. Message … placement (revised after owner live test). First
+    shipped overlaid on the bubble corner to dodge the popup clip —
+    but the overlay covered timestamps. Now sits outside the bubble,
+    vertically centered (mine left, theirs right). The bubble wrapper
+    caps at 85% width so the 32px gutter always fits, rail + panel.
 33. Reaction strip scroll. 12 emoji overflow the 320px popup:
     horizontal scroll, max width of the container, no wrap. Rail
     keeps the full row.

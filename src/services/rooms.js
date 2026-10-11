@@ -454,7 +454,15 @@ export async function uploadRoomPhoto(code, file) {
     contentType: file.type,
     upsert: false,
   });
-  if (error) throw new Error(error.message || 'Photo upload failed.');
+  if (error) {
+    const msg = String(error.message || '');
+    // Setup failure, not a user error: the dashboard bucket (plus anon
+    // insert) is still pending, so say what is missing, not SDK text.
+    if (/bucket not found/i.test(msg)) {
+      throw new Error('Photo uploads are not set up yet (missing room-chat bucket).');
+    }
+    throw new Error(msg || 'Photo upload failed.');
+  }
   const { data } = sb.storage.from('room-chat').getPublicUrl(path);
   if (!data?.publicUrl) throw new Error('Photo upload failed.');
   return data.publicUrl;

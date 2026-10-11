@@ -538,6 +538,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       poke();
       if (e.key === 'Escape') {
         if (document.fullscreenElement) return;
+        // An open overlay (chat menu, GIF picker, drawer, viewer,
+        // modal) already consumed this Escape — closing the whole
+        // player on top of it stranded users mid-dismiss.
+        if (e.defaultPrevented) return;
         e.preventDefault();
         if (isEpisodeOpen) {
           setIsEpisodeOpen(false);

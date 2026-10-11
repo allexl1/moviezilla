@@ -68,7 +68,10 @@ export default function ProviderPicker({ value, onChange, options = PROVIDERS, p
       setOpen(false);
     };
     const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', onDown);
     window.addEventListener('scroll', onScroll, true);

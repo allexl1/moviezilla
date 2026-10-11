@@ -38,6 +38,20 @@ export default function EpisodeDrawer({
     setExpandedEp(null);
   }, [tvId, activeSeason]);
 
+  // Escape closes the drawer without closing the player underneath
+  // (preventDefault marks the key handled — see Player shortcuts).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   // Land on the episode you're actually at: when the current season's
   // list arrives (or the drawer reopens with a cached list), bring the
   // current episode into view — no manual scroll. isOpen is a dep on

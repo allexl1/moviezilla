@@ -146,9 +146,10 @@ export function ChatMessage({
     if (!menuOpen) setPickerBelow(placeBelow());
     setMenuOpen((o) => !o);
   };
-  // Tap-anywhere dismissal: an open menu closes when the pointer lands
-  // outside this message (it opens on right click, so it must also
-  // close on any other click — a stuck menu is nonsense).
+  // Tap-anywhere + Escape dismissal: an open menu closes when the
+  // pointer lands outside this message (it opens on right click, so it
+  // must also close on any other click — a stuck menu is nonsense) or
+  // when Escape fires (keyboard path, same as the viewer and modals).
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e) => {
@@ -156,8 +157,18 @@ export function ChatMessage({
         setMenuOpen(false);
       }
     };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMenuOpen(false);
+      }
+    };
     document.addEventListener('pointerdown', onDown);
-    return () => document.removeEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [menuOpen]);
   if (m.sys) {
     return (
@@ -277,10 +288,12 @@ export function ChatMessage({
             )}
           </span>
         )}
-        {/* Hover action: one … button overlaid on the bubble corner
-            (bottom, sender side). It used to sit outside the bubble
-            (-left-8/-right-8) where the floating panel's overflow-hidden
-            cut it off — overlaying kills the clip on both surfaces.
+        {/* Hover action: one … button outside the bubble, vertically
+            centered (mine left, theirs right — never on top of the
+            message). Shipped once as a bubble-corner overlay to dodge
+            the popup clip, but the overlay covered timestamps (owner
+            live feedback), so it sits outside again. The wrapper caps
+            at 85% width, so the 32px gutter always fits, rail + panel.
             Touch keeps it faintly visible — no hover there. */}
         {!editing && (
           <button
@@ -288,8 +301,8 @@ export function ChatMessage({
 
             aria-label="Message actions"
             aria-expanded={menuOpen}
-            className={`absolute bottom-1 cine-icon-btn cine-icon-btn--xs bg-black/40 opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
-              mine ? 'right-1' : 'left-1'
+            className={`absolute top-1/2 -translate-y-1/2 cine-icon-btn cine-icon-btn--xs opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
+              mine ? '-left-8' : '-right-8'
             }`}
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
@@ -401,6 +414,7 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
   const [dragOver, setDragOver] = useState(false);
   const areaRef = useRef(null);
   const photoRef = useRef(null);
+  const gifBtnRef = useRef(null);
   const pendingUrlRef = useRef('');
   const fit = () => {
     const el = areaRef.current;
@@ -419,6 +433,20 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
     if (focusKey > 0) areaRef.current?.focus?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
+  // Escape closes the picker and hands focus back to the GIF button
+  // (keyboard path, same as the viewer and modals).
+  useEffect(() => {
+    if (!gifOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setGifOpen(false);
+        gifBtnRef.current?.focus?.();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [gifOpen]);
   // Object URLs die with the composer so pastes never leak.
   useEffect(() => () => {
     if (pendingUrlRef.current) {
@@ -582,7 +610,7 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
         </div>
         <button
           onClick={() => setGifOpen((o) => !o)}
-
+          ref={gifBtnRef}
           aria-label="Send a GIF"
           aria-pressed={gifOpen}
           className={`cine-control-btn flex-shrink-0 ${gifBtn}${gifOpen ? ' cine-pill--active' : ''}`}
@@ -655,7 +683,10 @@ export function ChatView({
   useEffect(() => {
     if (!viewingPhoto) return;
     const onKey = (e) => {
-      if (e.key === 'Escape') setViewingPhoto(null);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setViewingPhoto(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -969,6 +1000,46 @@ export function FloatingRoomChat({
     beginDrag(e, 'move');
   };
   const onHandlePointerDown = (e) => beginDrag(e, 'resize');
+  // Keyboard resize (the pointer grip is 24px, not a 44px tap target,
+  // so arrows give every user full operability without swallowing
+  // composer taps in invisible slop). Mirrors the pointer clamps;
+  // Shift steps 4x. Persists like a finished drag.
+  const onGripKeyDown = (e) => {
+    const k = e.key;
+    if (k !== 'ArrowLeft' && k !== 'ArrowRight' && k !== 'ArrowUp' && k !== 'ArrowDown') return;
+    e.preventDefault();
+    const el = panelRef.current;
+    if (!el) return;
+    const host = el.offsetParent;
+    const bw = host?.clientWidth || window.innerWidth;
+    const bh = host?.clientHeight || window.innerHeight;
+    const r = el.getBoundingClientRect();
+    const hr = host?.getBoundingClientRect();
+    const px = pos?.x ?? r.left - (hr?.left ?? 0);
+    const py = pos?.y ?? r.top - (hr?.top ?? 0);
+    const cw = size?.w ?? r.width;
+    const ch = size?.h ?? r.height;
+    const step = e.shiftKey ? 64 : 16;
+    let w = cw;
+    let h = ch;
+    if (k === 'ArrowLeft') w += step;
+    else if (k === 'ArrowRight') w -= step;
+    else if (k === 'ArrowUp') h -= step;
+    else h += step;
+    w = clampNum(w, FLOAT_MIN_W, Math.min(FLOAT_MAX_W, bw));
+    const hMax = Math.max(FLOAT_MIN_H, Math.min(bh - py, window.innerHeight * 0.9));
+    h = clampNum(h, FLOAT_MIN_H, hMax);
+    const p = { x: clampNum(px + cw - w, 0, Math.max(0, bw - 120)), y: py };
+    const s = { w, h };
+    setPos(p);
+    setSize(s);
+    try {
+      localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(p));
+      localStorage.setItem(FLOAT_SIZE_KEY, JSON.stringify(s));
+    } catch {
+      // private mode — session only (same rule as GIF favorites)
+    }
+  };
   if (!open) return null;
   return (
     <div
@@ -1024,9 +1095,11 @@ export function FloatingRoomChat({
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
+        onKeyDown={onGripKeyDown}
+        tabIndex={0}
         role="separator"
-        aria-label="Resize chat panel"
-        className="absolute left-1.5 bottom-1.5 z-50 h-4 w-4 cursor-nesw-resize touch-none rounded-sm opacity-50 hover:opacity-100"
+        aria-label="Resize chat panel. Arrow keys resize."
+        className="absolute left-1.5 bottom-1.5 z-50 h-6 w-6 cursor-nesw-resize touch-none rounded-sm opacity-50 hover:opacity-100 focus-visible:opacity-100"
         style={{ background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.65) 0 2px, transparent 2px 5px)' }}
       />
     </div>
