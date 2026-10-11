@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Play, CalendarDays } from 'lucide-react';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
+import Reveal from './ui/Reveal';
 import { InfinityMark } from './GridLoader';
 
 /**
@@ -73,7 +74,7 @@ export default function UpcomingRail({
   const yearOf = (m) => (m?.[dateKey] || '').split('-')[0] || null;
 
   return (
-    <section className="space-y-3">
+    <Reveal as="section" className="space-y-3">
       <div className="cine-section-head">
         <h2 className="cine-section-title cine-section-title--lg">{title}</h2>
       </div>
@@ -132,6 +133,6 @@ export default function UpcomingRail({
           </div>
         )}
       </div>
-    </section>
+    </Reveal>
   );
 }

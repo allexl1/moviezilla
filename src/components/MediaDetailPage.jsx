@@ -7,6 +7,7 @@ import { storage, WATCHED_PCT } from '../services/storage';
 import { shortName } from '../services/catalog';
 import RowRail from './RowRail';
 import ClampedText from './ClampedText';
+import Reveal from './ui/Reveal';
 
 // RT lookups cache a day (edge caches hits a day too; misses an hour).
 // Module scope: survives detail open/close.
@@ -229,7 +230,7 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
   const sheetIdx = sheetEp ? ordered.findIndex((e) => e.episode_number === sheetEp.episode_number) : -1;
 
   return (
-    <section className="space-y-4" aria-label="Episodes">
+    <Reveal as="section" className="space-y-4" aria-label="Episodes">
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <h3 className="cine-section-title inline-flex items-center gap-2">
           <ListVideo className="w-4 h-4 text-white/60" />
@@ -480,7 +481,7 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
           </div>
         </div>
       )}
-    </section>
+    </Reveal>
   );
 }
 
@@ -1018,7 +1019,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
         {/* Honours — gold strip, progressive disclosure (same as person
             pages), silent when the title has none indexed. */}
         {awards.length > 0 && (
-          <section className="space-y-3">
+          <Reveal as="section" className="space-y-3">
             <div className="cine-section-head">
               <h3 className="cine-section-title inline-flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-[#f5c518]" />
@@ -1047,7 +1048,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 {honoursExpanded ? 'Show less' : `Show all ${awards.length}`}
               </button>
             )}
-          </section>
+          </Reveal>
         )}
 
         {/* Episodes — above cast for shows: seasons, stills, synopses. */}
@@ -1064,7 +1065,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
 
         {/* Cast */}
         {cast.length > 0 && (
-          <section className="space-y-4">
+          <Reveal as="section" className="space-y-4">
             <h3 className="cine-section-title">Cast</h3>
             <div className="cine-cast-rail flex gap-5 overflow-x-auto no-scrollbar pb-2">
               {cast.map((actor) => (
@@ -1095,16 +1096,16 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                   <div>
                     <h4 className="text-[13px] font-bold text-white truncate">{shortName(actor.name)}</h4>
                     <p className="text-[11px] text-white/70 truncate">{actor.character}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+          </Reveal>
         )}
 
         {/* Trailers */}
         {trailers.length > 0 && (
-          <section className="space-y-4">
+          <Reveal as="section" className="space-y-4">
             <h3 className="cine-section-title">Trailers</h3>
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
               {trailers.map((t) => (
@@ -1137,9 +1138,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+          </Reveal>
         )}
 
         {/* Similar */}

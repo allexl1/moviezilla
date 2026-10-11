@@ -4,6 +4,7 @@ import { tmdb, FALLBACK_PROFILE, deptName } from '../services/tmdb';
 import { getAwardsByImdb, ageOf } from '../services/wikidata';
 import RowRail from './RowRail';
 import ClampedText from './ClampedText';
+import Reveal from './ui/Reveal';
 import { SkelRail } from './ui';
 
 function formatDate(iso) {
@@ -401,7 +402,7 @@ export default function PersonView({ personId, onSelectMedia }) {
 
         {/* Photo gallery — every profile TMDB has, sideways scroll. */}
         {photos.length > 1 && (
-          <section className="space-y-3">
+          <Reveal as="section" className="space-y-3">
             <h3 className="cine-section-title">Photos</h3>
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
               {photos.map((p, i) => (
@@ -422,14 +423,14 @@ export default function PersonView({ personId, onSelectMedia }) {
                 </button>
               ))}
             </div>
-          </section>
+          </Reveal>
         )}
 
         {/* Awards — glory line + year-first rows (IMDb scan). Count lives
             in the title as a chip, never floating at the row end. Silent
             when empty. */}
         {awards.length > 0 && (
-          <section id="honours" className="space-y-3 scroll-mt-28">
+          <Reveal as="section" id="honours" className="space-y-3 scroll-mt-28">
             <div className="cine-section-head">
               <h2 className="cine-section-title inline-flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-[#f5c518]" />
@@ -463,7 +464,7 @@ export default function PersonView({ personId, onSelectMedia }) {
                 {honoursExpanded ? 'Show less' : `Show all ${awards.length}`}
               </button>
             )}
-          </section>
+          </Reveal>
         )}
 
         {/* Known For: popularity-ranked orientation (IMDb rule). */}

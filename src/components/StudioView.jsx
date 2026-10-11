@@ -3,6 +3,7 @@ import { Building2, ExternalLink } from 'lucide-react';
 import { tmdb, FALLBACK_PROFILE, COUNTRIES } from '../services/tmdb';
 import { shortName } from '../services/catalog';
 import Card from './ui/Card';
+import Reveal from './ui/Reveal';
 import { SkelGrid } from './ui';
 
 // Dark-logo rescue: black logos vanish on our background. Sample the
@@ -266,7 +267,7 @@ export default function StudioView({ studioId, onSelectMedia, onSelectPerson, on
             </section>
 
             {faces.length > 0 && (
-              <section className="space-y-3">
+              <Reveal as="section" className="space-y-3">
                 <h2 className="cine-section-title">Top billed</h2>
                 <div className="flex gap-5 overflow-x-auto no-scrollbar pb-2">
                   {faces.map((a) => (
@@ -291,10 +292,10 @@ export default function StudioView({ studioId, onSelectMedia, onSelectPerson, on
                     </button>
                   ))}
                 </div>
-              </section>
+              </Reveal>
             )}
 
-            <section className="space-y-4">
+            <Reveal as="section" className="space-y-4">
               <div className="flex justify-center">
                 {hasMovies && hasShows ? (
                   <SegFilter
@@ -340,7 +341,7 @@ export default function StudioView({ studioId, onSelectMedia, onSelectPerson, on
                   </button>
                 </div>
               )}
-            </section>
+            </Reveal>
           </>
         )}
       </div>

@@ -8,6 +8,7 @@ import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
 import GridLoader from '../components/GridLoader';
 import Card from '../components/ui/Card';
+import Reveal from '../components/ui/Reveal';
 import { SkelGrid } from '../components/ui';
 
 // Stable fetcher reference for the paged rail (must not change identity
@@ -131,7 +132,7 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
         </div>
       )}
       <>
-        <section className="space-y-3">
+        <Reveal as="section" className="space-y-3">
         <div className="cine-section-head">
           <h2 className="cine-section-title cine-section-title--lg">Released Movies</h2>
         </div>
@@ -158,7 +159,7 @@ export default function MoviesView({ filters, onFilters, letterboxdUser, onSelec
             )}
           </>
         )}
-        </section>
+        </Reveal>
       </>
       <GridLoader
         hasMore={page < totalPages && totalCount > 0}

@@ -8,6 +8,7 @@ import FilterBar from '../components/FilterBar';
 import UpcomingRail from '../components/UpcomingRail';
 import GridLoader from '../components/GridLoader';
 import Card from '../components/ui/Card';
+import Reveal from '../components/ui/Reveal';
 import { SkelGrid } from '../components/ui';
 
 // Stable references for the paged rails (must not change identity across
@@ -145,7 +146,7 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
         hasMore={upcomingHasMore}
       />
       <>
-        <section className="space-y-3">
+        <Reveal as="section" className="space-y-3">
         <div className="cine-section-head">
           <h2 className="cine-section-title cine-section-title--lg">{showAiring ? 'On The Air' : 'Released Series'}</h2>
         </div>
@@ -172,7 +173,7 @@ export default function ShowsView({ filters, onFilters, letterboxdUser, onSelect
             )}
           </>
         )}
-        </section>
+        </Reveal>
       </>
       <GridLoader
         hasMore={showAiring ? onAirHasMore && onAirToday.length > 0 : !showAiring && page < totalPages && totalCount > 0}

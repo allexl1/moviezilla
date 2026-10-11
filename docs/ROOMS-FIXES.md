@@ -616,9 +616,11 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    reduced-motion shows instantly; headless asserts all-visible
    after scroll + no x-overflow). Globalized: RowRail owns its
    reveal (every rail app-wide) + home Continue Watching; lobby
-   wrapper removed to avoid a double. Detail custom sections,
-   UpcomingRail and grids stay on existing entrances until their
-   round. Back-to-top threshold verified
+   wrapper removed to avoid a double. Round 2: UpcomingRail owns
+   its reveal (Movies + Shows), detail episodes / honours / cast /
+   trailers, person photos / honours, studio top billed / catalog,
+   Movies + Shows released grids. Heroes, headers, mobile meta
+   chips and empty states stay instant by design. Back-to-top threshold verified
    on /clean (hidden at top, appears past 0.8x viewport, returns
    to top) — note it lives only on the test route; real routes
    getting one is an owner call, not built unprompted.
