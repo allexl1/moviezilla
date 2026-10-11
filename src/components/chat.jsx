@@ -812,6 +812,50 @@ export function ChatView({
 // player alike — the panel lives inside the fullscreen element. Player
 // passes its legacy floatEndRef/seenInfo through — both are inert now (the
 // pane owns its scroll and receipts), keeping Player.jsx untouched.
+// P6.35: the panel drags by its header and resizes from one corner
+// handle (bottom-left, clear of the composer send button), pointer
+// events cover mouse + touch. Position clamps to the player container
+// so it can't be lost off-screen; size clamps w 260-560 / h 320-90vh.
+// Geometry persists per device (localStorage), which is also what
+// restores it across close/reopen (the panel unmounts when closed).
+const FLOAT_SIZE_KEY = 'mz_float_chat_size';
+const FLOAT_POS_KEY = 'mz_float_chat_pos';
+const FLOAT_MIN_W = 260;
+const FLOAT_MAX_W = 560;
+const FLOAT_MIN_H = 320;
+
+const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function loadFloatSize() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FLOAT_SIZE_KEY) || 'null');
+    if (!raw) return null;
+    const h = Number(raw.h);
+    if (!Number.isFinite(h) || h < FLOAT_MIN_H) return null;
+    return {
+      w: clampNum(Number(raw.w) || 320, FLOAT_MIN_W, FLOAT_MAX_W),
+      h: Math.min(h, window.innerHeight * 0.9),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function loadFloatPos() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FLOAT_POS_KEY) || 'null');
+    if (!raw) return null;
+    const x = Number(raw.x);
+    const y = Number(raw.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return {
+      x: clampNum(x, 0, Math.max(0, window.innerWidth - 120)),
+      y: clampNum(y, 0, Math.max(0, window.innerHeight - 80)),
+    };
+  } catch {
+    return null;
+  }
+}
 export function FloatingRoomChat({
   open,
   onToggle,
@@ -834,10 +878,114 @@ export function FloatingRoomChat({
   onEdit,
   onDeleteRequest,
 }) {
+  const panelRef = useRef(null);
+  const [pos, setPos] = useState(loadFloatPos);
+  const [size, setSize] = useState(loadFloatSize);
+  const dragRef = useRef(null);
+  // A stored position without a stored size is stale — re-dock instead
+  // of rendering an unconstrained panel.
+  const docked = !pos || !size;
+  // Drag state is plain data (never functions): every read/write below
+  // happens in pointer handlers, and React drops the handlers on unmount,
+  // so there is nothing to unregister. Pointer capture (guarded — synthetic
+  // probe events have no active pointer to capture) keeps the gesture on
+  // the surface for mouse + touch alike.
+  const onDragMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const host = panelRef.current?.offsetParent;
+    const bw = host?.clientWidth || window.innerWidth;
+    const bh = host?.clientHeight || window.innerHeight;
+    if (d.mode === 'move') {
+      const p = {
+        x: clampNum(d.ax + e.clientX - d.sx, 0, Math.max(0, bw - 120)),
+        y: clampNum(d.ay + e.clientY - d.sy, 0, Math.max(0, bh - 80)),
+      };
+      d.pos = p;
+      setPos(p);
+    } else {
+      // Bottom-left handle: the right edge stays fixed, the top stays
+      // fixed, the panel grows left and down.
+      const w = clampNum(d.ow - (e.clientX - d.sx), FLOAT_MIN_W, Math.min(FLOAT_MAX_W, bw));
+      const hMax = Math.max(FLOAT_MIN_H, Math.min(bh - d.ay, window.innerHeight * 0.9));
+      const h = clampNum(d.oh + (e.clientY - d.sy), FLOAT_MIN_H, hMax);
+      const p = {
+        x: clampNum(d.ax + d.ow - w, 0, Math.max(0, bw - 120)),
+        y: d.ay,
+      };
+      const s = { w, h };
+      d.pos = p;
+      d.size = s;
+      setPos(p);
+      setSize(s);
+    }
+  };
+  const onDragEnd = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    try {
+      if (d.pos) localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(d.pos));
+      if (d.size) localStorage.setItem(FLOAT_SIZE_KEY, JSON.stringify(d.size));
+    } catch {
+      // private mode — session only (same rule as GIF favorites)
+    }
+  };
+  const beginDrag = (e, mode) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = panelRef.current;
+    if (!el || dragRef.current) return;
+    e.preventDefault();
+    // Adopt the live rect so a first drag never jumps: docked placement
+    // becomes explicit left/top/width/height from here on. Measured live
+    // at gesture time via getBoundingClientRect (not a thumb measurer —
+    // no font-drift class, so no fonts.ready re-measure is owed).
+    const r = el.getBoundingClientRect();
+    const host = el.offsetParent?.getBoundingClientRect();
+    const ax = r.left - (host?.left ?? 0);
+    const ay = r.top - (host?.top ?? 0);
+    dragRef.current = {
+      mode,
+      sx: e.clientX,
+      sy: e.clientY,
+      ax,
+      ay,
+      ow: r.width,
+      oh: r.height,
+      pos: null,
+      size: null,
+    };
+    if (!pos) setPos({ x: ax, y: ay });
+    if (!size) setSize({ w: r.width, h: r.height });
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // synthetic events (probes/tests) have no active pointer to capture
+    }
+  };
+  const onHeaderPointerDown = (e) => {
+    // The header holds the close button — its taps must stay clicks.
+    if (e.target.closest?.('button')) return;
+    beginDrag(e, 'move');
+  };
+  const onHandlePointerDown = (e) => beginDrag(e, 'resize');
   if (!open) return null;
   return (
-    <div className="absolute right-3 top-24 bottom-24 z-40 w-[320px] max-w-[80vw] rounded-2xl cine-glass-panel flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--cine-glass-border)] flex-shrink-0">
+    <div
+      ref={panelRef}
+      aria-label="Room chat panel"
+      className={`absolute z-40 rounded-2xl cine-glass-panel flex flex-col overflow-hidden${docked ? ' right-3 top-24 bottom-24' : ''}`}
+      style={docked
+        ? { width: 320, maxWidth: '80vw' }
+        : { left: pos.x, top: pos.y, width: size.w, height: size.h, maxWidth: '80vw' }}
+    >
+      <div
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+        className="flex items-center justify-between px-3 py-2 border-b border-[var(--cine-glass-border)] flex-shrink-0 cursor-move touch-none select-none"
+      >
         <p className="text-xs font-bold text-white">Room chat</p>
         <button
           onClick={onToggle}
@@ -867,6 +1015,19 @@ export function FloatingRoomChat({
         onEdit={onEdit}
         onDeleteRequest={onDeleteRequest}
         compact
+      />
+      {/* Resize corner, bottom-left only (one handle, not all edges):
+          the composer send button owns the bottom-right. Diagonal grip,
+          pointer events like the header (mouse + touch). */}
+      <div
+        onPointerDown={onHandlePointerDown}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+        role="separator"
+        aria-label="Resize chat panel"
+        className="absolute left-1.5 bottom-1.5 z-50 h-4 w-4 cursor-nesw-resize touch-none rounded-sm opacity-50 hover:opacity-100"
+        style={{ background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.65) 0 2px, transparent 2px 5px)' }}
       />
     </div>
   );
