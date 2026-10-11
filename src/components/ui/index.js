@@ -10,3 +10,5 @@ export { default as Row } from './Row.jsx';
 export { default as Input } from './Input.jsx';
 export { default as SegmentedControl } from './SegmentedControl.jsx';
 export { default as EmptyState } from './EmptyState.jsx';
+export { default as HoldButton } from './HoldButton.jsx';
+export { default as Reveal } from './Reveal.jsx';

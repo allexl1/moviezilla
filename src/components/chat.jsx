@@ -3,6 +3,7 @@ import { Send, X, Pencil, Trash2, CornerUpLeft, ChevronDown, MoreHorizontal, Ima
 import Emoji, { RichText } from './ui/Emoji';
 import { QUICK_REACTIONS } from '../services/emoji';
 import GifPicker from './GifPicker';
+import HoldButton from './ui/HoldButton';
 import { nameColor } from '../services/rooms';
 
 // Shared room-chat: message bubbles (Telegram language — replies, edits,
@@ -370,16 +371,17 @@ export function ChatMessage({
             </button>
           )}
           {(mine || canModerate) && (
-            <button
+            <HoldButton
               role="menuitem"
-              onClick={() => {
+              onConfirm={() => {
                 setMenuOpen(false);
                 onDeleteRequest?.(m.id, m);
               }}
+              aria-label="Press and hold to delete for everyone"
               className="cine-msg-menu-item cine-msg-menu-item--danger"
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete
-            </button>
+            </HoldButton>
           )}
           </div>
         </div>

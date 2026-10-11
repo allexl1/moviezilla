@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Play, Trash2, Zap, Download } from 'lucide-react';
 import { storage } from '../services/storage';
 import Modal from './ui/Modal';
+import HoldButton from './ui/HoldButton';
 import Picker from './Picker';
 
 const SERVERS = [
@@ -129,10 +130,8 @@ export default function SettingsModal({ isOpen, onClose }) {
   };
 
   const handleClearHistory = () => {
-    if (confirm('Clear all resume timestamps and continue watching history?')) {
-      storage.clearPlaybackHistory();
-      window.location.reload();
-    }
+    storage.clearPlaybackHistory();
+    window.location.reload();
   };
 
   return (
@@ -248,12 +247,13 @@ export default function SettingsModal({ isOpen, onClose }) {
           title="Watch History"
           desc="Clears resume timestamps and continue watching."
           control={
-            <button
-              onClick={handleClearHistory}
+            <HoldButton
+              onConfirm={handleClearHistory}
+              aria-label="Press and hold to clear watch history"
               className="cine-control-btn cine-btn-danger w-full"
             >
               Clear
-            </button>
+            </HoldButton>
           }
         />
       </div>

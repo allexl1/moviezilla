@@ -480,6 +480,36 @@ body.mz-vt .mz-page-fade {
   animation: none;
 }
 
+/* Hold-to-confirm (UI Phase 3): press-and-hold fires, release
+   cancels. The caller owns shape/color via its own classes; the fill
+   is one neutral wash and the label keeps its styling (displayed
+   through via contents so flex gaps survive). */
+.mz-hold {
+  position: relative;
+  overflow: hidden;
+}
+.mz-hold-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  transition-property: width;
+  transition-timing-function: linear;
+}
+.mz-hold-fill[data-on='true'] {
+  width: 100%;
+}
+.mz-hold-label {
+  display: contents;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mz-hold-fill {
+    transition: none;
+  }
+}
+
 /* Card entrance animation */
 @keyframes cine-card-in {
   0% { opacity: 0; transform: translateY(8px); }

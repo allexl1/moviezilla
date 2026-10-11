@@ -463,8 +463,16 @@ Tooltip already cut. What remains is below.
   rows (C-audit). Sliding pill, arrow-key support, reduced-motion
   path kept.
 - Phase 3 — hold-to-confirm (motion only): Delete room, Clear
-  watch history, playlist Clear watched. Kills the `confirm()`
-  calls and the delete-confirm modal branch.
+   watch history, playlist Clear watched. Kills the `confirm()`
+   calls and the delete-confirm modal branch.
+   Status: built (`ui/HoldButton`, ~900ms hold; release, blur and
+   pointer-leave cancel, Enter/Space hold works, neutral fill wash,
+   reduced-motion static; Delete room, settings Clear history,
+   playlist Clear watched (was unguarded), menu Delete
+   (pendingDelete branch + state removed). Zero native confirm()
+   calls remain. Crown/kick keep the modal (consequences need
+   words a hold can't carry). Headless holds proven (tombstone,
+   lobby return, no modal).
 - Phase 4 — cinema feel, ours (no library):
   a. Route drift: one ~150ms fade-drift between screens on the
   custom router. Screens cut today; cuts feel cheap.

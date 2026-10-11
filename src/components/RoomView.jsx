@@ -55,6 +55,7 @@ import { useAccount } from '../services/account';
 import { letterboxd } from '../services/letterboxd';
 import YouTubeRoomPlayer, { parseYouTubeId, fetchYouTubeMeta } from './YouTubeRoomPlayer';
 import Input from './ui/Input';
+import HoldButton from './ui/HoldButton';
 import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
 
@@ -711,8 +712,8 @@ export default function RoomView({ code, onLeave, onToast }) {
   }, [playlistOpen]);
   // Invite copy menu (B5): hover/tap the code chip to choose.
   const [inviteOpen, setInviteOpen] = useState(false);
-  // Delete confirm (B8): never vaporize on a single stray tap.
-  const [pendingDelete, setPendingDelete] = useState(null);
+  // Delete-for-everyone (B8) holds to confirm in the message menu —
+  // no modal, no stray-tap vaporize.
   // Host confirms (B10): crowning and removing both ask first.
   const [pendingHost, setPendingHost] = useState(null);
   const [pendingKick, setPendingKick] = useState(null);
@@ -2532,7 +2533,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                 replyTo={replyTo}
                 setReplyTo={setReplyTo}
                 onEdit={editMessage}
-                onDeleteRequest={(id) => setPendingDelete(id)}
+                onDeleteRequest={(delId, m) => deleteMessage(delId, m)}
               />
             </div>
           ) : media.id ? (
@@ -2570,7 +2571,7 @@ export default function RoomView({ code, onLeave, onToast }) {
                 replyTo,
                 setReplyTo,
                 onEdit: editMessage,
-                onDeleteRequest: (id) => setPendingDelete(id),
+                onDeleteRequest: (delId, m) => deleteMessage(delId, m),
               }}
             />
           ) : (
@@ -2671,7 +2672,7 @@ export default function RoomView({ code, onLeave, onToast }) {
             replyTo={replyTo}
             setReplyTo={setReplyTo}
             onEdit={editMessage}
-            onDeleteRequest={(id) => setPendingDelete(id)}
+            onDeleteRequest={(delId, m) => deleteMessage(delId, m)}
           />
         </div>
         {tab === 'settings' ? (
@@ -2841,14 +2842,13 @@ export default function RoomView({ code, onLeave, onToast }) {
               />
             ))}
             {isHost && (
-              <button
-                onClick={() => {
-                  if (confirm(`Delete room ${room.code} for everyone?`)) handleLeave(true);
-                }}
+              <HoldButton
+                onConfirm={() => handleLeave(true)}
+                aria-label="Press and hold to delete room for everyone"
                 className="cine-control-btn cine-btn-danger w-full h-9 text-xs"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete room
-              </button>
+              </HoldButton>
             )}
             <button
               onClick={() => handleLeave(false)}
@@ -2861,12 +2861,13 @@ export default function RoomView({ code, onLeave, onToast }) {
       </aside>
       )}
 
-      {/* Confirm sheet (B8/B10): delete-for-everyone, crowning, kicking —
-          all destructive-ish, all ask first. One white primary, glass out. */}
+      {/* Confirm sheet (B10): crowning and kicking ask first — the
+          consequences need words a hold can't carry. Message deletes
+          hold-to-confirm in place (no modal). One white primary,
+          glass out. */}
       <Modal
-        isOpen={Boolean(pendingDelete || pendingHost || pendingKick)}
+        isOpen={Boolean(pendingHost || pendingKick)}
         onClose={() => {
-          setPendingDelete(null);
           setPendingHost(null);
           setPendingKick(null);
         }}
@@ -2876,26 +2877,21 @@ export default function RoomView({ code, onLeave, onToast }) {
         <div className="p-6 sm:p-8 space-y-5 text-center">
           <div>
             <h2 className="text-lg font-extrabold text-white tracking-tight">
-              {pendingDelete
-                ? 'Delete this message for everyone?'
-                : pendingHost
-                  ? `Make ${pendingHost.name} the host?`
-                  : pendingKick
-                    ? `Remove ${pendingKick.name} from the room?`
-                    : ''}
+              {pendingHost
+                ? `Make ${pendingHost.name} the host?`
+                : pendingKick
+                  ? `Remove ${pendingKick.name} from the room?`
+                  : ''}
             </h2>
             <p className="text-xs text-white/60 mt-1">
-              {pendingDelete
-                ? 'Everyone in the room loses it. This cannot be undone.'
-                : pendingHost
-                  ? 'You step down to watcher.'
-                  : 'They leave immediately.'}
+              {pendingHost
+                ? 'You step down to watcher.'
+                : 'They leave immediately.'}
             </p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => {
-                setPendingDelete(null);
                 setPendingHost(null);
                 setPendingKick(null);
               }}
@@ -2905,19 +2901,14 @@ export default function RoomView({ code, onLeave, onToast }) {
             </button>
             <button
               onClick={() => {
-                if (pendingDelete) {
-                  const m = messages.find((x) => x.id === pendingDelete);
-                  deleteMessage(pendingDelete, m);
-                }
-                else if (pendingHost) transferHost(pendingHost.device, pendingHost.name);
+                if (pendingHost) transferHost(pendingHost.device, pendingHost.name);
                 else if (pendingKick) kickMember(pendingKick.device, pendingKick.name);
-                setPendingDelete(null);
                 setPendingHost(null);
                 setPendingKick(null);
               }}
               className="cine-btn cine-btn-white h-11 px-6 text-sm flex-1"
             >
-              {pendingDelete ? 'Delete' : pendingHost ? 'Make host' : 'Remove'}
+              {pendingHost ? 'Make host' : 'Remove'}
             </button>
           </div>
         </div>
@@ -3031,12 +3022,13 @@ export default function RoomView({ code, onLeave, onToast }) {
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">Watched here</p>
                   {isHost && (
-                    <button
-                      onClick={queueClearWatched}
+                    <HoldButton
+                      onConfirm={queueClearWatched}
+                      aria-label="Press and hold to clear watched"
                       className="text-[11px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
                     >
                       Clear
-                    </button>
+                    </HoldButton>
                   )}
                 </div>
                 {watchedItems.map((item) => (
