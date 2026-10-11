@@ -17,7 +17,7 @@ function loadFavs() {
   }
 }
 
-export default function GifPicker({ onPick, onClose }) {
+export default function GifPicker({ onPick, onClose, compact }) {
   const [query, setQuery] = useState('');
   const [gifs, setGifs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,11 @@ export default function GifPicker({ onPick, onClose }) {
     ? favs.filter((g) => !query.trim() || (g.title || '').toLowerCase().includes(query.trim().toLowerCase()))
     : gifs;
   return (
-    <div className="absolute bottom-full mb-2 right-0 w-80 sm:w-[340px] max-w-[86vw] rounded-2xl cine-glass-panel overflow-hidden z-30">
+    // Compact (floating 320px panel): anchor left+right instead of the
+    // fixed w-80 that clips past the panel edge. Rail keeps fixed width.
+    <div className={`absolute bottom-full mb-2 rounded-2xl cine-glass-panel overflow-hidden z-30${
+      compact ? ' left-0 right-0' : ' right-0 w-80 sm:w-[340px] max-w-[86vw]'
+    }`}>
       <div className="flex items-center gap-2 p-2.5 border-b border-[var(--cine-glass-border)]">
         <Search className="w-3.5 h-3.5 text-white/50 flex-shrink-0" />
         <input

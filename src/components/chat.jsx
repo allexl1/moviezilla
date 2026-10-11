@@ -119,6 +119,7 @@ export function ChatMessage({
   onDeleteRequest,
   onJump,
   onViewPhoto,
+  compact,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -276,7 +277,10 @@ export function ChatMessage({
             )}
           </span>
         )}
-        {/* Hover action (B6): one … button, never four overlapping icons.
+        {/* Hover action: one … button overlaid on the bubble corner
+            (bottom, sender side). It used to sit outside the bubble
+            (-left-8/-right-8) where the floating panel's overflow-hidden
+            cut it off — overlaying kills the clip on both surfaces.
             Touch keeps it faintly visible — no hover there. */}
         {!editing && (
           <button
@@ -284,8 +288,8 @@ export function ChatMessage({
 
             aria-label="Message actions"
             aria-expanded={menuOpen}
-            className={`absolute top-1/2 -translate-y-1/2 cine-icon-btn cine-icon-btn--xs opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
-              mine ? '-left-8' : '-right-8'
+            className={`absolute bottom-1 cine-icon-btn cine-icon-btn--xs bg-black/40 opacity-60 md:opacity-0 md:group-hover/msg:opacity-100 focus:opacity-100 ${
+              mine ? 'right-1' : 'left-1'
             }`}
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
@@ -304,7 +308,11 @@ export function ChatMessage({
           <div
             role="menu"
             aria-label="Choose a reaction"
-            className="flex gap-0.5 p-1 rounded-full cine-glass-panel mb-1.5"
+            className={`gap-0.5 p-1 rounded-full cine-glass-panel mb-1.5 flex${
+              // 12 emoji overflow the 320px popup: scroll there, full row
+              // on the rail.
+              compact ? ' flex-nowrap overflow-x-auto max-w-[248px]' : ''
+            }`}
           >
             {QUICK_REACTIONS.map((emoji) => (
               <button
@@ -314,7 +322,7 @@ export function ChatMessage({
                   setMenuOpen(false);
                 }}
                 aria-label={`React ${emoji}`}
-                className="w-7 h-7 rounded-full hover:bg-white/15 transition cursor-pointer flex items-center justify-center"
+                className={`w-7 h-7 rounded-full hover:bg-white/15 transition cursor-pointer flex items-center justify-center${compact ? ' flex-shrink-0' : ''}`}
               >
                 <Emoji char={emoji} size={18} />
               </button>
@@ -382,10 +390,18 @@ export function ChatMessage({
 // Shift+Enter breaks. Draft lives in the parent (survives tab switches,
 // reloads via the room's draft cache). focusKey nudges the keyboard open
 // whenever a reply starts (friend: answer writes immediately).
-function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSend, onSendGif, onSendPhoto, focusKey, photoBusy }) {
+// Paste / drag-drop (P6.31): a screenshot pasted or a file dropped onto
+// the composer lands in a preview strip (thumbnail + remove + Send).
+// Single file MVP, image/* only; send reuses the photo upload path with
+// the active reply attached. `compact` shrinks the buttons for the 320px
+// floating panel; the input is unchanged.
+function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSend, onSendGif, onSendPhoto, focusKey, photoBusy, compact }) {
   const [gifOpen, setGifOpen] = useState(false);
+  const [pending, setPending] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const areaRef = useRef(null);
   const photoRef = useRef(null);
+  const pendingUrlRef = useRef('');
   const fit = () => {
     const el = areaRef.current;
     if (!el) return;
@@ -403,6 +419,50 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
     if (focusKey > 0) areaRef.current?.focus?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
+  // Object URLs die with the composer so pastes never leak.
+  useEffect(() => () => {
+    if (pendingUrlRef.current) {
+      try {
+        URL.revokeObjectURL(pendingUrlRef.current);
+      } catch {
+        // already gone
+      }
+    }
+  }, []);
+  const clearPending = () => {
+    if (pendingUrlRef.current) {
+      try {
+        URL.revokeObjectURL(pendingUrlRef.current);
+      } catch {
+        // already gone
+      }
+      pendingUrlRef.current = '';
+    }
+    setPending(null);
+  };
+  const pickFile = (f) => {
+    if (!f || photoBusy) return;
+    const url = objectUrlFor(f);
+    if (!url) return;
+    clearPending();
+    pendingUrlRef.current = url;
+    setPending({ file: f, url });
+  };
+  const sendPending = () => {
+    if (!pending || photoBusy) return;
+    const file = pending.file;
+    clearPending();
+    onSendPhoto?.(file, replyTo);
+    setReplyTo(null);
+  };
+  const firstImage = (list) => Array.from(list || []).find((f) => f?.type?.startsWith('image/')) || null;
+  const objectUrlFor = (f) => {
+    try {
+      return URL.createObjectURL(f);
+    } catch {
+      return null;
+    }
+  };
   if (muted) {
     return (
       <div className="p-3 border-t border-[var(--cine-glass-border)] flex-shrink-0">
@@ -412,14 +472,34 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
   }
   const send = () => {
     const text = input.trim().slice(0, 500);
-    if (!text) return;
-    onSend(text, replyTo);
-    setReplyTo(null);
+    if (text) {
+      onSend(text, replyTo);
+      setReplyTo(null);
+      return;
+    }
+    // Empty input with a staged photo: the send button sends the photo.
+    if (pending) sendPending();
   };
+  const gifBtn = compact ? 'h-9 px-3 text-[11px]' : 'h-11 px-4 text-xs';
+  const sendBtn = compact ? 'w-9 h-9' : 'w-11 h-11';
   return (
-    <div className="p-3 border-t border-[var(--cine-glass-border)] flex-shrink-0 relative">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const f = firstImage(e.dataTransfer?.files);
+        if (f) pickFile(f);
+      }}
+      className={`p-3 border-t border-[var(--cine-glass-border)] flex-shrink-0 relative${dragOver ? ' ring-2 ring-white/60 rounded-b-2xl' : ''}`}
+    >
       {gifOpen && (
         <GifPicker
+          compact={compact}
           onPick={(g) => {
             setGifOpen(false);
             onSendGif(g.url, g.preview, replyTo);
@@ -447,6 +527,32 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
           </button>
         </div>
       )}
+      {pending && (
+        <div className="flex items-center gap-2 mb-2 rounded-2xl border border-white/15 bg-white/5 p-2" aria-label="Photo ready to send">
+          <img
+            src={pending.url}
+            alt="Photo to send"
+            className="h-16 w-16 rounded-xl object-cover border border-white/15 flex-shrink-0"
+          />
+          <span className="min-w-0 flex-1 text-[11px] text-white/60 truncate">
+            {(pending.file.name || 'Photo').slice(0, 60)}
+          </span>
+          <button
+            onClick={clearPending}
+            className="cine-icon-btn cine-icon-btn--xs flex-shrink-0"
+            aria-label="Remove photo"
+          >
+            <X className="w-3 h-3" />
+          </button>
+          <button
+            onClick={sendPending}
+            disabled={photoBusy}
+            className="cine-pill cine-pill--sm flex-shrink-0 disabled:opacity-50"
+          >
+            Send
+          </button>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
           <textarea
@@ -456,6 +562,12 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
             onChange={(e) => {
               setInput(e.target.value);
               fit();
+            }}
+            onPaste={(e) => {
+              const f = firstImage(e.clipboardData?.files);
+              if (!f) return;
+              e.preventDefault();
+              pickFile(f);
             }}
             placeholder="Send message"
             aria-label={nickname ? `Send message as ${nickname}` : 'Send message'}
@@ -473,7 +585,7 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
 
           aria-label="Send a GIF"
           aria-pressed={gifOpen}
-          className={`cine-control-btn flex-shrink-0 h-11 px-4 text-xs${gifOpen ? ' cine-pill--active' : ''}`}
+          className={`cine-control-btn flex-shrink-0 ${gifBtn}${gifOpen ? ' cine-pill--active' : ''}`}
         >
           GIF
         </button>
@@ -495,11 +607,11 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
           onClick={() => photoRef.current?.click()}
           disabled={photoBusy}
           aria-label="Send a photo"
-          className="cine-control-btn flex-shrink-0 h-11 px-4 text-xs disabled:opacity-50"
+          className={`cine-control-btn flex-shrink-0 ${gifBtn} disabled:opacity-50`}
         >
           <ImagePlus className="w-4 h-4" />
         </button>
-        <button onClick={send} className="flex-shrink-0 w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:bg-[#f2f2f5] active:scale-95 transition" aria-label="Send message">
+        <button onClick={send} className={`flex-shrink-0 ${sendBtn} rounded-full bg-white text-black flex items-center justify-center hover:bg-[#f2f2f5] active:scale-95 transition`} aria-label="Send message">
           <Send className="w-4 h-4" />
         </button>
       </div>
@@ -529,6 +641,7 @@ export function ChatView({
   setReplyTo,
   onEdit,
   onDeleteRequest,
+  compact,
 }) {
   const scrollerRef = useRef(null);
   const pinnedRef = useRef(true);
@@ -642,6 +755,7 @@ export function ChatView({
             onDeleteRequest={onDeleteRequest}
             onJump={jumpToMessage}
             onViewPhoto={(url, title) => setViewingPhoto({ url, title })}
+            compact={compact}
           />
         ))}
       </div>
@@ -663,6 +777,7 @@ export function ChatView({
         onSendPhoto={onSendPhoto}
         photoBusy={photoBusy}
         focusKey={focusKey}
+        compact={compact}
       />
       {/* Full-photo viewer */}
       {viewingPhoto && (
@@ -751,6 +866,7 @@ export function FloatingRoomChat({
         setReplyTo={setReplyTo}
         onEdit={onEdit}
         onDeleteRequest={onDeleteRequest}
+        compact
       />
     </div>
   );
