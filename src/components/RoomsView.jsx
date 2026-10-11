@@ -70,10 +70,10 @@ function NickRow({ nickname, isAccount, setNicknameState, onToast }) {
           setNicknameState(clean);
           onToast?.(`Hello, ${clean}`);
         }}
-        className="cine-control-btn px-4 h-10"
+        className="cine-btn cine-btn-white h-10 px-5 text-sm flex-shrink-0"
         aria-label="Save nickname"
       >
-        <Check className="w-4 h-4" />
+        Save
       </button>
     </div>
   );

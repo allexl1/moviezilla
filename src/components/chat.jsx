@@ -611,7 +611,7 @@ function Composer({ nickname, muted, input, setInput, replyTo, setReplyTo, onSen
         >
           <ImagePlus className="w-4 h-4" />
         </button>
-        <button onClick={send} className={`flex-shrink-0 ${sendBtn} rounded-full bg-white text-black flex items-center justify-center hover:bg-[#f2f2f5] active:scale-95 transition`} aria-label="Send message">
+        <button onClick={send} className={`cine-btn cine-btn-primary flex-shrink-0 ${sendBtn} active:scale-95`} aria-label="Send message">
           <Send className="w-4 h-4" />
         </button>
       </div>

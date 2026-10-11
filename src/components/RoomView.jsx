@@ -2833,14 +2833,14 @@ export default function RoomView({ code, onLeave, onToast }) {
                 onClick={() => {
                   if (confirm(`Delete room ${room.code} for everyone?`)) handleLeave(true);
                 }}
-                className="w-full h-9 rounded-full text-xs font-bold text-red-400/80 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+                className="cine-control-btn cine-btn-danger w-full h-9 text-xs"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete room
               </button>
             )}
             <button
               onClick={() => handleLeave(false)}
-              className="w-full h-9 rounded-full text-xs font-bold text-white/60 hover:text-white border border-white/10 transition cursor-pointer inline-flex items-center justify-center gap-1.5"
+              className="cine-control-btn w-full h-9 text-xs"
             >
               <LogOut className="w-3.5 h-3.5" /> Leave room
             </button>
