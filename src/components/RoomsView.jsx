@@ -18,6 +18,7 @@ import { tmdb } from '../services/tmdb';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
+import Reveal from './ui/Reveal';
 import Row from './ui/Row';
 import RowRail from './RowRail';
 import { useAccount } from '../services/account';
@@ -428,6 +429,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         {/* Lobby order: trending strip first, one centered action panel,
             then My rooms — nothing important below the fold. */}
         {trending.length > 0 && (
+          <Reveal>
           <RowRail
             title="Trending now: start a room"
             cardSize="sm"
@@ -442,10 +444,11 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               })
             }
           />
+          </Reveal>
         )}
         {/* One centered action: create first (white primary), join below.
             No room-name field — rooms take the title's name automatically. */}
-        <section className="rounded-3xl cine-glass-panel p-6 sm:p-8 space-y-5 max-w-xl w-full mx-auto">
+        <Reveal as="section" className="rounded-3xl cine-glass-panel p-6 sm:p-8 space-y-5 max-w-xl w-full mx-auto">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-extrabold text-white tracking-tight">Start watching together</h2>
             <p className="text-xs text-white/60">One tap to create, or join with a code</p>
@@ -500,13 +503,13 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               {busy ? 'Joining…' : 'Join'}
             </button>
           </div>
-        </section>
+        </Reveal>
         </>
       )}
 
       {/* My rooms — right under the action, never below the fold filler. */}
       {step === 'main' && rooms.length > 0 && (
-      <section className="space-y-3">
+      <Reveal as="section" className="space-y-3">
         <div className="cine-section-head">
           <h2 className="cine-section-title cine-section-title--lg">My rooms</h2>
         </div>
@@ -549,7 +552,7 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               />
             ))}
           </div>
-      </section>
+      </Reveal>
       )}
 
       <Modal

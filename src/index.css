@@ -468,6 +468,20 @@ button.mat-row:active {
   animation-delay: calc(var(--i, 0) * 30ms);
 }
 
+/* Scroll reveal, one shot (motion P6): subtle rise the first time a
+   section enters the viewport, then it stays put. Rooms lobby first.
+   Duration rides the base token (250ms, inside budget). */
+.mz-reveal {
+  opacity: 0;
+  translate: 0 12px;
+  transition: opacity var(--cine-duration-base) var(--cine-ease-out),
+    translate var(--cine-duration-base) var(--cine-ease-out);
+}
+.mz-reveal.is-visible {
+  opacity: 1;
+  translate: none;
+}
+
 /* Skeleton shimmer (loading states). Killed by max-power mode via the
    global animation:none rule, and by reduced-motion below. */
 .skel {
@@ -3962,5 +3976,11 @@ body.mz-clean .cine-duo-btn {
   .cine-seg-btn:active,
   button.mat-row:active {
     transform: none;
+  }
+  /* Scroll reveals show instantly (motion P6): no hidden-waiting. */
+  .mz-reveal {
+    opacity: 1;
+    translate: none;
+    transition: none;
   }
 }

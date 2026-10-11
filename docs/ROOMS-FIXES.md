@@ -581,9 +581,15 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    progressively with honest "Loading details..." text instead of
    shimmer. Nothing to change.
 - P6 scroll-driven (no parallax, ever): IntersectionObserver
-  section reveals (subtle rise, once each), back-to-top reveal
-  (exists — verify threshold), collapsing room People header?
-  No. Sticky headers stay static. Parallax stays banned (jank).
+   section reveals (subtle rise, once each), back-to-top reveal
+   (exists — verify threshold), collapsing room People header?
+   No. Sticky headers stay static. Parallax stays banned (jank).
+   Status: reveals built (one-shot `Reveal`, rooms lobby sections,
+   reduced-motion shows instantly; headless asserts all-visible
+   after scroll + no x-overflow). Back-to-top threshold verified
+   on /clean (hidden at top, appears past 0.8x viewport, returns
+   to top) — note it lives only on the test route; real routes
+   getting one is an owner call, not built unprompted.
 
 Per-surface checklist (build order = rooms first, then outward):
 1. Room detail: header (drift in), video column (fade), rail
