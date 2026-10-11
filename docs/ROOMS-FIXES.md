@@ -25,9 +25,10 @@ do not start building them unprompted.
 
 ## P1 — rooms follow-ups
 
-4. Rooms mobile UI. The room screen was never adapted for phones
-   (deferred until rooms stabilized). Playlist drawer, header scroll
-   row, People/Settings tabs at 390px.
+4. [BUILT rooms-2.0, untested live] Rooms mobile UI: header
+   truncates to one row (title class beats text-wrap: balance),
+   Playlist/Sync icon-only under sm, invite chip hidden on phones
+   (copy lives in Settings). Verified per tab at 390px headless.
 5. [PARKED for owner's separate doc] Structural split of RoomView
    (still ~2800 lines): channel hook, playlist drawer, settings
    panels as components. Checked `docs/`: no such document exists yet
@@ -187,7 +188,21 @@ text/gif + reply + reactions + receipts); photo messages add one new
     preload failing. Repro first with a manual trigger, then fix the
     actual gate — do not re-layer guesses here.
 
-## P0 — rooms time: one system (specified, not built)
+## P0 — rooms time: one system (PART BUILT rooms-2.0, remainder below)
+
+BUILT and verified headless, awaiting live test: single `roomClock()`
+read (frozen snapshot wins, all actions read here); `pauseKind`
+precedence for display (room > provider > absent > playing);
+`started` carried explicitly (row + ref, follower poll merges it);
+auto-start on provider time + voice flags (embed pt/live/ppaused,
+YouTube playingRef); seeks/ticks gated on started + voice; resume
+rebuilds at the frozen second; LiveClock freezes on unchanged meta;
+room history honesty (provider-verified writes only, never
+backwards, unmount saves frozen point).
+REMAINS: A1 single `resolveResume(type, id, server)` for every
+announcer (hero/toast/CW rail/playlist picker say top-level while
+Player opens the strict slot). Fold into the next time touch —
+do not build alone.
 
 Time audit (static: full read of Player/RoomView/YouTubeRoomPlayer +
 session logs — six clocks, four pause signals, all counted):
