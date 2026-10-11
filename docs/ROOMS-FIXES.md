@@ -288,8 +288,8 @@ test script permanently.
     (verify they are gone): `GSMFZB` (older) plus P6 headless-QA rooms
     `RUMNPB` `VP5BET` `YXKUJ8` `W2AETJ` `MJAWPP` (P6 headless QA)
     plus dots/Escape-layering QA rooms `MU7X55` `GGBSX8` `RFF9YU`
-    `XE44Q6` (host-only delete is unreachable headless, so they were
-    left standing).
+    `XE44Q6` and press-states QA room `Y796ME` (host-only delete is
+    unreachable headless, so they were left standing).
 14. Push + publish discipline + Telegram/Vercel cache busts (`?v=` style)
     after the rooms release.
 15. Visual pass per page, desktop + 390px, reporter sends screenshots.
