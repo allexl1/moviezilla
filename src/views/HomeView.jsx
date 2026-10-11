@@ -4,6 +4,7 @@ import { tmdb } from '../services/tmdb';
 import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
 import RowRail from '../components/RowRail';
+import Reveal from '../components/ui/Reveal';
 import ProviderPicker from '../components/ProviderPicker';
 import { SkelRail } from '../components/ui';
 
@@ -498,7 +499,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
       {/* Main Container */}
       <main className="cine-container">
         {continueWatching.length > 0 && (
-          <section className="space-y-3">
+          <Reveal as="section" className="space-y-3">
             <div className="cine-section-head">
               <h2 className="cine-section-title inline-flex items-center gap-2">
                 <History className="w-4 h-4 text-white/60" /> Continue Watching
@@ -578,7 +579,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
               })}
               </div>
             </div>
-          </section>
+          </Reveal>
         )}
 
         <section>

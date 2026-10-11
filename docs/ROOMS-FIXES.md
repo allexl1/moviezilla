@@ -606,7 +606,11 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    No. Sticky headers stay static. Parallax stays banned (jank).
    Status: reveals built (one-shot `Reveal`, rooms lobby sections,
    reduced-motion shows instantly; headless asserts all-visible
-   after scroll + no x-overflow). Back-to-top threshold verified
+   after scroll + no x-overflow). Globalized: RowRail owns its
+   reveal (every rail app-wide) + home Continue Watching; lobby
+   wrapper removed to avoid a double. Detail custom sections,
+   UpcomingRail and grids stay on existing entrances until their
+   round. Back-to-top threshold verified
    on /clean (hidden at top, appears past 0.8x viewport, returns
    to top) — note it lives only on the test route; real routes
    getting one is an owner call, not built unprompted.

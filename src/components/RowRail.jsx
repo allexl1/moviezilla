@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from './ui/Card';
+import Reveal from './ui/Reveal';
 
 /**
  * RowRail — horizontal poster rail for the home page.
@@ -107,7 +108,7 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
     ));
 
   return (
-    <section className="space-y-3">
+    <Reveal as="section" className="space-y-3">
       {head(actionBtn)}
 
       {expanded ? (
@@ -135,6 +136,6 @@ export default function RowRail({ title, titleNode, filterNode, items = [], onSe
       ) : (
         <div ref={railRef} className="cine-rail no-scrollbar -mx-1 px-1">{cards(cardSize)}</div>
       )}
-    </section>
+    </Reveal>
   );
 }

@@ -429,7 +429,6 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
         {/* Lobby order: trending strip first, one centered action panel,
             then My rooms — nothing important below the fold. */}
         {trending.length > 0 && (
-          <Reveal>
           <RowRail
             title="Trending now: start a room"
             cardSize="sm"
@@ -444,7 +443,6 @@ export default function RoomsView({ draftMedia = null, onEnter, onToast }) {
               })
             }
           />
-          </Reveal>
         )}
         {/* One centered action: create first (white primary), join below.
             No room-name field — rooms take the title's name automatically. */}
