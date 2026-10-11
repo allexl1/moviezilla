@@ -200,7 +200,7 @@ export default function EpisodeDrawer({
                     onSelectEpisode(activeSeason, ep.episode_number);
                     onClose();
                   }}
-                  className={`mat-row group flex items-center gap-3 p-2 cursor-pointer ${
+                  className={`mat-row group flex items-center gap-3 p-2 cursor-pointer active:scale-[0.98] ${
                     isCurrent ? 'border-[var(--cine-accent)]/50' : ''
                   }`}
                 >

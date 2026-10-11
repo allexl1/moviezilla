@@ -3355,11 +3355,17 @@ img.cine-detail-melt-img {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color var(--cine-duration-base) var(--cine-ease-out);
+  transition: color var(--cine-duration-base) var(--cine-ease-out),
+    transform var(--cine-duration-base) var(--cine-ease-out);
 }
 
 .cine-seg-btn:hover {
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* Press state (motion P4 audit): squash like every other tappable. */
+.cine-seg-btn:active {
+  transform: scale(0.97);
 }
 
 .cine-seg-btn.is-active {
@@ -3948,6 +3954,7 @@ body.mz-clean .cine-duo-btn {
   .cine-duo-btn button:active,
   .cine-hero-duo-btn:active,
   .cine-hero-disc:active,
+  .cine-seg-btn:active,
   button.mat-row:active {
     transform: none;
   }

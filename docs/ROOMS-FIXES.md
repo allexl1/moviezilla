@@ -560,8 +560,13 @@ Reduced motion: all patterns collapse to instant opacity or nothing
    press token gets it; nothing gets a custom one. Status: rooms
    gap-fill built (menu rows, reaction chips, button-rows at .98,
    slider thumbs affirm on grab, strip emoji via utility;
-   reduced-motion collapses all press transforms to none) — feel
-   pass owed to owner devices.
+   reduced-motion collapses all press transforms to none) plus
+   outward round 1 (seg buttons, episode-drawer rows at .98) —
+   feel pass owed to owner devices. Left as media-hover language
+   on purpose: episode/cast/trailer/poster tiles and GIF cells
+   (press would fight the hover lift; cast cards need keyboard
+   support first). Queue/MyList rows are not tappable (their
+   buttons already press); text links are not press surfaces.
 - P5 shimmer (keep + discipline): slow dim sweep only, layout
   mirrored everywhere it appears. Audit: Movies/Shows grids,
   Home rails, detail/person/studio loading states, search,
