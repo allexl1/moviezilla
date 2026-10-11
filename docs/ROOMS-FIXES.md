@@ -485,17 +485,25 @@ Reduced motion: all patterns collapse to instant opacity or nothing
   a slight rise (~150ms). Custom router wraps state updates in
   `document.startViewTransition`, feature-detected with instant-cut
   fallback (current behavior). Reduced motion: skip entirely.
-- P2 stagger entrance: first paint only, never on scroll. Rails,
-  grids, People rows, playlist rows, chat history initial load:
-  rise + fade, ~30ms step, capped (first ~12 items, rest appear).
-  CSS `animation-delay` per index (no JS loop per card).
+  OVERLAP RULE (audited 2026-10-11): mount fades already exist
+  (person/media/studio 300ms, Player 200ms, cine-fade-in/up,
+  hero-in). Drift REPLACES page-level mount fades where it lands —
+  never both. Overlay fades (modal/drawer/viewer/toast) stay
+  untouched; they are not route changes.
+- P2 stagger entrance: first paint only, never on scroll. UPGRADE,
+  not addition: `cine-card-in` already animates every poster card.
+  Extend it with a per-index delay variable (rails set `--i`,
+  capped ~12), same keyframes, same budget. RowRail/Card stay the
+  only owners of card entrance.
 - P3 FLIP glide: segmented pills (rooms tabs, My List, settings
   On/Off, Watchlist segmented — shared with the arc pilot),
   navbar thumb (already glides? verify, else unify), toast stack
   when it lands. Shared-layout-id technique or arc's
   implementation, one per control.
 - P4 press states (the missed-buttons audit): EVERY tappable
-  squashes (scale .97, 150ms, never flash). Audit list: room
+  squashes (scale .97, 150ms, never flash). Main button classes
+  already have :active — audit ADDS it only where missing, never
+  restyles existing ones. Audit list: room
   header buttons, rail tabs, chat bubbles with actions, message
   menu items, composer buttons, playlist rows + buttons, My List
   rows, invite copy buttons, settings pills/sliders thumbs,
