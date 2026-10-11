@@ -464,6 +464,99 @@ anywhere — screens cut, rails appear static.
   already good, sweep remaining screens), skeleton discipline
   (4e). No new items beyond the plan.
 
+## Motion plan (specified, not built — owner picks: all liked
+except Ken Burns)
+
+Owner verdicts 2026-10-11: View Transitions API yes, staggered
+entrance yes, FLIP yes, skeleton shimmer yes (keep), scroll-driven
+yes, Ken Burns never. This section covers EVERY surface, including
+the ones missed before (nickname gates, Letterboxd connect, 404 and
+error fallbacks, every button). One motion system (PRIME RULE):
+tokens + 6 patterns below, no per-screen inventions.
+
+Tokens (add once, index.css): --mz-dur-1 150ms, --mz-dur-2 250ms,
+--mz-dur-3 300ms; --mz-ease-out cubic-bezier(0.16,1,0.3,1).
+Reduced motion: all patterns collapse to instant opacity or nothing
+(media query + existing mz-low-power gates). Nothing may exceed
+300ms except ambient shimmer.
+
+- P1 route drift (View Transitions API): tab switches, detail
+  open/close, room enter/leave, player open/close cross-fade with
+  a slight rise (~150ms). Custom router wraps state updates in
+  `document.startViewTransition`, feature-detected with instant-cut
+  fallback (current behavior). Reduced motion: skip entirely.
+- P2 stagger entrance: first paint only, never on scroll. Rails,
+  grids, People rows, playlist rows, chat history initial load:
+  rise + fade, ~30ms step, capped (first ~12 items, rest appear).
+  CSS `animation-delay` per index (no JS loop per card).
+- P3 FLIP glide: segmented pills (rooms tabs, My List, settings
+  On/Off, Watchlist segmented — shared with the arc pilot),
+  navbar thumb (already glides? verify, else unify), toast stack
+  when it lands. Shared-layout-id technique or arc's
+  implementation, one per control.
+- P4 press states (the missed-buttons audit): EVERY tappable
+  squashes (scale .97, 150ms, never flash). Audit list: room
+  header buttons, rail tabs, chat bubbles with actions, message
+  menu items, composer buttons, playlist rows + buttons, My List
+  rows, invite copy buttons, settings pills/sliders thumbs,
+  NickGate save, RoomsView nickname save, Watchlist Letterboxd
+  connect/save/change, search result rows, filter pills, episode
+  rows + eye toggles, cast cards, provider/server menus, player
+  chrome, floating chat controls, modal buttons, empty-state
+  actions, error retry buttons. Anything tappable missing the
+  press token gets it; nothing gets a custom one.
+- P5 shimmer (keep + discipline): slow dim sweep only, layout
+  mirrored everywhere it appears. Audit: Movies/Shows grids,
+  Home rails, detail/person/studio loading states, search,
+  rooms lobby trending, chat history. No flashing variants.
+- P6 scroll-driven (no parallax, ever): IntersectionObserver
+  section reveals (subtle rise, once each), back-to-top reveal
+  (exists — verify threshold), collapsing room People header?
+  No. Sticky headers stay static. Parallax stays banned (jank).
+
+Per-surface checklist (build order = rooms first, then outward):
+1. Room detail: header (drift in), video column (fade), rail
+   tabs (FLIP), chat messages (rise on arrival only if pinned —
+   already pinned-aware, add entrance), composer focus (no motion),
+   playlist drawer (slide-in exists — verify duration ≤300ms),
+   People rows (stagger on tab open), settings rows (static,
+   press states), NickGate (entrance + save press).
+2. Rooms lobby: pick flow, nickname gate, trending rail stagger,
+   join/create press states.
+3. Chat everywhere (rail + floating + fullscreen): message
+   entrance, menu open (fade/scale 150ms), reaction strip,
+   composer send (arrow lift is arc's? no — keep ours), viewer
+   open/close, pill moves (already absolute — verify offset).
+4. Player (solo + YT + room frame): open/close drift, chrome
+   auto-hide fade (exists — verify), fullscreen toggle (no
+   motion, instant), episode drawer + server menus (150ms),
+   endings (no motion).
+5. Media detail + person + studio: hero drift-in, facts column
+   fade, rails stagger, episode rows press, eye toggles,
+   cast cards press, trailer (if any) instant.
+6. Home/movies/shows/watchlist/football: hero drift, rail
+   stagger, filter pills press + FLIP if segmented lands,
+   cards press, badges static.
+7. Modals (search/settings/account): open/close 200ms fade-scale
+   (Modal has it — verify all three), inputs focus rings (exist),
+   buttons press.
+8. Letterboxd connect/save/change + nickname save: press states
+   + inline success (no toast-only feedback where the button
+   itself can confirm).
+9. Empty states: fade in with content (no separate animation);
+   error + retry rows: press states, no motion.
+10. ErrorBoundary fallback ("Something broke") + unknown routes
+    (land home with drift like any tab switch — no separate 404
+    exists by design): fallback gets entrance + press states on
+    Try again / Go Home.
+11. Toasts: rise/fade only until the toast-stack phase; no custom
+    motion per call site.
+
+Verification (stills can't show motion): DevTools animation
+inspector + reduced-motion emulation per batch; headless probes
+assert no-JS-errors + layout stability (motion is CSS-only, never
+layout-shifting). Manual device pass for feel, owner judges.
+
 ## Site-wide layering audit (playback/nav/UI surveyed)
 
 Rooms/time already done (six clocks → one reader; presence to
