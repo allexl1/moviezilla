@@ -687,7 +687,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const overview = details?.overview || media?.overview || 'No storyline available.';
 
   return (
-    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
+    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 mz-page-fade">
       {/* Poster tint: the artwork's palette at 30% across the whole page. */}
       <div className="cine-detail-bg" aria-hidden="true">
         <img src={backdrop} alt="" className="cine-detail-bg-img" />

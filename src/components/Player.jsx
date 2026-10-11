@@ -781,7 +781,7 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // of a fullscreen overlay. All chrome/positioning inside stays absolute.
   const rootClass = framed
     ? `relative w-full h-full min-h-0 bg-[var(--cine-bg-deep)] flex flex-col ${showChrome ? '' : 'cursor-none'}`
-    : `fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 ${showChrome ? '' : 'cursor-none'}`;
+    : `fixed inset-0 z-50 bg-[var(--cine-bg-deep)] flex flex-col animate-in fade-in duration-200 mz-page-fade ${showChrome ? '' : 'cursor-none'}`;
 
   return (
     <div

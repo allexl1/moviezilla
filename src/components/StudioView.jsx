@@ -217,7 +217,7 @@ export default function StudioView({ studioId, onSelectMedia, onSelectPerson, on
   const invertLogo = useInvertedLogo(logoSrc);
 
   return (
-    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300">
+    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 mz-page-fade">
       <div className="relative z-20 max-w-[1560px] mx-auto px-6 md:px-14 pt-24 md:pt-28 space-y-10">
         {loading ? (
           <SkelGrid count={12} />

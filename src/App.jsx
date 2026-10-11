@@ -35,6 +35,41 @@ const DEFAULT_FILTERS = {
   language: '',
 };
 
+// Route drift (motion P1): tab switches, detail open/close, room
+// enter/leave and player open/close cross-fade with a slight rise.
+// Feature-detected with instant-cut fallback (current behavior) and
+// skipped under reduced motion. Nested calls run direct — the outer
+// transition already covers them.
+let driftDepth = 0;
+function drift(fn) {
+  const reduce =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (
+    reduce ||
+    typeof document === 'undefined' ||
+    typeof document.startViewTransition !== 'function' ||
+    driftDepth > 0
+  ) {
+    fn();
+    return;
+  }
+  try {
+    driftDepth++;
+    document.startViewTransition(() => {
+      try {
+        fn();
+      } finally {
+        driftDepth--;
+      }
+    });
+  } catch {
+    driftDepth--;
+    fn();
+  }
+}
+
 export default function App() {
   // Deep-link entry: each state initializes from the URL (pure parsers —
   // StrictMode-safe). State owns navigation from here on; the push effect
@@ -109,13 +144,13 @@ export default function App() {
         // ignore
       }
     }
-    if (r.from) setPlayerFrom(r.from);
     if (r.media && r.play && !autoPlayed.current) {
       autoPlayed.current = true;
       playMedia({ id: r.media.id, media_type: r.media.media_type });
     }
     const onPop = () => {
       const p = parseLocation();
+      drift(() => {
       if (!p.play) {
         autoPlayed.current = false;
         setPlayerFrom(null);
@@ -151,6 +186,7 @@ export default function App() {
         skipMirrorOnce.current = true;
         playMedia({ id: p.media.id, media_type: p.media.media_type });
       }
+      });
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -303,7 +339,9 @@ export default function App() {
   const leaveRoom = () => {
     // URL follows via the mirror effect (replaces → /rooms, so Back
     // can't rejoin the room just left).
-    setActiveRoomCode(null);
+    drift(() => {
+      setActiveRoomCode(null);
+    });
   };
 
   // Any navigation away from playback resets ?play=1: a stale player over
@@ -311,6 +349,7 @@ export default function App() {
   // Opening a title also syncs the navbar tab to its type (a show picked
   // from Home/Search/Watchlist lights up Shows, not Home).
   const selectMedia = (item) => {
+    drift(() => {
     setActivePlayer(null);
     setPlayerFrom(null);
     // Same-title re-tap (double-click) is a no-op: without this the
@@ -332,8 +371,10 @@ export default function App() {
     setSelectedStudio(null);
     setSelectedMedia(item);
     if (item) setActiveTab(resolveMediaType(item) === 'tv' ? 'tv' : 'movie');
+    });
   };
   const selectPerson = (id) => {
+    drift(() => {
     setActivePlayer(null);
     setPlayerFrom(null);
     if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
@@ -343,8 +384,10 @@ export default function App() {
     setSelectedMedia(null);
     setSelectedStudio(null);
     setSelectedPerson(id);
+    });
   };
   const selectStudio = (id) => {
+    drift(() => {
     setActivePlayer(null);
     setPlayerFrom(null);
     if (selectedMedia) pushBack({ kind: 'media', media: selectedMedia });
@@ -354,10 +397,12 @@ export default function App() {
     setSelectedMedia(null);
     setSelectedPerson(null);
     setSelectedStudio(id);
+    });
   };
   // Tab-root navigation contract (navbar, logo, home rails): new root —
   // player off, detail gone, stack + draft cleared, filters reset.
   const openTab = (tab) => {
+    drift(() => {
     setCleanHome(false);
     setActivePlayer(null);
     setPlayerFrom(null);
@@ -371,8 +416,10 @@ export default function App() {
     setActiveRoomCode(null);
     setActiveTab(tab);
     setFilters({ ...DEFAULT_FILTERS, sort: defaultSortFor(tab) });
+    });
   };
   const goHome = () => {
+    drift(() => {
     setActivePlayer(null);
     setPlayerFrom(null);
     setSelectedMedia(null);
@@ -382,7 +429,22 @@ export default function App() {
     setActiveRoomCode(null);
     setRoomDraft(null);
     setActiveTab('home');
+    });
   };
+
+  // Route drift needs CSS to know View Transitions exist: where they
+  // do, drift replaces page mount fades (overlap rule — never both);
+  // older browsers keep the fades (current behavior).
+  useEffect(() => {
+    try {
+      document.body.classList.toggle(
+        'mz-vt',
+        typeof document.startViewTransition === 'function'
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Test-page scope: softens floating chrome shadows on /clean only.
   useEffect(() => {
@@ -470,12 +532,14 @@ export default function App() {
     try {
       const details = await tmdb.getMediaDetails(mediaType, media.id);
 
-      setActivePlayer({
-        media: {
-          ...media,
-          media_type: mediaType,
-        },
-        details: details || fallbackDetails || media,
+      drift(() => {
+        setActivePlayer({
+          media: {
+            ...media,
+            media_type: mediaType,
+          },
+          details: details || fallbackDetails || media,
+        });
       });
       announceResume();
     } catch (err) {
@@ -486,12 +550,14 @@ export default function App() {
       // episode drawer loads real season data on demand — so a details
       // failure degrades (season count may fall back to 1) instead of
       // refusing playback. The failure is logged, never disguised as success.
-      setActivePlayer({
-        media: {
-          ...media,
-          media_type: mediaType,
-        },
-        details: fallbackDetails || media,
+      drift(() => {
+        setActivePlayer({
+          media: {
+            ...media,
+            media_type: mediaType,
+          },
+          details: fallbackDetails || media,
+        });
       });
       announceResume();
     }
@@ -501,15 +567,17 @@ export default function App() {
   // shelf instead of stranding a phantom detail (reload or resume
   // flows). Detail playback carries no origin — close stays put.
   const closePlayer = () => {
-    if (playerFrom) {
-      const t = playerFrom;
-      setPlayerFrom(null);
-      setSelectedMedia(null);
-      setSelectedPerson(null);
-      setSelectedStudio(null);
-      setActiveTab(t);
-    }
-    setActivePlayer(null);
+    drift(() => {
+      if (playerFrom) {
+        const t = playerFrom;
+        setPlayerFrom(null);
+        setSelectedMedia(null);
+        setSelectedPerson(null);
+        setSelectedStudio(null);
+        setActiveTab(t);
+      }
+      setActivePlayer(null);
+    });
   };
 
   const overlaid = isSearchOpen || isSettingsOpen || isAccountOpen || Boolean(activePlayer);
@@ -535,6 +603,7 @@ export default function App() {
         }}
         isDetailView={Boolean(selectedMedia) || Boolean(selectedPerson) || Boolean(selectedStudio)}
         onBack={() => {
+          drift(() => {
           // Player open: Back only closes it (browser-Back parity) —
           // never pops the stack underneath, or the detail gets skipped.
           // Tab-root playback returns to its origin shelf (?from=).
@@ -573,6 +642,7 @@ export default function App() {
           setSelectedMedia(null);
           setSelectedPerson(null);
           setSelectedStudio(null);
+          });
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAccount={() => setIsAccountOpen(true)}
@@ -700,10 +770,12 @@ export default function App() {
             <RoomsView
               draftMedia={roomDraft}
               onEnter={(code) => {
-                setRoomDraft(null);
-                setActivePlayer(null);
-                setBackStack([]);
-                setActiveRoomCode(code);
+                drift(() => {
+                  setRoomDraft(null);
+                  setActivePlayer(null);
+                  setBackStack([]);
+                  setActiveRoomCode(code);
+                });
               }}
               onToast={showToast}
             />

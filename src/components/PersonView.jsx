@@ -287,7 +287,7 @@ export default function PersonView({ personId, onSelectMedia }) {
   const honoursShown = honoursExpanded ? awardsSorted : awardsSorted.slice(0, HONOURS_VISIBLE);
 
   return (
-    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 bg-[#161a23]">
+    <div className="relative min-h-screen text-white pb-24 animate-in fade-in duration-300 bg-[#161a23] mz-page-fade">
       {/* Light frozen slate, side-anchored identity (reference rule): no
           photographic layers anywhere, no dead half-screen, bio rides the
           right column at full measure. */}

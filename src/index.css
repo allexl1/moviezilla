@@ -454,6 +454,32 @@ button.mat-row:active {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* Route drift (motion P1): cross-fade with a slight rise, ~150ms.
+   The JS wraps tab switches, detail open/close, room enter/leave and
+   player open/close in document.startViewTransition (instant-cut
+   fallback, skipped under reduced motion). Overlap rule: where drift
+   runs it REPLACES page mount fades — body.mz-vt is set at boot when
+   View Transitions exist, and .mz-page-fade kills the Tailwind
+   mount animation there. Older browsers keep the fades. Overlay
+   fades (modal/drawer/viewer/toast) stay untouched. */
+::view-transition-old(root) {
+  animation: mz-drift-out 150ms ease-out both;
+}
+::view-transition-new(root) {
+  animation: mz-drift-in 150ms ease-out both;
+}
+@keyframes mz-drift-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mz-drift-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+body.mz-vt .mz-page-fade {
+  animation: none;
+}
+
 /* Card entrance animation */
 @keyframes cine-card-in {
   0% { opacity: 0; transform: translateY(8px); }

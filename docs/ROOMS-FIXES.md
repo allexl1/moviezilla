@@ -526,10 +526,17 @@ Reduced motion: all patterns collapse to instant opacity or nothing
 300ms except ambient shimmer.
 
 - P1 route drift (View Transitions API): tab switches, detail
-  open/close, room enter/leave, player open/close cross-fade with
-  a slight rise (~150ms). Custom router wraps state updates in
-  `document.startViewTransition`, feature-detected with instant-cut
-  fallback (current behavior). Reduced motion: skip entirely.
+   open/close, room enter/leave, player open/close cross-fade with
+   a slight rise (~150ms). Custom router wraps state updates in
+   `document.startViewTransition`, feature-detected with instant-cut
+   fallback (current behavior). Reduced motion: skip entirely.
+   Status: built (`drift()` in App shell covers tabs, detail,
+   person/studio, back-stack, popstate, player open/close, room
+   enter/leave; nested calls run direct under the outer transition;
+   `mz-vt` body flag kills the four page mount fades where drift
+   runs, older browsers keep them; overlays untouched). Headless
+   nav suite green (tabs, detail open, browser back, overlap rule
+   computed live). Feel pass owed to owner devices.
   OVERLAP RULE (audited 2026-10-11): mount fades already exist
   (person/media/studio 300ms, Player 200ms, cine-fade-in/up,
   hero-in). Drift REPLACES page-level mount fades where it lands —
