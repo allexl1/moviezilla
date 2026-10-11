@@ -389,6 +389,58 @@ the seam, do not layer. Upgrade neighboring controls to the same
 tokens while touching them (tooltip/tip unification, toast
 unification), but never redesign surfaces around a new component.
 
+## UI build plan (phases — starts after rooms test + push)
+
+Checked 2026-10-11: lucide-animated skill + play/pause/send/heart/
+refresh-ccw icon docs; arc segmented-control, hold-to-confirm,
+tooltip, toast-stack, select, chat-thread docs. One shared `motion`
+dependency serves both libraries. All vendored (own the files, no
+runtime theme to fight); arc CSS modules get remapped onto cine
+tokens, never the reverse. PRIME RULE applies throughout: one piece
+per round, test after each, rework seams instead of layering.
+
+- Phase 0 — deps: `npm install motion` (lucide-react already in).
+  No shadcn init, no components.json, no @/* alias: copy sources
+  by hand into `src/components/icons/` (jsx-ified) and
+  `src/components/arc/`, fix imports to relative paths.
+- Phase 1 — animated icons (vendored, zero structural risk):
+  play + pause (rooms Pause/Resume + hero Play), send (chat
+  composer), refresh-ccw (Sync buttons), heart (GIF favorites),
+  loader-circle if a spinner survives the audit. Caveat from
+  their docs: hover animation needs hover — touch gets imperative
+  triggers or nothing; verify per icon at build, desktop delight
+  first, phone must at least not regress (static glyph = current
+  look).
+- Phase 2 — segmented-control (motion only): rooms Chat/People/
+  Settings tabs, My List pills, settings On/Off groups, Watchlist
+  segmented. Replaces `ui/SegmentedControl.jsx` + all manual pill
+  rows (C-audit). Sliding pill, arrow-key support, reduced-motion
+  path kept.
+- Phase 3 — hold-to-confirm (motion only): Delete room, Clear
+  watch history, playlist Clear watched. Kills the `confirm()`
+  calls and the delete-confirm modal branch.
+- Phase 4 — toast-stack (motion only): replaces App `showToast` +
+  all ~20 `onToast` call sites. Stacked, undo-capable (playlist
+  add/remove and message delete get Undo). Provider wraps App
+  once; call sites morph one by one.
+- Phase 5 — select unification (adds @radix-ui/react-select):
+  Picker vs ProviderPicker vs ServerSwitcher become one arc
+  select, remapped to cine tokens; delete dead `ui/Select.jsx`.
+  Radix is the only new runtime dep in the whole plan — accepted
+  here because dropdowns are the worst duplication (portal vs
+  fixed vs absolute, z 100/70/50).
+- Explicitly NOT adopted: arc tooltip (our cine-tip system is one
+  system already; Radix dep unjustified), arc chat-thread (our
+  ChatView is domain-fitted — presence-bound receipts, tombstones,
+  session cache, GIF/photo kinds, outbox; migrating would throw
+  away tested realtime logic for a prettier shell — borrow
+  patterns only, e.g. its attach-tray UX which already matches
+  ours), arc button/dialog/charts (our systems exist), anything
+  Pro-gated.
+- Rejected libraries stay rejected (see UI pilot plan). Originkit
+  still unverified — check together only if a gap remains after
+  Phase 5.
+
 ## Site-wide layering audit (playback/nav/UI surveyed)
 
 Rooms/time already done (six clocks → one reader; presence to
