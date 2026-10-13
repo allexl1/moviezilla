@@ -157,6 +157,7 @@ describe('resolveResume ranking (history rewrite)', () => {
       second: 0,
       season: 1,
       episode: 1,
+      duration: 0,
       seriesWatched: false,
       source: 'zero',
     });
@@ -187,6 +188,17 @@ describe('resolveResume ranking (history rewrite)', () => {
     assert.equal(r.second, 0);
     assert.equal(r.seriesWatched, true);
     assert.equal(r.source, 'finished');
+  });
+  it('a poisoned top-level 100 never hides a half-watched series', () => {
+    storage.saveProgress({ mediaId: 30, type: 'tv', season: 6, episode: 11, currentTime: 600, duration: 1320, title: 'S', poster: '/s', server: 'vidy' });
+    const raw = JSON.parse(localStorage.getItem('moviezilla_playback_progress'));
+    raw['tv_30'].currentTime = 1320;
+    raw['tv_30'].duration = 1320;
+    raw['tv_30'].percent = 100;
+    localStorage.setItem('moviezilla_playback_progress', JSON.stringify(raw));
+    const cw = storage.getAllContinueWatching();
+    assert.ok(cw.some((x) => x.mediaId === 30), 'falsely finished series resurfaces');
+    assert.equal(storage.resolveResume({ type: 'tv', mediaId: 30, server: 'vidy' }).second, 600);
   });
   it('switching episodes never borrows another episode point', () => {
     storage.saveProgress({ mediaId: 27, type: 'tv', season: 1, episode: 1, currentTime: 1200, duration: 2700, title: 'S', poster: '/s', server: 'vidy' });

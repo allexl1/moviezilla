@@ -351,16 +351,21 @@ export const storage = {
   // episode (that cross-contamination restarted players mid-show).
   // Ancient rows with no episodes map fall back to top-level, like
   // the old strict read did.
-  resolveResume({ type, mediaId, server = '' } = {}) {
-    const none = { second: 0, season: 1, episode: 1, seriesWatched: false, source: 'zero' };
-    if (!mediaId) return none;
+  resolveResume({ type, mediaId, server = '', season: seasonSel = null, episode: episodeSel = null } = {}) {
+    const none = (season, episode) => ({ second: 0, season, episode, duration: 0, seriesWatched: false, source: 'zero' });
+    if (!mediaId) return none(1, 1);
     const entry = safeGet(STORAGE_KEYS.PROGRESS, {})[`${type}_${mediaId}`];
-    if (!entry) return none;
-    const season = Number(entry.season) || 1;
-    const episode = Number(entry.episode) || 1;
+    if (!entry) return none(1, 1);
+    // Explicit episode overrides the top-level (episode switching asks
+    // where THAT episode stopped, not where the title points).
+    const topSeason = Number(entry.season) || 1;
+    const topEpisode = Number(entry.episode) || 1;
+    const season = seasonSel == null ? topSeason : Number(seasonSel) || 1;
+    const episode = episodeSel == null ? topEpisode : Number(episodeSel) || 1;
+    const topDur = Math.max(0, Math.floor(Number(entry.duration) || 0));
     const catalog = safeGet(STORAGE_KEYS.SEASON_COUNTS, {})[String(mediaId)] || null;
     if (storage.isSeriesWatched(entry, catalog)) {
-      return { second: 0, season, episode, seriesWatched: true, source: 'finished' };
+      return { second: 0, season, episode, duration: topDur, seriesWatched: true, source: 'finished' };
     }
     const sane = (t, d) => {
       const tt = Math.floor(Number(t) || 0);
@@ -371,11 +376,15 @@ export const storage = {
     };
     const bestOf = (slots) => {
       let best = 0;
+      let bestDur = 0;
       for (const s of Object.values(slots || {})) {
         const c = sane(s?.currentTime, s?.duration);
-        if (c > best) best = c;
+        if (c > best) {
+          best = c;
+          bestDur = Math.max(0, Math.floor(Number(s?.duration) || 0));
+        }
       }
-      return best;
+      return { best, bestDur };
     };
     const episodes = entry.episodes || null;
     if (entry.type === 'tv' && episodes) {
@@ -389,39 +398,51 @@ export const storage = {
               ? (ep.currentTime / ep.duration) * 100
               : 0;
       if (epPct >= WATCHED_PCT) {
-        return { second: 0, season, episode, seriesWatched: false, source: 'episode-done' };
+        return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'episode-done' };
       }
       const tracked = ep && ep.servers && Object.keys(ep.servers).length > 0;
       if (tracked) {
         const mine = server ? ep.servers[server] : null;
         const t = mine ? sane(mine.currentTime, mine.duration) : 0;
-        if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'slot' };
+        if (t > 0) {
+          return { second: t, season, episode, duration: Math.max(0, Math.floor(Number(mine.duration) || 0)), seriesWatched: false, source: 'slot' };
+        }
         const jump = bestOf(ep.servers);
-        if (jump > 0) return { second: jump, season, episode, seriesWatched: false, source: 'jump' };
-        return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+        if (jump.best > 0) {
+          return { second: jump.best, season, episode, duration: jump.bestDur, seriesWatched: false, source: 'jump' };
+        }
+        return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
       }
       if (ep) {
         const t = sane(ep.currentTime, ep.duration);
-        if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'episode' };
-        return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+        if (t > 0) {
+          return { second: t, season, episode, duration: Math.max(0, Math.floor(Number(ep.duration) || 0)), seriesWatched: false, source: 'episode' };
+        }
+        return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
       }
-      return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+      return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
     }
     const entryTracked = entry.servers && Object.keys(entry.servers).length > 0;
     if (entryTracked) {
       const mine = server ? entry.servers[server] : null;
       const t = mine ? sane(mine.currentTime, mine.duration) : 0;
-      if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'slot' };
+      if (t > 0) {
+        return { second: t, season, episode, duration: Math.max(0, Math.floor(Number(mine.duration) || 0)), seriesWatched: false, source: 'slot' };
+      }
       const jump = bestOf(entry.servers);
-      if (jump > 0) return { second: jump, season, episode, seriesWatched: false, source: 'jump' };
-      return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+      if (jump.best > 0) {
+        return { second: jump.best, season, episode, duration: jump.bestDur, seriesWatched: false, source: 'jump' };
+      }
+      return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
     }
     if ((entry.percent || 0) >= WATCHED_PCT) {
-      return { second: 0, season, episode, seriesWatched: false, source: 'episode-done' };
+      return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'episode-done' };
     }
     const t = sane(entry.currentTime, entry.duration);
-    if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'top' };
-    return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+    if (t > 0) {
+      return { second: t, season, episode, duration: topDur, seriesWatched: false, source: 'top' };
+    }
+    return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
   },
 
   // Server-newer row lands here: top-level clock adopts the server while
@@ -491,11 +512,15 @@ export const storage = {
   // long titles once providers started reporting real durations. Series
   // with established history (2 finished/deep seasons behind them) count
   // from 5s: the next episode of your show always belongs on the rail.
+  // Watched-exclusion reads DERIVED series truth (history rewrite), not
+  // raw top-level percent — a single poisoned 100% stamp must never hide
+  // a half-watched series again.
   getAllContinueWatching() {
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const counts = safeGet(STORAGE_KEYS.SEASON_COUNTS, {});
     return Object.values(allProgress)
       .filter((item) => {
-        if (item.percent >= WATCHED_PCT) return false;
+        if (storage.isSeriesWatched(item, counts[String(item.mediaId)] || null)) return false;
         if (item.percent > MIN_CONTINUE_PCT) return true;
         const gate = item.type === 'tv' && tvEstablished(item) ? ESTABLISHED_CONTINUE_SEC : MIN_CONTINUE_SEC;
         return (item.currentTime || 0) >= gate;

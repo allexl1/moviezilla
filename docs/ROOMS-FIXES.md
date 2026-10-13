@@ -380,6 +380,25 @@ panel, button look sign-off.
 37. Nickname gate restyle (part of 36, listed explicitly): current
     old-style pills → current input + white primary button.
 
+## Solo history rewrite (in progress — replaces layering with one system)
+
+Owner-ordered: Young Sheldon falsely completed by silent wall accrual;
+vidy resolution restarts clobbered the point via un-rearmed convergence;
+no auto-next. Rules locked this round: wall may resume but never finish
+(completion needs provider voice or the manual eye); a series is watched
+only when every episode is watched or manually marked; auto-jump best
+slot, zero deletions; manual Next button only (no auto-advance).
+Landed: storage truth (series rules, resolveResume with S/E override,
+season-counts cache, manual series mark, ep percent stamps),
+31/31 unit tests, Player one-owner read path (pos() for writes,
+voice-only writer, evidence-gated ended, one-shot recovery rebuild,
+unified frame resets, resolver init + episode switch, derived CW
+gate). Headless proven: seeded point survives open/heartbeat/reload/
+server-switch, silent slot created, zero errors.
+Remains: Next button, season-count filling, watched checkmarks, full
+history dates, announcer swaps, manual series-mark UI, live 2-device
+proof (receive, real photo render, delete-file, feel).
+
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 
 - Next batches append here, still nothing built until owner says so.
@@ -680,12 +699,11 @@ follow the PRIME RULE (rewrite once, no layering).
 - C. UI primitives (buttons/pills/modals/toasts/tips/skeletons/
   empty states/segmented controls).
 - Findings (surveyed, not yet fixed):
-  A1. [REAL, user-visible] Display second vs play second: hero/toast/
-  CW picker announce top-level (or hardcoded vidy) seconds while the
-  Player opens the strict current-server slot — same title can say
-  7:00 and open 0:00 after a server switch. Disposition: single
-  `resolveResume(type, id, server)` used by every announcer; fold
-  into the time rewrite.
+   A1. [IN PROGRESS by solo history rewrite] Display second vs play
+   second: hero/toast/CW picker announce top-level (or hardcoded vidy)
+   seconds while the Player opens the strict current-server slot — same
+   title can say 7:00 and open 0:00 after a server switch. Disposition:
+   single `resolveResume(type, id, server)` used by every announcer.
   A2. [REAL, contained] Two clocks, one row: wall estimate vs
   provider time both write the same key. Priority/convergence/
   20s-freeze contain it; the rewrite's single-owner rule finishes it.

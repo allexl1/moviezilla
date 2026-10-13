@@ -94,18 +94,13 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // VidLink keep separate clocks — one shared timestamp corrupts both).
   const preferredServer = storage.getPreferredServer('vidy');
   const getInitialPlayback = () => {
-    const saved = mediaId ? storage.getProgress(isTv ? 'tv' : 'movie', mediaId) : null;
-    const slot = mediaId ? storage.getServerProgress(isTv ? 'tv' : 'movie', mediaId, preferredServer) : null;
-    // Finished titles restart at 0: a stale per-server slot must never
-    // resurrect and replay the credits (or un-mark Watched on heartbeat).
-    // Season/episode stay where they finished — the picker owns those.
-    const watched = (saved?.percent || 0) >= WATCHED_PCT;
+    const r = mediaId
+      ? storage.resolveResume({ type: isTv ? 'tv' : 'movie', mediaId, server: preferredServer })
+      : null;
     return {
-      season: saved?.season || 1,
-      episode: saved?.episode || 1,
-      // Strict slot only: another server's seconds (or legacy top-level
-      // once slots exist) must never leak in here.
-      time: watched ? 0 : (slot?.currentTime ?? 0),
+      season: r?.season ?? 1,
+      episode: r?.episode ?? 1,
+      time: r?.second ?? 0,
     };
   };
 
@@ -180,6 +175,18 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   };
   // The message handler used to stringify all of localStorage every ~1s.
   const saveThrottleRef = useRef({ sec: -1, at: 0 });
+  // Strongest VOICED second this session (provider ticks only — wall
+  // accrual never counts). Decides whether a bare ended-at-0 may
+  // complete the title or must stay a peek. Never inferred.
+  const sessionEvidenceRef = useRef(0);
+  // Per-frame boot tracking (history rewrite): highest voiced second on
+  // THIS frame load, whether a seek proved the position, and whether the
+  // one-shot recovery rebuild already fired. Reset on every deliberate
+  // rebuild; a provider-internal reload keeps them so boot noise can't
+  // clobber the frozen point twice.
+  const frameMaxPmRef = useRef(0);
+  const frameSeekSeenRef = useRef(false);
+  const frameRecoveredRef = useRef(false);
 
   const accumulateWallClock = () => {
     const now = Date.now();
@@ -209,6 +216,33 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     };
   };
 
+  // Storable snapshot (history rewrite): like the estimate, but frozen
+  // the instant anything pauses or ends, and pinned to the last voiced
+  // second once the provider goes quiet past 20s (the wall may still
+  // accrue display seconds past that cap — storage never sees them).
+  // CONTRACT SPLIT, not duplication: estimatedPosition stays the live
+  // display + room-tick math (rooms-tested, untouched); pos() is the
+  // only thing allowed to touch history. Same numbers while playing,
+  // frozen the moment it matters.
+  const pos = () => {
+    const pm = playbackRef.current;
+    const duration = Math.floor(pm.duration);
+    if (pausedProvRef.current) {
+      return { time: Math.floor(pm.currentTime), duration, voiced: pmSeenRef.current };
+    }
+    if (pmSeenRef.current && pm.currentTime > 0) {
+      return { time: Math.floor(pm.currentTime), duration, voiced: true };
+    }
+    if (pmSeenRef.current && Date.now() - lastPmRef.current.at > 20000) {
+      return { time: Math.floor(lastPmRef.current.time), duration, voiced: true };
+    }
+    return {
+      time: wallBaseRef.current + Math.floor(activeMsRef.current / 1000),
+      duration,
+      voiced: pmSeenRef.current,
+    };
+  };
+
   const buildMeta = () => ({
     title: details?.title || details?.name || media?.title || media?.name || 'Media',
     poster: media?.poster_path || details?.poster_path,
@@ -221,32 +255,32 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const saveNowRef = useRef(() => {});
   saveNowRef.current = () => {
     if (!mediaId) return;
-    const pos = estimatedPosition();
+    const p = pos();
     const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
-    if (pos.time <= 0 && (prev?.currentTime || 0) > 0) return;
+    if (p.time <= 0 && (prev?.currentTime || 0) > 0) return;
     // Room mode: never write from the wall estimate alone. An idle room
     // player (provider silent) must not overwrite a real resume point
     // with seconds it never played (a 7:00 resume wiped by 0:05 of
     // sitting in the room). Only provider-verified time may write.
-    if (framed && !pmSeenRef.current) return;
+    if (framed && !p.voiced) return;
     // Room mode: never move the resume point backwards. Joining a fresh
     // room at 0:00 (or rejoining mid-title) must not erase where I
     // stopped; forward progress still records. 5s tolerance for noise.
-    if (framed && (prev?.currentTime || 0) - pos.time > 5) return;
+    if (framed && (prev?.currentTime || 0) - p.time > 5) return;
     // Don't spam History with 0s opens: first meaningful save happens
     // after ~5s of actual watching (see heartbeat below).
-    if (pos.time <= 0 && !pmSeenRef.current && activeMsRef.current < 4000) return;
+    if (p.time <= 0 && !p.voiced && activeMsRef.current < 4000) return;
     // Peek rule: a brand-new title needs 5 real seconds (or provider
     // playback evidence) before it earns a history row at all.
-    if (!prev && pos.time < 5 && !pmSeenRef.current) return;
-    // Runtime-anchored completion: silent providers (wall-clock only, no
-    // duration, no ended event) can otherwise NEVER reach Watched — the
-    // title sits in Continue Watching forever. The TMDB runtime is the
-    // honest yardstick: past 95% of it, the watch counts as finished.
+    if (!prev && p.time < 5 && !p.voiced) return;
+    // Runtime-anchored completion is VOICE-GATED (history rewrite): a
+    // silent wall clock may resume but must never finish on its own —
+    // that exact snap deleted shows from Continue Watching. Manual eye
+    // and provider-voiced finishes still complete.
     const runtimeSec = Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60);
-    let saveTime = pos.time;
-    let saveDur = pos.duration;
-    if (runtimeSec > 60 && pos.time >= runtimeSec * 0.95) {
+    let saveTime = p.time;
+    let saveDur = p.duration;
+    if (runtimeSec > 60 && p.time >= runtimeSec * 0.95 && p.voiced) {
       saveTime = runtimeSec;
       saveDur = runtimeSec;
     }
@@ -257,6 +291,28 @@ export default function Player({ media, details, onClose, onPosition = null, roo
       episode: currentEpisode,
       currentTime: saveTime,
       duration: saveDur,
+      server,
+      ...buildMeta(),
+    });
+  };
+
+  // Voice evidence from the provider (ticks or ended): the only path
+  // that may advance the stored point beyond the wall estimate, and the
+  // only path (with the manual eye) that may complete a title. The
+  // handler resolves what to save; this applies the never-clobber guard
+  // and writes. Voice ticks count as playback evidence, so the peek
+  // rule doesn't apply here.
+  const saveVoice = (saveT, saveDur) => {
+    if (!mediaId) return;
+    const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
+    if (saveT <= 0 && (prev?.currentTime || 0) > 0) return;
+    storage.saveProgress({
+      mediaId,
+      type: isTv ? 'tv' : 'movie',
+      season: currentSeason,
+      episode: currentEpisode,
+      currentTime: Math.floor(saveT),
+      duration: Math.floor(saveDur),
       server,
       ...buildMeta(),
     });
@@ -306,19 +362,30 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     );
   };
 
-  // Stall recovery: remount the embed at the last known second (or from
-  // zero). Same code path as an episode switch, minus the episode change.
-  const reloadStream = (fromZero = false) => {
-    saveNowRef.current();
-    const t = fromZero ? 0 : estimatedPosition().time;
+  // One frame-clock reset for every rebuild path (reload, server
+  // switch, episode switch, provider-internal load): previously each
+  // path reset a different subset, and the gaps ate resume points.
+  // clearRecovery only on deliberate rebuilds — a provider-internal
+  // load must not re-arm the one-shot recovery, or it loops forever.
+  const resetFrameClock = (t, clearRecovery = false) => {
     playbackRef.current = { currentTime: t, duration: playbackRef.current.duration };
     wallBaseRef.current = t;
     activeMsRef.current = 0;
     lastTickRef.current = Date.now();
-    // Saved seconds are resume position, not boot proof (see rebuildEmbed).
     pmSeenRef.current = false;
     pausedProvRef.current = false;
+    frameMaxPmRef.current = 0;
+    frameSeekSeenRef.current = false;
+    if (clearRecovery) frameRecoveredRef.current = false;
     rearmConvergence();
+  };
+
+  // Stall recovery: remount the embed at the last known second (or from
+  // zero). Same code path as an episode switch, minus the episode change.
+  const reloadStream = (fromZero = false) => {
+    saveNowRef.current();
+    const t = fromZero ? 0 : pos().time;
+    resetFrameClock(t, true);
     rebuildEmbed(server, currentSeason, currentEpisode, t);
     setKey((prev) => prev + 1);
     poke();
@@ -423,6 +490,11 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     chromeTouched.current = false;
     if (sandboxTimer.current) clearTimeout(sandboxTimer.current);
     sandboxTimer.current = setTimeout(() => tryArmSandbox(), SBX_FALLBACK_MS);
+    // Provider-internal reload (resolution switch): adopt the last
+    // estimate as frozen base and re-arm convergence, so boot-low ticks
+    // can't clobber the real point. Deliberate rebuilds set the base
+    // explicitly just before, so adopting here is equivalent for them.
+    resetFrameClock(pos().time, false);
   };
   useEffect(() => {
     if (!roomTarget || roomTarget.key == null) return;
@@ -644,9 +716,27 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           const t = Number(time);
           const isEnd = type === 'ended' || type === 'complete';
           if (t > 0 || isEnd) {
-            const est = estimatedPosition().time;
+            const est = pos().time;
+            if (type === 'seeked') frameSeekSeenRef.current = true;
             if (!convergedRef.current && !isEnd) {
               if (type === 'seeked' || t >= est - 30 || Date.now() > convergeUntilRef.current) {
+                // Genuine-restart check (history rewrite): the window
+                // expired with the provider still at boot-low, no seek
+                // ever proved the point, but we hold a real frozen base
+                // (provider-internal reload, e.g. resolution switch).
+                // Exactly once per boot cycle, rebuild at the frozen
+                // second so the provider gets a second chance at the
+                // resume param; if it still sits at 0, that zero is real
+                // and storage follows it below.
+                if (Date.now() > convergeUntilRef.current && !frameSeekSeenRef.current && !frameRecoveredRef.current && t <= 10) {
+                  const frozen = Math.floor(wallBaseRef.current);
+                  if (frozen > 60) {
+                    frameRecoveredRef.current = true;
+                    rebuildEmbed(server, currentSeason, currentEpisode, frozen);
+                    setKey((prev) => prev + 1);
+                    return;
+                  }
+                }
                 convergedRef.current = true;
               } else {
                 return;
@@ -654,27 +744,35 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
             pmSeenRef.current = true;
             lastPmRef.current = { time: t, at: Date.now() };
+            if (t > frameMaxPmRef.current) frameMaxPmRef.current = t;
+            if (t > sessionEvidenceRef.current) sessionEvidenceRef.current = t;
             // Boot proof for the popup guard: telemetry marks pmSeen, then
             // tryArm gates on elapsed>=4s (never arms early on slow boots).
             armSandbox();
-            // Ended snaps to 100% even when the provider never sent a
-            // duration (silent servers, wall-clock titles): the event IS
-            // the evidence. Bare 'ended' with no time at all marks via
-            // the known duration, the title runtime, or 1/1 — same as a
-            // manual Mark-watched, never a 0/0 that misses completion.
+            // Ended resolves through one rule (history rewrite): a bare
+            // ended-at-0 with no evidence is autoplay-preview-shaped and
+            // must never fabricate completion (manual eye stays the path).
             let saveT = t;
             let saveDur = Number(dur) || 0;
+            let doSave = true;
             if (isEnd) {
               const runtimeSec = Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60);
               const d = Number(dur) > 0
                 ? Number(dur)
-                : (playbackRef.current.duration > 0 ? playbackRef.current.duration : (runtimeSec > 0 ? runtimeSec : 1));
-              const done = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
-              saveT = done;
-              saveDur = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
-              playbackRef.current = { currentTime: done, duration: saveDur };
-              wallBaseRef.current = done;
+                : (playbackRef.current.duration > 0 ? playbackRef.current.duration : (runtimeSec > 0 ? runtimeSec : 0));
+              if (!(d > 0)) {
+                doSave = false;
+              } else if (t <= 0 && sessionEvidenceRef.current <= 60) {
+                doSave = false;
+              } else {
+                saveT = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
+                saveDur = t > 0 ? (Number(dur) > 0 ? Number(dur) : t) : d;
+              }
               pausedProvRef.current = true;
+              if (doSave) {
+                playbackRef.current = { currentTime: saveT, duration: saveDur };
+                wallBaseRef.current = saveT;
+              }
             } else {
               playbackRef.current = { currentTime: t, duration: Number(dur) || 0 };
               // Keep the wall estimate in sync so a later fallback save
@@ -686,20 +784,14 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             reportRef.current();
             // Throttled persist: same second or <8s since last write skips
             // the full-map stringify (was: every provider tick, ~1/sec).
+            // Voice is the only path that advances storage past the wall
+            // estimate — and the only path (with the manual eye) that may
+            // complete a title.
             const now = Date.now();
             const ls = saveThrottleRef.current;
-            if (Math.abs(saveT - ls.sec) >= 3 || now - ls.at >= 8000) {
+            if (doSave && (Math.abs(saveT - ls.sec) >= 3 || now - ls.at >= 8000)) {
               saveThrottleRef.current = { sec: saveT, at: now };
-              storage.saveProgress({
-                mediaId,
-                type: isTv ? 'tv' : 'movie',
-                season: currentSeason,
-                episode: currentEpisode,
-                currentTime: saveT,
-                duration: saveDur,
-                server,
-                ...buildMeta(),
-              });
+              saveVoice(saveT, saveDur);
             }
           }
         }
@@ -746,31 +838,25 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     }
     setCurrentSeason(seasonNum);
     setCurrentEpisode(episodeNum);
-    // Resume the target episode where IT stopped (per-episode memory) —
-    // a fresh episode starts at 0, a visited one picks up its own time
-    // on THIS server.
-    const epSaved = storage.getEpisodeProgress('tv', mediaId, seasonNum, episodeNum, server);
-    const epStart = epSaved?.currentTime || 0;
-    playbackRef.current = { currentTime: epStart, duration: epSaved?.duration || 0 };
+    // Resume the target episode where IT stopped: the resolver reads
+    // that episode's own truth (strict slot, auto-jump, legacy) — a
+    // fresh episode starts at 0, a visited one picks up its own time
+    // on THIS server, a finished one restarts at 0.
+    const epStart = storage.resolveResume({ type: 'tv', mediaId, server, season: seasonNum, episode: episodeNum });
+    resetFrameClock(epStart.second, true);
+    playbackRef.current = { currentTime: epStart.second, duration: epStart.duration || 0 };
     // Boot proof comes only from the NEW frame's telemetry (rebuildEmbed
     // resets pmSeen) — a saved resume second is not proof of boot.
-    pmSeenRef.current = false;
-    wallBaseRef.current = epStart;
-    activeMsRef.current = 0;
-    lastTickRef.current = Date.now();
-    pausedProvRef.current = false;
-    rearmConvergence();
-    rebuildEmbed(server, seasonNum, episodeNum, epStart);
+    rebuildEmbed(server, seasonNum, episodeNum, epStart.second);
     setKey((prev) => prev + 1);
   };
 
   const handleServerChange = (newServer) => {
     saveNowRef.current();
-    const pos = estimatedPosition().time;
+    const at = pos().time;
     setServer(newServer);
-    pausedProvRef.current = false;
-    rearmConvergence();
-    rebuildEmbed(newServer, currentSeason, currentEpisode, pos);
+    resetFrameClock(at, true);
+    rebuildEmbed(newServer, currentSeason, currentEpisode, at);
     setKey((prev) => prev + 1);
   };
 
