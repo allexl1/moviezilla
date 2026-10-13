@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   ACTIVE_SERVER: 'moviezilla_preferred_server',
   SEARCH_HISTORY: 'moviezilla_search_history',
   HIDDEN_LETTERBOXD: 'moviezilla_hidden_letterboxd',
+  SEASON_COUNTS: 'moviezilla_season_counts',
 };
 
 // Single source of truth for every progress gate in the app (was: magic
@@ -169,6 +170,7 @@ export const storage = {
     const stamp = {
       currentTime: Math.floor(currentTime),
       duration: Math.floor(duration),
+      percent: Math.min(100, Math.floor(progressPercent)),
       updatedAt: Date.now(),
     };
 
@@ -249,6 +251,177 @@ export const storage = {
   // Raw entries for the sync engine (merge/push work on whole entries).
   getProgressEntries() {
     return Object.values(safeGet(STORAGE_KEYS.PROGRESS, {}));
+  },
+
+  // Season catalog cache (history rewrite): per-show episode counts so
+  // series completion is checkable. { [mediaId]: { seasons: {n: total},
+  // totalSeasons, at } }. Fresh loads overwrite (a new season airing
+  // heals a stale "complete" read back to incomplete). Specials
+  // (season 0) are never stored — they never gate completion.
+  // Filled opportunistically wherever season details load (episode
+  // drawer, player); nothing here fetches.
+  recordSeasonCounts(mediaId, seasons, totalSeasons) {
+    if (!mediaId) return;
+    const clean = {};
+    for (const [k, v] of Object.entries(seasons || {})) {
+      const n = Number(k);
+      const total = Number(v);
+      if (n >= 1 && total > 0) clean[n] = Math.floor(total);
+    }
+    if (Object.keys(clean).length === 0) return;
+    const all = safeGet(STORAGE_KEYS.SEASON_COUNTS, {});
+    all[String(mediaId)] = {
+      seasons: clean,
+      totalSeasons: Math.max(0, Math.floor(Number(totalSeasons) || 0)),
+      at: Date.now(),
+    };
+    safeSet(STORAGE_KEYS.SEASON_COUNTS, all);
+  },
+
+  getSeasonCounts(mediaId) {
+    if (!mediaId) return null;
+    return safeGet(STORAGE_KEYS.SEASON_COUNTS, {})[String(mediaId)] || null;
+  },
+
+  // Manual series mark (history rewrite): the user saying "I finished
+  // this" (or taking it back) beats every inference. Unmarking is a
+  // deliberate user action, not a backwards move — allowed, timestamped
+  // so sync latest-wins stays sane.
+  setSeriesWatched({ mediaId, type, watched, title = '', poster = '' }) {
+    if (!mediaId) return;
+    const all = safeGet(STORAGE_KEYS.PROGRESS, {});
+    const key = `${type}_${mediaId}`;
+    const prev = all[key] || { mediaId, type, season: 1, episode: 1 };
+    all[key] = {
+      ...prev,
+      mediaId,
+      type,
+      title: title || prev.title || '',
+      poster: poster || prev.poster || '',
+      manualWatched: Boolean(watched),
+      manualWatchedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    safeSet(STORAGE_KEYS.PROGRESS, all);
+    dispatchAccountDirty('progress');
+  },
+
+  // Series truth (history rewrite): a series is watched ONLY when every
+  // episode is watched or the user marked it themselves. A single 100%
+  // stamp — ended event, manual eye, or a poisoned wall write — must
+  // never promote the whole series (that exact bug hid shows from
+  // Continue Watching). Movies are one unit: percent>=95, unchanged.
+  // Unknown catalog (no counts) means manual-only: under-mark, never
+  // over-mark.
+  isSeriesWatched(entry, catalog) {
+    if (!entry) return false;
+    if (entry.manualWatched) return true;
+    if (entry.type !== 'tv') return (entry.percent || 0) >= WATCHED_PCT;
+    // Episode percent lives on the stamp for new rows; older rows only
+    // carry currentTime/duration, so derive it when absent.
+    const pctOf = (x) => {
+      if (!x) return 0;
+      if (x.percent != null) return x.percent;
+      if ((x.duration || 0) > 0) return (x.currentTime / x.duration) * 100;
+      return 0;
+    };
+    const total = Math.floor(Number(catalog?.totalSeasons) || 0);
+    const seasons = catalog?.seasons || null;
+    if (!(total >= 1) || !seasons) return false;
+    const eps = entry.episodes || {};
+    for (let s = 1; s <= total; s++) {
+      const count = Math.floor(Number(seasons[s]) || 0);
+      if (count <= 0) return false;
+      for (let e = 1; e <= count; e++) {
+        if (pctOf(eps[`${s}x${e}`]) < WATCHED_PCT) return false;
+      }
+    }
+    return true;
+  },
+
+  // Single resume resolver (history rewrite, folds old A1): every
+  // announcer and the player open ask here, never raw slots. Ranking:
+  // finished series restarts at 0; finished episodes restart at 0;
+  // current-server slot for the open episode; best other-server slot
+  // (owner-ordered auto-jump, nothing deleted); legacy untracked
+  // stamps; legacy top-level; else 0. Points past a known duration
+  // are poison (paused-embed inflation) and dropped; the player clamp
+  // still applies on open as a second net. TV reads episode-keyed
+  // truth only — title-level slots never stand in for another
+  // episode (that cross-contamination restarted players mid-show).
+  // Ancient rows with no episodes map fall back to top-level, like
+  // the old strict read did.
+  resolveResume({ type, mediaId, server = '' } = {}) {
+    const none = { second: 0, season: 1, episode: 1, seriesWatched: false, source: 'zero' };
+    if (!mediaId) return none;
+    const entry = safeGet(STORAGE_KEYS.PROGRESS, {})[`${type}_${mediaId}`];
+    if (!entry) return none;
+    const season = Number(entry.season) || 1;
+    const episode = Number(entry.episode) || 1;
+    const catalog = safeGet(STORAGE_KEYS.SEASON_COUNTS, {})[String(mediaId)] || null;
+    if (storage.isSeriesWatched(entry, catalog)) {
+      return { second: 0, season, episode, seriesWatched: true, source: 'finished' };
+    }
+    const sane = (t, d) => {
+      const tt = Math.floor(Number(t) || 0);
+      if (tt <= 0) return 0;
+      const dd = Math.floor(Number(d) || 0);
+      if (dd > 60 && tt > dd) return 0;
+      return tt;
+    };
+    const bestOf = (slots) => {
+      let best = 0;
+      for (const s of Object.values(slots || {})) {
+        const c = sane(s?.currentTime, s?.duration);
+        if (c > best) best = c;
+      }
+      return best;
+    };
+    const episodes = entry.episodes || null;
+    if (entry.type === 'tv' && episodes) {
+      const ep = episodes[`${season}x${episode}`] || null;
+      const epPct =
+        ep == null
+          ? 0
+          : ep.percent != null
+            ? ep.percent
+            : ep.duration > 0
+              ? (ep.currentTime / ep.duration) * 100
+              : 0;
+      if (epPct >= WATCHED_PCT) {
+        return { second: 0, season, episode, seriesWatched: false, source: 'episode-done' };
+      }
+      const tracked = ep && ep.servers && Object.keys(ep.servers).length > 0;
+      if (tracked) {
+        const mine = server ? ep.servers[server] : null;
+        const t = mine ? sane(mine.currentTime, mine.duration) : 0;
+        if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'slot' };
+        const jump = bestOf(ep.servers);
+        if (jump > 0) return { second: jump, season, episode, seriesWatched: false, source: 'jump' };
+        return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+      }
+      if (ep) {
+        const t = sane(ep.currentTime, ep.duration);
+        if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'episode' };
+        return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+      }
+      return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+    }
+    const entryTracked = entry.servers && Object.keys(entry.servers).length > 0;
+    if (entryTracked) {
+      const mine = server ? entry.servers[server] : null;
+      const t = mine ? sane(mine.currentTime, mine.duration) : 0;
+      if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'slot' };
+      const jump = bestOf(entry.servers);
+      if (jump > 0) return { second: jump, season, episode, seriesWatched: false, source: 'jump' };
+      return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
+    }
+    if ((entry.percent || 0) >= WATCHED_PCT) {
+      return { second: 0, season, episode, seriesWatched: false, source: 'episode-done' };
+    }
+    const t = sane(entry.currentTime, entry.duration);
+    if (t > 0) return { second: t, season, episode, seriesWatched: false, source: 'top' };
+    return { second: 0, season, episode, seriesWatched: false, source: 'zero' };
   },
 
   // Server-newer row lands here: top-level clock adopts the server while
