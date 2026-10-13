@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Check, ListVideo, ChevronDown, Crosshair } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
+import { storage } from '../services/storage';
 
 // Day-first everywhere ("19 May 2026", never 2026-05-19).
 function formatEpDay(iso) {
@@ -83,7 +84,11 @@ export default function EpisodeDrawer({
     tmdb.getSeasonDetails(tvId, activeSeason)
       .then((data) => {
         if (isMounted) {
-          setEpisodes(data?.episodes || []);
+          const eps = data?.episodes || [];
+          setEpisodes(eps);
+          // Catalog fill (history rewrite): every season load stamps its
+          // count, so Next/finale math heals without a detail visit.
+          storage.noteSeasonCount(tvId, activeSeason, eps.length, totalSeasons);
           setLoading(false);
         }
       })
@@ -96,7 +101,7 @@ export default function EpisodeDrawer({
       });
 
     return () => { isMounted = false; };
-  }, [tvId, activeSeason, isOpen, seasonRetry]);
+  }, [tvId, activeSeason, isOpen, seasonRetry, totalSeasons]);
 
   // NOTE: no click-outside-to-close on purpose. The video area is a
   // cross-origin iframe (never fires document mousedown), and on the chrome
@@ -184,6 +189,10 @@ export default function EpisodeDrawer({
           ) : (
             episodes.map((ep) => {
               const isCurrent = activeSeason === currentSeason && ep.episode_number === currentEpisode;
+              // Watched check (history rewrite): any-server stamp past the
+              // watched percent. Current keeps the accent check; finished
+              // others get the quiet check + hover words.
+              const watched = storage.isEpisodeWatched('tv', tvId, activeSeason, ep.episode_number);
               const expanded = expandedEp === ep.episode_number;
               const thumb = ep.still_path
                 ? tmdb.getImageUrl(ep.still_path, 'w300')
@@ -212,7 +221,7 @@ export default function EpisodeDrawer({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h4 className={`text-xs font-semibold truncate ${isCurrent ? 'text-[var(--cine-accent)]' : 'text-white/90 group-hover:text-white'}`}>
+                    <h4 className={`text-xs font-semibold truncate ${isCurrent ? 'text-[var(--cine-accent)]' : watched ? 'text-white/50' : 'text-white/90 group-hover:text-white'}`}>
                       {ep.episode_number}. {ep.name || `Episode ${ep.episode_number}`}
                     </h4>
                     <p className="text-[11px] text-white/60 line-clamp-1 mt-0.5">
@@ -248,9 +257,14 @@ export default function EpisodeDrawer({
                     <ChevronDown className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {isCurrent && (
+                  {isCurrent ? (
                     <Check className="w-4 h-4 text-[var(--cine-accent)] flex-shrink-0 mr-1" />
-                  )}
+                  ) : watched ? (
+                    <span className="cine-has-tip flex-shrink-0 mr-1" aria-label={`Episode ${ep.episode_number} watched`}>
+                      <Check className="w-4 h-4 text-white/40" />
+                      <span className="cine-tip" aria-hidden="true">Watched</span>
+                    </span>
+                  ) : null}
                 </div>
               );
             })

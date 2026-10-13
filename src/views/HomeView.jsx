@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Plus, Check, Info, Star, CalendarDays, Clapperboard, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
-import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
+import { storage, progressLabel, formatClock } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, resolveMediaType, hasRating, PROVIDERS, DATA_TTL, pickAiring } from '../services/catalog';
 import RowRail from '../components/RowRail';
 import Reveal from '../components/ui/Reveal';
@@ -258,12 +258,12 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
     lastHeroRef.current = heroItem;
   }, [heroItem?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Hero resume: one dominant Play language. If this title has a real
-  // position (30s+, not watched), the CTA reads "Resume • 12:34" —
-  // same recipe, same size, just honest about where Play lands.
-  const heroSaved = heroItem?.id ? storage.getProgress(heroMediaType, heroItem.id) : null;
-  const heroResumeSec = heroSaved && (heroSaved.percent || 0) < WATCHED_PCT && (heroSaved.currentTime || 0) >= 30
-    ? Math.floor(heroSaved.currentTime)
+  // Hero resume: one dominant Play language. Reads the resolver
+  // (history rewrite A1) — the CTA names the second Play opens on this
+  // server, never a stale top-level number from another provider.
+  const heroSaved = heroItem?.id ? storage.resolveResume({ type: heroMediaType, mediaId: heroItem.id, server: storage.getPreferredServer('vidy') }) : null;
+  const heroResumeSec = heroSaved && !heroSaved.seriesWatched && heroSaved.second >= 30
+    ? Math.floor(heroSaved.second)
     : 0;
 
   // Hero watchlist toggle: icon + labels follow the real state, live across
@@ -514,15 +514,21 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                 className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 md:-mx-14 md:px-14"
               >
               {continueWatching.map((item) => {
-                const pct = item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0;
+                // Resolver-fed (history rewrite A1): the rail says the
+                // second Play opens on this server — remaining, position,
+                // and bar all derive from one read.
+                const res = storage.resolveResume({ type: item.type, mediaId: item.mediaId, server: storage.getPreferredServer('vidy') });
+                const sec = res.second;
+                const dur = res.duration || item.duration || 0;
+                const pct = sec > 0 && dur > 0 ? Math.floor((sec / dur) * 100) : (item.percent > 0 ? item.percent : sec > 0 ? 4 : 0);
                 // Uniform time phrase: remaining when the duration is known,
                 // position otherwise. Never mixed bare numbers.
                 const time =
-                  item.duration > item.currentTime && item.currentTime > 0
-                    ? `${formatClock(item.duration - item.currentTime)} left`
-                    : item.currentTime > 0
-                      ? `at ${formatClock(item.currentTime)}`
-                      : progressLabel(item);
+                  dur > sec && sec > 0
+                    ? `${formatClock(dur - sec)} left`
+                    : sec > 0
+                      ? `at ${formatClock(sec)}`
+                      : progressLabel({ percent: 0, duration: dur, currentTime: 0 });
                 return (
                 <div
                   key={`${item.type}_${item.mediaId}`}
@@ -572,7 +578,7 @@ export default function HomeView({ onSelectMedia, onPlay, onToast, onOpenTopRate
                   </div>
                   <h4 className="cine-cw-portrait-title">{item.title}</h4>
                   <p className="cine-cw-portrait-meta">
-                    {item.type === 'tv' ? `S${item.season} E${item.episode} · ` : ''}{time}
+                    {item.type === 'tv' ? `S${res.season} E${res.episode} · ` : ''}{time}
                   </p>
                 </div>
                 );

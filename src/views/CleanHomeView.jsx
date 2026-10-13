@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Play, ChevronRight, ChevronLeft, Star, Plus, Check, Info, CalendarDays, Clapperboard, ArrowUp } from 'lucide-react';
 import { tmdb } from '../services/tmdb';
-import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
+import { storage, progressLabel, formatClock } from '../services/storage';
 import { GENRE_NAME, GENRE_ICON, hasRating, resolveMediaType } from '../services/catalog';
 import RowRail from '../components/RowRail';
 import { SkelRail } from '../components/ui';
@@ -114,11 +114,12 @@ export default function CleanHomeView({ onSelectMedia, onPlay, onToast, overlaid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hero?.id]);
 
-  // Resume-aware Play: honest label when a real position exists.
-  const heroSaved = hero?.id ? storage.getProgress(heroMediaType, hero.id) : null;
+  // Resume-aware Play: honest label when a real position exists. Reads
+  // the resolver (history rewrite A1) — same second Play opens.
+  const heroSaved = hero?.id ? storage.resolveResume({ type: heroMediaType, mediaId: hero.id, server: storage.getPreferredServer('vidy') }) : null;
   const heroResumeSec =
-    heroSaved && (heroSaved.percent || 0) < WATCHED_PCT && (heroSaved.currentTime || 0) >= 30
-      ? Math.floor(heroSaved.currentTime)
+    heroSaved && !heroSaved.seriesWatched && heroSaved.second >= 30
+      ? Math.floor(heroSaved.second)
       : 0;
 
   // Watchlist state follows the real store, live across tabs.
@@ -322,7 +323,16 @@ export default function CleanHomeView({ onSelectMedia, onPlay, onToast, overlaid
                 {/* Portrait resume cards: same 2:3 card system as the rails,
                     so posters are never cropped. Progress pins to the art. */}
                 <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                  {continueWatching.map((item) => (
+                  {continueWatching.map((item) => {
+                    // Resolver-fed (history rewrite A1): card meta says the
+                    // second Play opens on this server.
+                    const res = storage.resolveResume({ type: item.type, mediaId: item.mediaId, server: storage.getPreferredServer('vidy') });
+                    const sec = res.second;
+                    const dur = res.duration || item.duration || 0;
+                    const railPct = sec > 0 && dur > 0 ? Math.floor((sec / dur) * 100) : 0;
+                    const railLabel = progressLabel({ percent: railPct, duration: dur, currentTime: sec });
+                    const barPct = railPct > 0 ? railPct : item.percent > 0 ? item.percent : sec > 0 ? 4 : 0;
+                    return (
                     <div
                       key={`${item.type}_${item.mediaId}`}
                       role="button"
@@ -349,24 +359,25 @@ export default function CleanHomeView({ onSelectMedia, onPlay, onToast, overlaid
                             <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
                           </span>
                           <span className="cine-card-hover-title">{item.title}</span>
-                          <span className="cine-card-hover-meta">{progressLabel(item)}</span>
+                          <span className="cine-card-hover-meta">{railLabel}</span>
                         </span>
                         <div className="clean-cw-progress" aria-hidden="true">
                           <div
                             className="cine-cw-progress-fill"
-                            style={{ width: `${item.percent > 0 ? item.percent : item.currentTime > 0 ? 4 : 0}%` }}
+                            style={{ width: `${barPct}%` }}
                           />
                         </div>
                       </div>
                       <h4 className="cine-card-title">{item.title}</h4>
                       <p className="cine-cw-meta">
                         {item.type === 'tv'
-                          ? `Season ${item.season}, episode ${item.episode}`
+                          ? `Season ${res.season}, episode ${res.episode}`
                           : 'Movie'}{' '}
-                        • {progressLabel(item)}
+                        • {railLabel}
                       </p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}

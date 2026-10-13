@@ -194,20 +194,27 @@ function pickedOfItem(item) {
 }
 
 // My List → picked shapes. CW entries resume at this room server's slot
-// (strict: never another provider's seconds), falling back to the
-// top-level clock. Adding/playing writes no history — the Player records
-// only genuinely watched seconds afterwards.
+// via the resolver (history rewrite A1: strict slot, auto-jump, legacy,
+// poison dropped — the same second solo Play opens). Adding/playing
+// writes no history — the Player records only genuinely watched seconds
+// afterwards.
 function pickedOfCwEntry(entry) {
-  const slot = storage.getServerProgress(entry.type, entry.mediaId, 'vidy');
+  const r = storage.resolveResume({
+    type: entry.type,
+    mediaId: entry.mediaId,
+    server: 'vidy',
+    season: entry.season || 1,
+    episode: entry.episode || 1,
+  });
   return {
     kind: 'tmdb',
     id: entry.mediaId,
     media_type: entry.type,
     title: entry.title || '',
     poster_path: entry.poster || '',
-    season: entry.season || 1,
-    episode: entry.episode || 1,
-    startAt: Math.floor(slot?.currentTime ?? entry.currentTime ?? 0),
+    season: r.season,
+    episode: r.episode,
+    startAt: r.second,
   };
 }
 

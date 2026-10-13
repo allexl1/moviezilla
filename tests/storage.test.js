@@ -4,6 +4,7 @@ import './helpers.js';
 import {
   storage,
   progressLabel,
+  formatFullDate,
   tvEstablished,
   WATCHED_PCT,
   MIN_CONTINUE_SEC,
@@ -237,5 +238,66 @@ describe('switchEpisode stamp', () => {
     storage.saveProgress({ mediaId: 6, type: 'movie', currentTime: 1800, duration: 7200, title: 'M', poster: '/m' });
     storage.saveProgress({ mediaId: 6, type: 'movie', currentTime: 0, duration: 0, title: 'M', poster: '/m' });
     assert.equal(storage.getProgress('movie', 6).currentTime, 1800);
+  });
+});
+
+describe('season-count filling (history rewrite remains)', () => {
+  beforeEach(() => {
+    localStorage.removeItem('moviezilla_season_counts');
+  });
+  it('merges one season at a time, never wipes known seasons', () => {
+    storage.recordSeasonCounts(40, { 1: 10 }, 2);
+    storage.noteSeasonCount(40, 2, 8, 2);
+    assert.deepEqual(storage.getSeasonCounts(40).seasons, { 1: 10, 2: 8 });
+  });
+  it('ignores specials and junk, totalSeasons only grows', () => {
+    storage.recordSeasonCounts(41, { 1: 10 }, 2);
+    storage.noteSeasonCount(41, 0, 5, 2);
+    storage.noteSeasonCount(41, 1, -3, 2);
+    storage.noteSeasonCount(41, 2, 8, 1);
+    assert.deepEqual(storage.getSeasonCounts(41), {
+      seasons: { 1: 10, 2: 8 },
+      totalSeasons: 2,
+      at: storage.getSeasonCounts(41).at,
+    });
+  });
+});
+
+describe('next-episode arithmetic (history rewrite remains)', () => {
+  beforeEach(() => {
+    localStorage.removeItem('moviezilla_season_counts');
+  });
+  it('walks in-season, crosses seasons, hides on the known finale', () => {
+    storage.recordSeasonCounts(42, { 1: 3, 2: 2 }, 2);
+    assert.deepEqual(storage.nextEpisode({ mediaId: 42, season: 1, episode: 1, totalSeasons: 2 }), { season: 1, episode: 2 });
+    assert.deepEqual(storage.nextEpisode({ mediaId: 42, season: 1, episode: 3, totalSeasons: 2 }), { season: 2, episode: 1 });
+    assert.equal(storage.nextEpisode({ mediaId: 42, season: 2, episode: 2, totalSeasons: 2 }), null);
+  });
+  it('never claims a finale on an unknown catalog', () => {
+    assert.deepEqual(storage.nextEpisode({ mediaId: 43, season: 1, episode: 7 }), { season: 1, episode: 8 });
+  });
+});
+
+describe('episode + entry watched truth (history rewrite remains)', () => {
+  beforeEach(() => {
+    localStorage.removeItem('moviezilla_season_counts');
+  });
+  it('sees per-server finishes the top-level misses', () => {
+    assert.equal(storage.isEpisodeWatched('tv', 44, 1, 1), false);
+    storage.saveProgress({ mediaId: 44, type: 'tv', season: 1, episode: 1, currentTime: 2600, duration: 2700, title: 'S', poster: '/s', server: 'vidy' });
+    assert.equal(storage.isEpisodeWatched('tv', 44, 1, 1), true);
+  });
+  it('sends manual series marks to Watched, movies stay percent-ruled', () => {
+    storage.setSeriesWatched({ mediaId: 45, type: 'tv', watched: true, title: 'S' });
+    assert.equal(storage.isEntryWatched(storage.getProgress('tv', 45)), true);
+    assert.equal(storage.isEntryWatched(movie({ percent: 100 })), true);
+    assert.equal(storage.isEntryWatched(movie({ percent: 30 })), false);
+  });
+});
+
+describe('full history dates (history rewrite remains)', () => {
+  it('renders the exact day, US long form', () => {
+    assert.equal(formatFullDate(new Date('2026-09-19T12:00:00').getTime()), 'September 19, 2026');
+    assert.equal(formatFullDate(NaN), '');
   });
 });

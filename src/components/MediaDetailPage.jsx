@@ -3,7 +3,7 @@ import { Play, Plus, Check, Star, X, Users, Trophy, ChevronRight, ChevronDown, C
 import { tmdb, FALLBACK_PROFILE, FALLBACK_POSTER } from '../services/tmdb';
 import { getImdbRating, imdbIdOf } from '../services/ratings';
 import { getAwardsByImdb } from '../services/wikidata';
-import { storage, WATCHED_PCT } from '../services/storage';
+import { storage } from '../services/storage';
 import { shortName } from '../services/catalog';
 import RowRail from './RowRail';
 import ClampedText from './ClampedText';
@@ -118,7 +118,11 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
     tmdb.getSeasonDetails(mediaId, activeSeason)
       .then((data) => {
         if (alive) {
-          setEpisodes(data?.episodes || []);
+          const eps = data?.episodes || [];
+          setEpisodes(eps);
+          // Catalog fill (history rewrite): every season load stamps its
+          // count, same as the player drawer.
+          storage.noteSeasonCount(mediaId, activeSeason, eps.length, details?.number_of_seasons || 0);
           setLoading(false);
         }
       })
@@ -129,7 +133,7 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
         }
       });
     return () => { alive = false; };
-  }, [mediaId, activeSeason, seasonRetry]);
+  }, [mediaId, activeSeason, seasonRetry, details?.number_of_seasons]);
 
   useEffect(() => {
     if (!sheetEp) return;
@@ -153,20 +157,11 @@ function EpisodesSection({ mediaId, media, details, onPlay, onToast, onSelectPer
     };
   }, [sheetEp]);
 
-  // Watched truth reads the whole episode stamp, not one server slot:
-  // episodes finished inside the player carry per-server clocks, and a
-  // server-less read returned null for those (the toggle that never
-  // flipped). Any clock past the watched percent counts.
+  // Watched truth is the shared any-server helper (one system: the
+  // player drawer reads the same function, never a local copy).
   const isWatched = (epNum) => {
     try {
-      const entry = storage.getProgress('tv', mediaId);
-      const ep = entry?.episodes?.[`${activeSeason}x${epNum}`];
-      if (!ep) return false;
-      if ((ep.percent || 0) >= WATCHED_PCT) return true;
-      return Object.values(ep.servers || {}).some((s) => {
-        const pct = s && s.duration > 0 ? (s.currentTime / s.duration) * 100 : 0;
-        return pct >= WATCHED_PCT;
-      });
+      return storage.isEpisodeWatched('tv', mediaId, activeSeason, epNum);
     } catch {
       return false;
     }
@@ -499,6 +494,9 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   const [rt, setRt] = useState(null);
   const [awards, setAwards] = useState([]);
   const [honoursExpanded, setHonoursExpanded] = useState(false);
+  // Bumped by series-mark toggles so the hero eye re-renders (storage
+  // has no subscription — same pattern as the episode toggles below).
+  const [, setSeriesTick] = useState(0);
 
   const mediaId = media?.id;
 
@@ -532,6 +530,19 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
     fetchDetails();
     return () => { isMounted = false; };
   }, [mediaId, mediaType, detailsRetry]);
+
+  // Full catalog record (history rewrite): the detail payload carries
+  // every season's episode count — one write completes the cache, so
+  // series completion and finale math work before any episode plays.
+  useEffect(() => {
+    if (mediaType !== 'tv' || !mediaId || !details?.seasons?.length) return;
+    const seasons = {};
+    for (const s of details.seasons) {
+      const n = Number(s?.season_number);
+      if (n >= 1 && Number(s?.episode_count) > 0) seasons[n] = Math.floor(Number(s.episode_count));
+    }
+    storage.recordSeasonCounts(mediaId, seasons, details?.number_of_seasons || 0);
+  }, [mediaId, mediaType, details]);
 
   // Stay in sync when the watchlist changes elsewhere (no reload needed).
   useEffect(() => {
@@ -609,6 +620,27 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
   }, [details?.title, details?.name, media?.title, media?.name, details?.release_date, details?.first_air_date]);
 
   const title = details?.title || details?.name || media?.title || media?.name;
+  // Manual series eye (history rewrite): the user saying "I finished
+  // this" beats every inference. Reads the derived truth, so a fully
+  // watched catalog and a manual mark show the same state.
+  const seriesDone = mediaType === 'tv' && mediaId
+    ? storage.isSeriesWatched(storage.getProgress('tv', mediaId), storage.getSeasonCounts(mediaId))
+    : false;
+  const toggleSeriesWatched = () => {
+    try {
+      storage.setSeriesWatched({
+        mediaId,
+        type: 'tv',
+        watched: !seriesDone,
+        title: details?.name || details?.title || media?.name || media?.title || '',
+        poster: details?.poster_path || media?.poster_path || '',
+      });
+      setSeriesTick((t) => t + 1);
+      onToast?.(seriesDone ? 'Removed series from watched' : 'Marked series watched');
+    } catch {
+      onToast?.('Could not update. Retry.');
+    }
+  };
   const backdrop = tmdb.getImageUrl(details?.backdrop_path || media?.backdrop_path, 'w1280');
   const rating = (details?.vote_average || media?.vote_average || 0).toFixed(1);
   const voteCount = details?.vote_count || media?.vote_count || null;
@@ -779,6 +811,21 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
               >
                 <Users className="w-5 h-5" />
                 <span className="cine-tip" aria-hidden="true">Watch together</span>
+              </button>
+            )}
+
+            {mediaType === 'tv' && (
+              <button
+                onClick={toggleSeriesWatched}
+                className={`cine-btn-circle cine-has-tip${seriesDone ? ' text-[var(--cine-accent)]' : ''}`}
+
+                aria-label={seriesDone ? 'Series watched, tap to undo' : 'Mark series watched'}
+                aria-pressed={seriesDone}
+              >
+                {seriesDone ? <Check className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                <span className="cine-tip" aria-hidden="true">
+                  {seriesDone ? 'Series watched, tap to undo' : 'Mark series watched'}
+                </span>
               </button>
             )}
 

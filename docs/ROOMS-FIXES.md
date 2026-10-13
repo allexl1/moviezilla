@@ -398,6 +398,26 @@ server-switch, silent slot created, zero errors.
 Remains: Next button, season-count filling, watched checkmarks, full
 history dates, announcer swaps, manual series-mark UI, live 2-device
 proof (receive, real photo render, delete-file, feel).
+Landed this round (38/38 tests, headless-green): season-count filling
+(detail full catalog + per-season merges in EpisodeDrawer, detail
+section and player fetch), manual Next button (null on the known
+finale so the button hides, optimistic E+1 on unknown catalog, no
+auto-advance), finale-ended marks the series watched (evidence-gated
+like every finish, catalog-gated like every completion), episode
+watched checks in the player drawer (shared helper, detail inline
+deleted), full history dates on every row ("September 19, 2026"),
+every announcer on resolveResume (toast, both heroes, both CW rails,
+history rows, room picker), series-mark eye in the detail hero +
+honest history Mark watched (tv goes through the manual eye;
+Watched/History lanes read the derived truth, so a manual mark moves
+tabs immediately). Headless notes: seed ids must be high (99 is a
+real TMDB show and its real catalog merged mid-probe); one 16x `%c`
+NaN console burst on a second player open, unreproducible across 4
+reruns, no source in the tree (sandbox flake, not a gate failure);
+Exit-player clicks fail headless when the chrome auto-hides —
+synthetic Escape (cancelable:true) or a key poke recovers it.
+Remains now: live 2-device proof (receive, real photo render,
+delete-file, feel) + owner feel pass on Next/series-eye.
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 
@@ -699,7 +719,7 @@ follow the PRIME RULE (rewrite once, no layering).
 - C. UI primitives (buttons/pills/modals/toasts/tips/skeletons/
   empty states/segmented controls).
 - Findings (surveyed, not yet fixed):
-   A1. [IN PROGRESS by solo history rewrite] Display second vs play
+   A1. [DONE this round] Display second vs play
    second: hero/toast/CW picker announce top-level (or hardcoded vidy)
    seconds while the Player opens the strict current-server slot — same
    title can say 7:00 and open 0:00 after a server switch. Disposition:

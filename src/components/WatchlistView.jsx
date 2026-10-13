@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ListVideo, X, Check, Play, History, Clapperboard } from 'lucide-react';
 import { tmdb, MOVIE_GENRES, TV_GENRES } from '../services/tmdb';
-import { storage, progressLabel, formatClock, WATCHED_PCT } from '../services/storage';
+import { storage, progressLabel, formatClock, formatFullDate, WATCHED_PCT } from '../services/storage';
 import { letterboxd } from '../services/letterboxd';
 import Card from './ui/Card';
 import Picker from './Picker';
@@ -115,17 +115,24 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
   };
 
   const handleMarkWatched = (h) => {
-    storage.saveProgress({
-      mediaId: h.mediaId,
-      type: h.type,
-      season: h.season || 1,
-      episode: h.episode || 1,
-      currentTime: 1,
-      duration: 1,
-      title: h.title,
-      poster: h.poster,
-      genres: h.genres || [],
-    });
+    // Series go through the manual eye (derived truth): a fake 1/1
+    // top-level stamp would show Watched here yet stay in Continue
+    // Watching under the new rules. Movies are one unit, unchanged.
+    if (h.type === 'tv') {
+      storage.setSeriesWatched({ mediaId: h.mediaId, type: h.type, watched: true, title: h.title, poster: h.poster });
+    } else {
+      storage.saveProgress({
+        mediaId: h.mediaId,
+        type: h.type,
+        season: h.season || 1,
+        episode: h.episode || 1,
+        currentTime: 1,
+        duration: 1,
+        title: h.title,
+        poster: h.poster,
+        genres: h.genres || [],
+      });
+    }
     bump();
     onToast?.('Marked as Watched');
   };
@@ -246,8 +253,11 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
     );
   })();
 
+  // Watched + History lanes read the DERIVED truth (history rewrite),
+  // not raw top-level percent: a manual series mark belongs in Watched
+  // even with a low clock, and must leave History with it.
   const watchedItems = history.filter(
-    (h) => h.percent >= WATCHED_PCT && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter)
+    (h) => storage.isEntryWatched(h) && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter)
   );
 
   const historyGroups = (() => {
@@ -255,7 +265,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
     history
       // Watched titles live in the Watched tab only — History is the
       // unfinished lane (tapping ✓ moves the row out immediately).
-      .filter((h) => h.percent < WATCHED_PCT && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter))
+      .filter((h) => !storage.isEntryWatched(h) && matchType(h.type) && matchGenre(h.genres) && inWhenFilter(h.updatedAt, whenFilter))
       .forEach((h) => {
         const label = groupLabel(h.updatedAt);
         if (!groups.has(label)) groups.set(label, []);
@@ -286,8 +296,15 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
   const showMine = !showLbGroups || lbFilter !== 'letterboxd';
   const showRemote = letterboxdUser && (!showLbGroups || lbFilter !== 'mine') && letterboxdVisible.length > 0;
 
-  // Progress strings come straight from storage.progressLabel so every
-  // row in the app agrees.
+  // Progress strings come from the resolver (history rewrite A1), not
+  // raw top-level fields: what the row SAYS is what the Player OPENS on
+  // this server. progressLabel still formats, fed with resolver numbers.
+  const resumeServer = storage.getPreferredServer('vidy');
+  const rowLabel = (h) => {
+    const r = storage.resolveResume({ type: h.type, mediaId: h.mediaId, server: resumeServer });
+    const pct = r.duration > 0 && r.second > 0 ? Math.floor((r.second / r.duration) * 100) : 0;
+    return progressLabel({ percent: pct, duration: r.duration, currentTime: r.second });
+  };
 
   const resumePayload = (h) => ({
     media: {
@@ -590,7 +607,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                 key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
                 poster={posterUrl}
                 title={h.title}
-                meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${groupLabel(h.updatedAt)}`}
+                meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • Watched • ${formatFullDate(h.updatedAt)}`}
                 onClick={() => onResume(media, fallback)}
                 thumbClassName="w-20 h-28"
                 titleClassName="text-sm md:text-base font-semibold text-white truncate"
@@ -650,7 +667,7 @@ export default function WatchlistView({ onSelectMedia, onResume, letterboxdUser,
                     key={`${h.type}_${h.mediaId}_${h.updatedAt}`}
                     poster={posterUrl}
                     title={h.title}
-                    meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${progressLabel(h)}`}
+                    meta={`${h.type === 'tv' ? `S${h.season} E${h.episode}` : 'Movie'} • ${rowLabel(h)} • ${formatFullDate(h.updatedAt)}`}
                     onClick={() => onResume(media, fallback)}
                     thumbClassName="w-20 h-28"
                     titleClassName="text-sm md:text-base font-semibold text-white truncate"

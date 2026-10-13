@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { tmdb } from './services/tmdb';
-import { storage, formatClock, WATCHED_PCT } from './services/storage';
+import { storage, formatClock } from './services/storage';
 import { resolveMediaType, defaultSortFor } from './services/catalog';
 import { parseLocation, parseLocationSafe, buildLocation } from './services/routing';
 import Navbar from './components/Navbar';
@@ -515,14 +515,16 @@ export default function App() {
       (fallbackDetails?.type === 'tv' || fallbackDetails?.type === 'movie') ? fallbackDetails.type :
       (media?.first_air_date || fallbackDetails?.first_air_date || fallbackDetails?.number_of_seasons) ? 'tv' : 'movie';
 
-    // "Resuming from 17:41" — makes the history system feel true. Only
-    // when there's a real position worth announcing (30s+, not watched:
-    // a finished film must never toast "Resuming from 1:30:00").
+    // "Resuming from 17:41" — makes the history system feel true. Reads
+    // the resolver (history rewrite A1), never the raw top-level: the
+    // toast must name the second the Player actually opens on this
+    // server. Only when there's a real position worth announcing (30s+,
+    // not finished — a completed title must never toast a resume).
     const announceResume = () => {
       try {
-        const saved = storage.getProgress(mediaType, media.id);
-        if (saved && saved.currentTime >= 30 && (saved.percent || 0) < WATCHED_PCT) {
-          showToast(`Resuming from ${formatClock(saved.currentTime)}`);
+        const r = storage.resolveResume({ type: mediaType, mediaId: media.id, server: storage.getPreferredServer('vidy') });
+        if (r && !r.seriesWatched && r.second >= 30) {
+          showToast(`Resuming from ${formatClock(r.second)}`);
         }
       } catch {
         // never block playback for a toast

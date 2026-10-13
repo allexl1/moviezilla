@@ -134,6 +134,15 @@ export function formatClock(totalSeconds) {
   return `${h > 0 ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`;
 }
 
+// Full calendar date for history rows ("September 19, 2026"): group
+// headers stay weekly/monthly, but every row carries its own exact day.
+// en-US pinned on purpose: the format is the spec, not the locale.
+export function formatFullDate(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 // One honest progress string for every history entry shape.
 export function progressLabel(h) {
   if (!h) return '';
@@ -281,6 +290,76 @@ export const storage = {
   getSeasonCounts(mediaId) {
     if (!mediaId) return null;
     return safeGet(STORAGE_KEYS.SEASON_COUNTS, {})[String(mediaId)] || null;
+  },
+
+  // Merge one season's episode count into the catalog cache (season
+  // details load one season at a time in the drawers, so a full
+  // overwrite there would wipe the seasons already known). Specials
+  // (season 0) never stored — they never gate completion. totalSeasons
+  // only ever grows: a stale small read must not shrink a known catalog.
+  noteSeasonCount(mediaId, season, count, totalSeasons) {
+    if (!mediaId) return;
+    const n = Math.floor(Number(season) || 0);
+    const total = Math.floor(Number(count) || 0);
+    if (n < 1 || total <= 0) return;
+    const all = safeGet(STORAGE_KEYS.SEASON_COUNTS, {});
+    const prev = all[String(mediaId)] || { seasons: {}, totalSeasons: 0 };
+    all[String(mediaId)] = {
+      seasons: { ...(prev.seasons || {}), [n]: total },
+      totalSeasons: Math.max(
+        Math.floor(Number(totalSeasons) || 0),
+        Math.floor(Number(prev.totalSeasons) || 0)
+      ),
+      at: Date.now(),
+    };
+    safeSet(STORAGE_KEYS.SEASON_COUNTS, all);
+  },
+
+  // Next-episode arithmetic over the catalog cache (manual Next button):
+  // known season → next in season, or S+1 E1 across a boundary, or null
+  // on the known finale (the button hides there). Unknown catalog never
+  // claims a finale — optimistic E+1 until a season load fills the cache.
+  nextEpisode({ mediaId, season = 1, episode = 1, totalSeasons = 0 } = {}) {
+    const s = Math.floor(Number(season) || 1);
+    const e = Math.floor(Number(episode) || 1);
+    const catalog = mediaId ? safeGet(STORAGE_KEYS.SEASON_COUNTS, {})[String(mediaId)] : null;
+    const known = Math.floor(Number(catalog?.seasons?.[s]) || 0);
+    if (known > 0 && e < known) return { season: s, episode: e + 1 };
+    if (known > 0 && e >= known) {
+      const total = Math.max(
+        Math.floor(Number(catalog?.totalSeasons) || 0),
+        Math.floor(Number(totalSeasons) || 0)
+      );
+      if (total >= 1 && s >= total) return null;
+      return { season: s + 1, episode: 1 };
+    }
+    return { season: s, episode: e + 1 };
+  },
+
+  // Episode watched truth, any server: episodes finished inside the
+  // player carry per-server clocks, so a server-less top-level read
+  // alone misses them. Any stamp past the watched percent counts.
+  isEpisodeWatched(type, mediaId, season, episode) {
+    if (!mediaId) return false;
+    const ep = safeGet(STORAGE_KEYS.PROGRESS, {})[`${type}_${mediaId}`]?.episodes?.[`${season}x${episode}`];
+    if (!ep) return false;
+    const pctOf = (x) => {
+      if (!x) return 0;
+      if (x.percent != null) return x.percent;
+      if ((x.duration || 0) > 0) return (x.currentTime / x.duration) * 100;
+      return 0;
+    };
+    if (pctOf(ep) >= WATCHED_PCT) return true;
+    return Object.values(ep.servers || {}).some((sl) => pctOf(sl) >= WATCHED_PCT);
+  },
+
+  // Whole-entry watched truth for list filters (Watched tab, History
+  // lane): movies are one unit, series read the derived truth — a manual
+  // series mark belongs in Watched even when its top-level percent is low.
+  isEntryWatched(h) {
+    if (!h) return false;
+    if (h.type !== 'tv') return (h.percent || 0) >= WATCHED_PCT;
+    return storage.isSeriesWatched(h, storage.getSeasonCounts(h.mediaId));
   },
 
   // Manual series mark (history rewrite): the user saying "I finished

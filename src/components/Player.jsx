@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw } from 'lucide-react';
-import { storage, WATCHED_PCT } from '../services/storage';
+import { ArrowLeft, ListVideo, Maximize, MessageCircle, RotateCcw, SkipForward } from 'lucide-react';
+import { storage } from '../services/storage';
 import { tmdb, FALLBACK_BACKDROP } from '../services/tmdb';
 import EpisodeDrawer from './EpisodeDrawer';
 import ServerSwitcher from './ServerSwitcher';
@@ -782,6 +782,27 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             activeMsRef.current = 0;
             lastTickRef.current = Date.now();
             reportRef.current();
+            // Series finale rule (history rewrite): a provider-voiced end
+            // on the KNOWN last episode of the last season marks the whole
+            // series watched. Evidence-gated like every finish (doSave),
+            // catalog-gated like every completion (unknown catalog stays
+            // episode-level — under-mark, never over-mark).
+            if (isEnd && doSave && isTv) {
+              try {
+                const counts = storage.getSeasonCounts(mediaId);
+                const inSeason = Math.floor(Number(counts?.seasons?.[currentSeason]) || 0);
+                const total = Math.max(
+                  Math.floor(Number(counts?.totalSeasons) || 0),
+                  Math.floor(Number(details?.number_of_seasons) || 0)
+                );
+                if (inSeason > 0 && currentEpisode >= inSeason && total >= 1 && currentSeason >= total) {
+                  const meta = buildMeta();
+                  storage.setSeriesWatched({ mediaId, type: 'tv', watched: true, title: meta.title, poster: meta.poster });
+                }
+              } catch {
+                // never block the write path for a mark
+              }
+            }
             // Throttled persist: same second or <8s since last write skips
             // the full-map stringify (was: every provider tick, ~1/sec).
             // Voice is the only path that advances storage past the wall
@@ -863,6 +884,27 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   const title = details?.title || details?.name || media?.title || media?.name || 'Now Playing';
   const totalSeasons = details?.number_of_seasons || media?.number_of_seasons || 1;
 
+  // Season catalog fill (history rewrite): one season-details fetch per
+  // season visit records its episode count, so Next/finale math and series
+  // completion never wait on a detail-page visit. Silent on failure.
+  useEffect(() => {
+    if (!isTv || !mediaId) return;
+    let alive = true;
+    tmdb.getSeasonDetails(mediaId, currentSeason)
+      .then((d) => {
+        if (alive) storage.noteSeasonCount(mediaId, currentSeason, (d?.episodes || []).length, totalSeasons);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [mediaId, currentSeason, isTv, totalSeasons]);
+
+  // Manual Next only (locked rule: no auto-advance). Null on the known
+  // finale — the button hides there and the ended handler marks the
+  // series watched instead. Unknown catalog stays optimistic (E+1).
+  const nextEp = isTv && !roomLocked && mediaId
+    ? storage.nextEpisode({ mediaId, season: currentSeason, episode: currentEpisode, totalSeasons })
+    : null;
+
   // framed: embedded in the room screen layout (relative fill) instead
   // of a fullscreen overlay. All chrome/positioning inside stays absolute.
   const rootClass = framed
@@ -925,6 +967,20 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             >
               <ListVideo className="w-4 h-4 text-[var(--cine-accent)]" />
               <span>Episodes</span>
+            </button>
+          )}
+          {nextEp && (
+            <button
+              onClick={() => {
+                markChromeTouched();
+                handleSelectEpisode(nextEp.season, nextEp.episode);
+              }}
+              className="cine-control-btn cine-has-tip"
+              aria-label={`Next episode: Season ${nextEp.season} Episode ${nextEp.episode}`}
+            >
+              <SkipForward className="w-4 h-4" />
+              <span>Next</span>
+              <span className="cine-tip cine-tip--below" aria-hidden="true">S{nextEp.season} E{nextEp.episode}</span>
             </button>
           )}
 
