@@ -541,6 +541,20 @@ full-width sign out, danger zone with hold-to-confirm delete-my-data
 (server rows + local wipe, then sign out; auth user survives — browsers
 cannot delete it). Signed-in view is owner QA (fake sessions don't fool
 the SDK); logged-out modal + gates + build proven headless.
+Football polish round (landed 2026-10-15, headless-proven desktop +
+390px zero-overflow, suite green): MatchView hero crests centered over
+the names (block imgs ignored text-center, now flex justify-center
+wraps); Popular tag dropped from stream cards (feed marks nearly every
+match popular so the tag was noise in accent on static metadata —
+lime rule — while the popular-first sort keeps doing the ranking job);
+Model buttons gated on the 12 covered comps in day rows and the match
+page (uncovered comps have no season table, the button could only
+error); TeamView loads table/season/scorers independently and renders
+whatever resolved, error only when all three fail — uncovered-comp
+clubs now show a real page (proven: Fluminense CLI modal went from
+"Could not load" to 5 results + 5 fixtures, no table line, no
+scorers). CLI standings 502 as expected (not on free), team season
+200. Antislop mode this session: during (session override).
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

@@ -32,11 +32,6 @@ function MatchCard({ match, onWatch }) {
       </div>
       <h3 className="text-base font-bold text-white tracking-tight leading-snug">
         {match.title}
-        {match.popular && !match.live && (
-          <span className="ml-2 align-middle text-[10px] font-black uppercase tracking-wider text-[var(--cine-accent)]">
-            Popular
-          </span>
-        )}
       </h3>
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-white/50">
@@ -237,7 +232,10 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
   }, [slug, m.id, m.home.name, m.away.name, m.utc]);
 
   const countdown = !m.finished && !liveEv ? countdownTo(m.utc) : null;
-  const sched = !m.finished && !m.delayed && !liveEv;
+  // Model needs a season table, so uncovered competitions get no
+  // button (it could only ever show an error there).
+  const covered = FCOMPS.some((c) => c.code === m.competition.code);
+  const sched = covered && !m.finished && !m.delayed && !liveEv;
   const mpOpen = modelApi.modelId === m.id;
   const mpDone = modelApi.model?.id === m.id ? modelApi.model : null;
   const centerScore = liveEv
@@ -285,7 +283,9 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
       {/* Score hero */}
       <div className="flex items-center gap-3 md:gap-6">
         <div className="flex-1 min-w-0 text-center space-y-2">
-          <Crest name={m.home.name} crest={m.home.crest} size="w-14 h-14" />
+          <span className="flex justify-center">
+            <Crest name={m.home.name} crest={m.home.crest} size="w-14 h-14" />
+          </span>
           <div>
             <button
               onClick={() => onOpenTeam({ code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
@@ -309,7 +309,9 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
           </p>
         </div>
         <div className="flex-1 min-w-0 text-center space-y-2">
-          <Crest name={m.away.name} crest={m.away.crest} size="w-14 h-14" />
+          <span className="flex justify-center">
+            <Crest name={m.away.name} crest={m.away.crest} size="w-14 h-14" />
+          </span>
           <div>
             <button
               onClick={() => onOpenTeam({ code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
@@ -508,31 +510,29 @@ const DAY_FILTERS = [
 // as fact would lie.
 function TeamView({ team, code, onOpenPlayer }) {
   const [data, setData] = useState(undefined);
+  // Each source loads on its own: uncovered competitions have no
+  // table (and sometimes no scorers) but team season data usually
+  // resolves, so one dead call must not blank the whole page. The
+  // error state means every source failed, nothing partial.
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const [t, ms] = await Promise.all([
-          fdata.table(code),
-          team.id ? fdata.teamMatches(team.id) : Promise.resolve([]),
-        ]);
-        let sc = [];
-        try {
-          sc = (await fdata.scorers(code)) || [];
-        } catch {
-          sc = [];
-        }
-        if (!alive) return;
-        const row = (t.total || []).find((r) => r.team.name === team.name);
-        setData({
-          row: row || null,
-          results: ms.filter((m) => m.finished).sort((a, b) => b.utc - a.utc).slice(0, 5),
-          fixtures: ms.filter((m) => !m.finished).sort((a, b) => a.utc - b.utc).slice(0, 5),
-          scorers: sc.filter((s) => s.team === team.name).slice(0, 5),
-        });
-      } catch {
-        if (alive) setData(null);
+      const [t, ms, sc] = await Promise.all([
+        fdata.table(code).catch(() => null),
+        (team.id ? fdata.teamMatches(team.id) : Promise.resolve([])).catch(() => null),
+        fdata.scorers(code).catch(() => null),
+      ]);
+      if (!alive) return;
+      if (!t && !ms && !sc) {
+        setData(null);
+        return;
       }
+      setData({
+        row: ((t && t.total) || []).find((r) => r.team.name === team.name) || null,
+        results: (ms || []).filter((m) => m.finished).sort((a, b) => b.utc - a.utc).slice(0, 5),
+        fixtures: (ms || []).filter((m) => !m.finished).sort((a, b) => a.utc - b.utc).slice(0, 5),
+        scorers: (sc || []).filter((s) => s.team === team.name).slice(0, 5),
+      });
     })();
     return () => {
       alive = false;
@@ -1172,7 +1172,8 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                       {group.map(({ m, hit, liveEv }) => {
                         const modelOpen = modelId === m.id;
                         const modelDone = model?.id === m.id ? model : null;
-                        const sched = !m.finished && !m.delayed && !liveEv;
+                        // Same coverage gate as the match page: no table, no model.
+                        const sched = FCOMPS.some((c) => c.code === m.competition.code) && !m.finished && !m.delayed && !liveEv;
                         return (
                           <div key={m.id}>
                             <div className="mat-row px-3 py-2.5 flex items-center gap-2">
