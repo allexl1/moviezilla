@@ -434,6 +434,9 @@ screenshot-proven) + the dead Tailwind accent tint moved into CSS
 Headless green for everything provable (order/hover asserts, drawer
 Current icon, chip desktop + 390px zero-overflow); voice + follow
 need live proof (sandbox embeds are DNS-dead, voice unfakeable).
+Round 5 (41/41 tests): owner call, CW shows everything played — the
+30s/5s gates plus tvEstablished are deleted, only pure 0s opens stay
+out (headless-proven with a seeded 0:14 row).
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

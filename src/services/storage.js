@@ -8,29 +8,11 @@ const STORAGE_KEYS = {
 };
 
 // Single source of truth for every progress gate in the app (was: magic
-// 2/95/30 scattered across storage + WatchlistView).
+// 2/95/30 scattered across storage + WatchlistView). The time gates are
+// gone (owner call: everything played shows) — percent floor is all that
+// remains beside the watched line.
 export const WATCHED_PCT = 95;
-export const MIN_CONTINUE_PCT = 2;
-export const MIN_CONTINUE_SEC = 30;
 export const MAX_EPISODES_KEPT = 10;
-// Series with real watch history behind them (finished episodes, or
-// several deeply-watched ones) surface in Continue Watching after just a
-// few seconds: opening S3E8 of a show you already watched for 2 seasons
-// is never an accident. Fresh/unknown titles keep the 30s anti-clutter
-// gate so stray taps don't spam the rail.
-export const ESTABLISHED_EPISODES = 2;
-export const ESTABLISHED_EP_SEC = 300;
-export const ESTABLISHED_CONTINUE_SEC = 5;
-
-export function tvEstablished(entry) {
-  if (!entry || entry.type !== 'tv') return false;
-  let deep = 0;
-  for (const e of Object.values(entry.episodes || {})) {
-    if ((e?.percent || 0) >= WATCHED_PCT) return true;
-    if ((e?.currentTime || 0) >= ESTABLISHED_EP_SEC) deep += 1;
-  }
-  return deep >= ESTABLISHED_EPISODES;
-}
 
 function safeGet(key, fallback = {}) {
   try {
@@ -605,23 +587,19 @@ export const storage = {
     return allProgress[`${type}_${mediaId}`] || null;
   },
 
-  // Get all partially watched items sorted by most recent. Anything with
-  // 30s+ on the clock counts — percent-gating alone hid short watches of
-  // long titles once providers started reporting real durations. Series
-  // with established history (2 finished/deep seasons behind them) count
-  // from 5s: the next episode of your show always belongs on the rail.
-  // Watched-exclusion reads DERIVED series truth (history rewrite), not
-  // raw top-level percent — a single poisoned 100% stamp must never hide
-  // a half-watched series again.
+  // Get all partially watched items sorted by most recent. Owner call:
+  // everything with a played second shows — no time gate (a voiced 0:14
+  // is proven playback, hiding it felt like a bug). Only pure 0s opens
+  // stay out (tapped, never played). Watched-exclusion reads DERIVED
+  // series truth, not raw top-level percent — a single poisoned 100%
+  // stamp must never hide a half-watched series again.
   getAllContinueWatching() {
     const allProgress = safeGet(STORAGE_KEYS.PROGRESS, {});
     const counts = safeGet(STORAGE_KEYS.SEASON_COUNTS, {});
     return Object.values(allProgress)
       .filter((item) => {
         if (storage.isSeriesWatched(item, counts[String(item.mediaId)] || null)) return false;
-        if (item.percent > MIN_CONTINUE_PCT) return true;
-        const gate = item.type === 'tv' && tvEstablished(item) ? ESTABLISHED_CONTINUE_SEC : MIN_CONTINUE_SEC;
-        return (item.currentTime || 0) >= gate;
+        return (item.percent || 0) > 0 || (item.currentTime || 0) > 0;
       })
       .sort((a, b) => b.updatedAt - a.updatedAt);
   },
