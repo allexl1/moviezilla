@@ -193,3 +193,19 @@ export function formatTime(ms) {
   if (!ms) return '';
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+// Countdown to kickoff ("Starts in 2d 4h", "3h 12m", "12m"). Null once
+// underway — the caller owns live/finished states. Pure for tests.
+export function countdownTo(utcMs, nowMs = Date.now()) {
+  const diff = Math.floor(Number(utcMs) || 0) - Math.floor(Number(nowMs) || 0);
+  if (!(diff > 0)) return null;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Starting now';
+  if (mins < 60) return `Starts in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) {
+    const rest = mins % 60;
+    return rest > 0 ? `Starts in ${hours}h ${rest}m` : `Starts in ${hours}h`;
+  }
+  return `Starts in ${Math.floor(hours / 24)}d ${hours % 24}h`;
+}

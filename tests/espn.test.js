@@ -34,7 +34,7 @@ describe('espn summary shapes', () => {
     const ev = normKeyEvents(json);
     assert.equal(ev.length, 3);
     assert.deepEqual(ev[0], { minute: "18'", kind: 'goal', text: 'Assane Diao Goal' });
-    assert.equal(ev[2].kind, 'card');
+    assert.equal(ev[2].kind, 'yellow');
   });
   it('reads squads, broadcasts, venue and odds', () => {
     const ro = normRosters(json);

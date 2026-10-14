@@ -486,6 +486,12 @@ never AI/bets), Model buttons on scheduled day rows with inline bars
 plus likely scorelines, zero quota when the table is cached, honest
 thin-data and error states. Headless-proven with Saturday fixtures
 (Everton-Chelsea 50/22/28).
+Match pages (landed): chevron on every day row opens a full view —
+sticky score bar (Matchday rule), giant score/countdown hero, Watch,
+Model, goal/card/sub timeline, both squads, broadcasts plus venue,
+bookmaker odds only when offered. ESPN event resolved by day +
+two-side match; uncovered comps show the page without events.
+Headless-proven (Copa semi countdown).
 Team/player pages (landed): taps on standings, fixtures and scorers
 open modals. Team = table line, form, club scorers with photos, last 5
 results + next 5 from one cached team call. Player = verified search

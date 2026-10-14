@@ -30,10 +30,13 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'ESPN path not allowed' });
     }
 
-    // Only the event id rides along (summary endpoint); everything else
-    // is dropped so callers can't reshape upstream queries.
-    const qs = queryParams.event ? `?event=${encodeURIComponent(String(queryParams.event)).slice(0, 24)}` : '';
-    const targetUrl = `${API}/${cleanPath}${qs}`;
+    // Only the event id and an 8-digit date ride along (summary +
+    // scoreboard scoping); everything else is dropped so callers can't
+    // reshape upstream queries.
+    const qp = [];
+    if (queryParams.event) qp.push(`event=${encodeURIComponent(String(queryParams.event)).slice(0, 24)}`);
+    if (/^\d{8}$/.test(String(queryParams.dates || ''))) qp.push(`dates=${queryParams.dates}`);
+    const targetUrl = `${API}/${cleanPath}${qp.length ? `?${qp.join('&')}` : ''}`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10000);
     let r;

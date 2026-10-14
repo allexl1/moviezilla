@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
-import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
-import { liveAcross, ESPN_SLUGS } from '../services/espn';
+import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, countdownTo, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
+import { liveAcross, matchEventId, matchSummary, ESPN_SLUGS } from '../services/espn';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
 import { playerPhoto, playerCard, flagUrlFor } from '../services/tsdb';
@@ -185,6 +185,250 @@ function DayPicker({ day, onChange }) {
   );
 }
 
+// Match page (Matchday sticky-header rule): the score bar sticks while
+// events, squads and odds scroll beneath. Sections render only from
+// verified shapes — no event id, no events section; no odds offered,
+// no odds section. Scheduled matches show countdown + model, live
+// shows the minute, finished shows FT.
+function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
+  const slug = ESPN_SLUGS[m.competition.code] || '';
+  const [sum, setSum] = useState(() => (slug ? undefined : null));
+  useEffect(() => {
+    if (!slug) return;
+    let alive = true;
+    (async () => {
+      try {
+        const dayIso = new Date(m.utc).toISOString().slice(0, 10);
+        const id = await matchEventId(slug, m.home.name, m.away.name, dayIso);
+        if (!alive) return;
+        if (!id) {
+          setSum(null);
+          return;
+        }
+        const s = await matchSummary(slug, id);
+        if (alive) setSum(s);
+      } catch {
+        if (alive) setSum(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [slug, m.id, m.home.name, m.away.name, m.utc]);
+  useEffect(() => {
+    if (!slug) return;
+    const t = setInterval(() => {
+      (async () => {
+        try {
+          const dayIso = new Date(m.utc).toISOString().slice(0, 10);
+          const id = await matchEventId(slug, m.home.name, m.away.name, dayIso);
+          if (!id) return;
+          const s = await matchSummary(slug, id);
+          setSum(s);
+        } catch {
+          // keep the last good snapshot
+        }
+      })();
+    }, 90000);
+    return () => clearInterval(t);
+  }, [slug, m.id, m.home.name, m.away.name, m.utc]);
+
+  const countdown = !m.finished && !liveEv ? countdownTo(m.utc) : null;
+  const sched = !m.finished && !m.delayed && !liveEv;
+  const mpOpen = modelApi.modelId === m.id;
+  const mpDone = modelApi.model?.id === m.id ? modelApi.model : null;
+  const centerScore = liveEv
+    ? `${liveEv.home.score ?? 0} - ${liveEv.away.score ?? 0}`
+    : m.finished || m.delayed
+      ? `${m.home.score ?? 0} - ${m.away.score ?? 0}`
+      : null;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="cine-icon-btn cine-icon-btn--sm"
+          title="Back to matches"
+          aria-label="Back to matches"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-white truncate">{m.competition.name || 'Match'}</h2>
+          <p className="text-[11px] text-white/60">{roundLabel(m)}</p>
+        </div>
+      </div>
+
+      {/* Sticky score bar: score and minute survive the scroll. */}
+      <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-[var(--cine-bg-deep)]/95 backdrop-blur-sm">
+        <div className="mat-row px-4 py-2.5 flex items-center gap-3">
+          <Crest name={m.home.name} crest={m.home.crest} size="w-7 h-7" />
+          <span className="flex-1 min-w-0 font-bold text-white text-sm truncate text-right">{m.home.name}</span>
+          <span className="flex-shrink-0 min-w-16 text-center text-xl font-black text-white tabular-nums">
+            {centerScore ?? <span className="text-sm text-white/60">{formatTime(m.utc)}</span>}
+          </span>
+          <span className="flex-1 min-w-0 font-bold text-white text-sm truncate">{m.away.name}</span>
+          <Crest name={m.away.name} crest={m.away.crest} size="w-7 h-7" />
+          {liveEv && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-black text-red-400 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+              {liveEv.clock}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Score hero */}
+      <div className="flex items-center gap-3 md:gap-6">
+        <div className="flex-1 min-w-0 text-center space-y-2">
+          <Crest name={m.home.name} crest={m.home.crest} size="w-14 h-14" />
+          <div>
+            <button
+              onClick={() => onOpenTeam({ code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
+              className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
+              aria-label={`Open ${m.home.name}`}
+            >
+              {m.home.name}
+            </button>
+          </div>
+        </div>
+        <div className="flex-shrink-0 text-center space-y-1">
+          {centerScore ? (
+            <p className="text-5xl font-black text-white tabular-nums">{centerScore}</p>
+          ) : countdown ? (
+            <p className="text-xl font-black text-white">{countdown}</p>
+          ) : (
+            <p className="text-xl font-black text-white">{formatTime(m.utc)}</p>
+          )}
+          <p className="text-[11px] font-bold text-white/55">
+            {liveEv ? `Live • ${liveEv.clock}` : m.finished ? 'Full time' : m.delayed ? 'Delayed' : formatKickoff(m.utc)}
+          </p>
+        </div>
+        <div className="flex-1 min-w-0 text-center space-y-2">
+          <Crest name={m.away.name} crest={m.away.crest} size="w-14 h-14" />
+          <div>
+            <button
+              onClick={() => onOpenTeam({ code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
+              className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
+              aria-label={`Open ${m.away.name}`}
+            >
+              {m.away.name}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {hit && (
+        <button
+          onClick={() => onWatch(hit)}
+          className="cine-control-btn w-full h-12 text-[15px]"
+          aria-label={`Watch ${m.home.name} versus ${m.away.name}`}
+        >
+          <MonitorPlay className="w-4 h-4" /> Watch live
+        </button>
+      )}
+
+      {sched && (
+        <section className="space-y-2">
+          <button
+            onClick={() => modelApi.openModel(m)}
+            className="cine-pill cine-pill--sm"
+            aria-expanded={mpOpen}
+            aria-label={`Model prediction for ${m.home.name} versus ${m.away.name}`}
+          >
+            <Calculator className="w-3 h-3" /> Model
+          </button>
+          {mpOpen && (
+            <div className="mat-row px-4 py-3 space-y-2" aria-live="polite">
+              <ModelPanel modelDone={mpDone} />
+            </div>
+          )}
+        </section>
+      )}
+
+      {sum && sum.events.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="cine-section-title">Events</h3>
+          <div className="space-y-1.5">
+            {sum.events.map((e, i) => (
+              <div key={`${e.minute}_${i}`} className="mat-row px-3 py-2 flex items-center gap-3">
+                <span className="w-10 flex-shrink-0 text-[11px] font-black text-white/60 tabular-nums">{e.minute}</span>
+                <span
+                  aria-hidden="true"
+                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    e.kind === 'goal' ? 'bg-[var(--cine-accent)]' : e.kind === 'red' ? 'bg-red-500' : e.kind === 'yellow' ? 'bg-yellow-400' : 'bg-white/40'
+                  }`}
+                />
+                <span className="flex-1 min-w-0 text-xs text-white/85 truncate">{e.text}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {sum && sum.rosters.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="cine-section-title">Squads</h3>
+          <div className="grid gap-3 md:grid-cols-2">
+            {sum.rosters.map((g, gi) => (
+              <div key={gi} className="space-y-1.5">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-white/45">
+                  {gi === 0 ? m.home.name : m.away.name}
+                </h4>
+                {g.players.map((p, pi) => (
+                  <div key={`${p.name}_${pi}`} className="mat-row px-3 py-1.5 flex items-center gap-2.5">
+                    {p.photo ? (
+                      <img src={p.photo} alt="" loading="lazy" className="w-7 h-7 rounded-full object-cover bg-white/5 flex-shrink-0" />
+                    ) : (
+                      <span className="w-7 h-7 rounded-full bg-white/10 text-white/60 text-[10px] font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                        {(p.short || p.name || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    {p.jersey != null && (
+                      <span className="w-6 flex-shrink-0 text-[11px] font-black text-white/40 tabular-nums">{p.jersey}</span>
+                    )}
+                    <span className="flex-1 min-w-0 text-xs font-semibold text-white/90 truncate">{p.name}</span>
+                    {p.position && (
+                      <span className="text-[10px] font-bold text-white/40 flex-shrink-0">{p.position}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {sum && sum.odds && (
+        <section className="space-y-2">
+          <h3 className="cine-section-title">
+            Odds {sum.odds.provider && <span className="text-white/40 font-medium normal-case">via {sum.odds.provider}</span>}
+          </h3>
+          <div className="mat-row px-4 py-3 flex items-center gap-3">
+            {[
+              ['1', sum.odds.home],
+              ['X', sum.odds.draw],
+              ['2', sum.odds.away],
+            ].map(([label, v]) => (
+              <div key={label} className="flex-1 text-center space-y-0.5">
+                <p className="text-[10px] font-bold text-white/45">{label}</p>
+                <p className="text-base font-black text-white tabular-nums">{v != null ? v.toFixed(2) : '—'}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {sum && ((sum.broadcasts || []).length > 0 || sum.venue) && (
+        <p className="text-[11px] text-white/45">
+          {[sum.venue, (sum.broadcasts || []).join(' • ')].filter(Boolean).join(' • ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function fixtureLabel(m) {
   if (m.finished) return 'FT';
   if (m.delayed) return 'Delayed';
@@ -200,6 +444,44 @@ function roundLabel(m) {
   if (m.matchday) return `Matchday ${m.matchday}`;
   const s = String(m.stage || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   return s || '';
+}
+
+// Model output panel, shared by day rows and the match page. Leader
+// gets the accent fill (the pick is state), the rest stay quiet.
+function ModelPanel({ modelDone }) {
+  if (!modelDone) return <p className="text-[11px] text-white/50">Loading model…</p>;
+  if (modelDone.error) return <p className="text-[11px] text-white/50">Model unavailable right now.</p>;
+  if (modelDone.thin) return <p className="text-[11px] text-white/50">Not enough form yet.</p>;
+  const leader = Math.max(modelDone.data.home, modelDone.data.draw, modelDone.data.away);
+  return (
+    <>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+        Model <span className="normal-case font-medium">estimate from {modelDone.data.sample} games each</span>
+      </p>
+      <div className="space-y-1.5">
+        {[
+          ['Home', modelDone.data.home],
+          ['Draw', modelDone.data.draw],
+          ['Away', modelDone.data.away],
+        ].map(([label, pct]) => (
+          <div key={label} className="flex items-center gap-2">
+            <span className="w-10 text-[11px] font-bold text-white/60">{label}</span>
+            <span className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
+              <span
+                className={`block h-full rounded-full ${pct === leader ? 'bg-[var(--cine-accent)]' : 'bg-white/30'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </span>
+            <span className="w-10 text-right text-[11px] font-black text-white tabular-nums">{pct}%</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-white/60">
+        Likely: {modelDone.data.scores.map((s) => `${s.h}-${s.a} (${s.pct}%)`).join(', ')}
+      </p>
+      <p className="text-[10px] text-white/35">Fun estimate, not betting advice.</p>
+    </>
+  );
 }
 
 const DAY_FILTERS = [
@@ -568,6 +850,10 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
   // Team/player pages (modal): one open at a time, keyed remounts reset
   // each view. Team carries its comp code for tables and matches.
   const [profile, setProfile] = useState(null);
+
+  // Match page (in-app view, like watching): the row's chevron opens it,
+  // back returns to the day. Watching wins while a stream plays.
+  const [matchPage, setMatchPage] = useState(null);
   const openModel = async (m) => {
     if (modelId === m.id) {
       setModelId(null);
@@ -590,9 +876,24 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
     }
   };
 
-  if (watching) {
-    const active = streams[streamIdx];
+  if (matchPage && !watching) {
+    const liveForPage = espnLive.find((e) => sideHit(e.home.name, matchPage.m.home.name) && sideHit(e.away.name, matchPage.m.away.name)) || null;
     return (
+      <MatchView
+        key={matchPage.m.id}
+        m={matchPage.m}
+        hit={matchPage.hit}
+        liveEv={liveForPage}
+        onBack={() => setMatchPage(null)}
+        onWatch={(s) => openMatch(s)}
+        onOpenTeam={(t) => setProfile({ kind: 'team', ...t })}
+        modelApi={{ modelId, model, openModel }}
+      />
+    );
+  }
+
+  if (watching) {
+    const active = streams[streamIdx];    return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <button
@@ -860,10 +1161,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                       {group.map(({ m, hit, liveEv }) => {
                         const modelOpen = modelId === m.id;
                         const modelDone = model?.id === m.id ? model : null;
-                        const sched = !m.finished && !m.delayed;
-                        const leader = modelDone?.data
-                          ? Math.max(modelDone.data.home, modelDone.data.draw, modelDone.data.away)
-                          : -1;
+                        const sched = !m.finished && !m.delayed && !liveEv;
                         return (
                           <div key={m.id}>
                             <div className="mat-row px-3 py-2.5 flex items-center gap-2">
@@ -925,44 +1223,17 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                               <Calculator className="w-3 h-3" /> Model
                             </button>
                           )}
+                          <button
+                            onClick={() => setMatchPage({ m, hit })}
+                            className="cine-icon-btn cine-icon-btn--xs flex-shrink-0"
+                            aria-label={`Open ${m.home.name} versus ${m.away.name} match page`}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
                             </div>
                             {modelOpen && (
                               <div className="mat-row px-4 py-3 space-y-2" aria-live="polite">
-                                {!modelDone ? (
-                                  <p className="text-[11px] text-white/50">Loading model…</p>
-                                ) : modelDone.error ? (
-                                  <p className="text-[11px] text-white/50">Model unavailable right now.</p>
-                                ) : modelDone.thin ? (
-                                  <p className="text-[11px] text-white/50">Not enough form yet.</p>
-                                ) : (
-                                  <>
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-                                      Model <span className="normal-case font-medium">estimate from {modelDone.data.sample} games each</span>
-                                    </p>
-                                    <div className="space-y-1.5">
-                                      {[
-                                        ['Home', modelDone.data.home],
-                                        ['Draw', modelDone.data.draw],
-                                        ['Away', modelDone.data.away],
-                                      ].map(([label, pct]) => (
-                                        <div key={label} className="flex items-center gap-2">
-                                          <span className="w-10 text-[11px] font-bold text-white/60">{label}</span>
-                                          <span className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
-                                            <span
-                                              className={`block h-full rounded-full ${pct === leader ? 'bg-[var(--cine-accent)]' : 'bg-white/30'}`}
-                                              style={{ width: `${pct}%` }}
-                                            />
-                                          </span>
-                                          <span className="w-10 text-right text-[11px] font-black text-white tabular-nums">{pct}%</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <p className="text-[11px] text-white/60">
-                                      Likely: {modelDone.data.scores.map((s) => `${s.h}-${s.a} (${s.pct}%)`).join(', ')}
-                                    </p>
-                                    <p className="text-[10px] text-white/35">Fun estimate, not betting advice.</p>
-                                  </>
-                                )}
+                                <ModelPanel modelDone={modelDone} />
                               </div>
                             )}
                           </div>

@@ -2,6 +2,8 @@
 // overlay — delete all three and nothing else notices). Our comp codes
 // to ESPN league slugs, verified live. Poll gently: 60s client cache,
 // 90s UI refresh, only while the tab is open.
+import { sideHit } from './football.js';
+
 export const ESPN_SLUGS = {
   CL: 'uefa.champions',
   PL: 'eng.1',
@@ -69,7 +71,8 @@ async function fetchSlug(slug) {
     .filter(Boolean);
 }
 
-export async function liveAcross(slugs) {  const now = Date.now();
+export async function liveAcross(slugs) {
+  const now = Date.now();
   const cache = readCache();
   const out = [];
   const missing = [];
@@ -104,9 +107,8 @@ export async function liveAcross(slugs) {  const now = Date.now();
 }
 
 // Match summary pipe (goals, cards, subs, squads, broadcasts, venue,
-// odds when the bookmakers offer them). Verified live shapes only —
-// every field is defensive, anything unrecognized drops out instead of
-// rendering wrong. 60s cache, one match page polls at 90s.
+// odds when the bookmakers offer them). Verified live shapes only,
+// every field defensive, anything unrecognized drops out.
 const SUM_KEY = 'mz_espn_summary';
 const SUM_TTL = 60 * 1000;
 const SUM_MAX = 40;
@@ -128,12 +130,13 @@ export function normKeyEvents(json) {
   for (const e of list) {
     const kind = String(e?.type?.type || '').toLowerCase();
     const isGoal = kind === 'goal';
-    const isCard = kind.includes('card');
+    const isYellow = kind.includes('yellow');
+    const isRed = kind.includes('red');
     const isSub = kind === 'substitution';
-    if (!isGoal && !isCard && !isSub) continue;
+    if (!isGoal && !isYellow && !isRed && !isSub) continue;
     out.push({
       minute: e?.clock?.displayValue || '',
-      kind: isGoal ? 'goal' : isCard ? 'card' : 'sub',
+      kind: isGoal ? 'goal' : isRed ? 'red' : isYellow ? 'yellow' : 'sub',
       text: e?.shortText || e?.text || '',
     });
   }
@@ -169,7 +172,7 @@ export function normVenue(json) {
 }
 
 // Bookmaker odds ride the summary when offered (hasOdds). Shown with
-// the provider name or not at all — never invented, never blended.
+// the provider name or not at all, never invented, never blended.
 export function normOdds(json) {
   if (!json?.hasOdds) return null;
   const d = (Array.isArray(json?.odds) ? json.odds : [])[0] || {};
@@ -213,4 +216,27 @@ export async function matchSummary(slug, eventId) {
     // cache is a nicety
   }
   return data;
+}
+
+// Resolve our fixture to their event id (scoreboard by day, two-side
+// name match). Null when the league or the fixture isn't covered —
+// the match page simply shows no events section.
+export async function matchEventId(slug, home, away, dayIso) {
+  if (!slug || !home || !away || !dayIso) return null;
+  const compact = String(dayIso).replace(/-/g, '');
+  const res = await fetch(`/api/espn?${new URLSearchParams({ path: `soccer/${slug}/scoreboard`, dates: compact })}`, {
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  const events = Array.isArray(data?.events) ? data.events : [];
+  for (const ev of events) {
+    const comp = (ev?.competitions || [])[0] || {};
+    const sides = comp.competitors || [];
+    const side = (want) => sides.find((s) => s?.homeAway === want) || {};
+    const hn = side('home')?.team?.displayName || side('home')?.team?.name || '';
+    const an = side('away')?.team?.displayName || side('away')?.team?.name || '';
+    if (sideHit(hn, home) && sideHit(an, away)) return String(ev?.id || '');
+  }
+  return null;
 }

@@ -101,3 +101,16 @@ describe('day view competition + stream matching', () => {
     assert.equal(findStreamFor([], 'A', 'B'), null);
   });
 });
+
+describe('kickoff countdown', () => {
+  it('counts down in days, hours and minutes, then goes quiet', async () => {
+    const { countdownTo } = await import('../src/services/football.js');
+    const now = Date.parse('2026-10-14T12:00:00Z');
+    assert.equal(countdownTo(Date.parse('2026-10-17T15:00:00Z'), now), 'Starts in 3d 3h');
+    assert.equal(countdownTo(Date.parse('2026-10-14T15:12:00Z'), now), 'Starts in 3h 12m');
+    assert.equal(countdownTo(Date.parse('2026-10-14T12:40:00Z'), now), 'Starts in 40m');
+    assert.equal(countdownTo(Date.parse('2026-10-14T12:00:30Z'), now), 'Starting now');
+    assert.equal(countdownTo(Date.parse('2026-10-14T11:00:00Z'), now), null);
+    assert.equal(countdownTo(0, now), null);
+  });
+});
