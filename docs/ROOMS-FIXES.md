@@ -466,6 +466,13 @@ badges (never live), crests with initial fallback, top scorers
 desktop + 390px zero-overflow; no Europa League on free (falls back
 to Streamed-only). Player ratings: none free-legit anywhere (Opta
 paid, SofaScore/FotMob proprietary) — top scorers instead.
+Player photos (landed, NO key needed): TheSportsDB v1 public key,
+verified live that free search works (docs claim Arsenal-only, false
+in practice). Server-side /tsdb proxy (allowlisted art endpoints),
+permanent client photo cache + in-flight dedupe, cutout-preferred
+picks, initial-chip fallback. Headless-proven on PL scorers (9/10 real
+faces). Next: Poisson predictor from finished-match data + Apple-dense
+pass, both keyless.
 Account menu round 2 (landed, needs live eyes + `avatars` bucket):avatar upload (2MB cap, upsert per user, URL in user_metadata) with
 keyboard-reachable picker, sync row with saved/history counts,
 full-width sign out, danger zone with hold-to-confirm delete-my-data

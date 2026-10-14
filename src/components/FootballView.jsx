@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { football, FOOTBALL_MIRRORS, formatKickoff, getPreferredStream, setPreferredStream } from '../services/football';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
+import { playerPhoto } from '../services/tsdb';
 import EmptyState from './ui/EmptyState';
 import SegmentedControl from './ui/SegmentedControl';
 
@@ -69,6 +70,32 @@ function Crest({ name, crest }) {
       className="w-6 h-6 object-contain flex-shrink-0"
     />
   );
+}
+
+// Scorer face: lazy photo with an initial chip until (and unless)
+// the art lands. One fetch per face ever — the service cache holds.
+function ScorerPhoto({ name }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    playerPhoto(name).then((u) => {
+      if (alive) setUrl(u || '');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [name]);
+  if (!url) {
+    return (
+      <span
+        className="w-10 h-10 rounded-full bg-white/10 text-white/70 text-sm font-black flex items-center justify-center flex-shrink-0"
+        aria-hidden="true"
+      >
+        {(name || '?').slice(0, 1).toUpperCase()}
+      </span>
+    );
+  }
+  return <img src={url} alt="" loading="lazy" className="w-10 h-10 rounded-full object-cover bg-white/5 flex-shrink-0" />;
 }
 
 function FormDots({ form }) {
@@ -541,6 +568,7 @@ export default function FootballView({ onToast }) {
                 {scorers.map((s, i) => (
                   <div key={`${s.name}_${s.team}`} className="mat-row px-4 py-2.5 flex items-center gap-3">
                     <span className="w-6 flex-shrink-0 text-xs font-black text-white/40 tabular-nums">{i + 1}</span>
+                    <ScorerPhoto key={s.name} name={s.name} />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-bold text-white truncate">{s.name}</span>
                       <span className="block text-[11px] text-white/50 truncate">{s.team}</span>
