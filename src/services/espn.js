@@ -15,6 +15,7 @@ export const ESPN_SLUGS = {
   PPL: 'por.1',
   ELC: 'eng.2',
   EL: 'uefa.europa',
+  CLI: 'conmebol.libertadores',
   BSA: 'bra.1',
   WC: 'fifa.world',
   EC: 'uefa.euro',

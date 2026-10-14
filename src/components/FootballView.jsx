@@ -52,6 +52,9 @@ function MatchCard({ match, onWatch }) {
 
 // Team crest with an initial-chip fallback (remote art dies silently;
 // a letter always renders — never a broken-image icon).
+// Team crest with a light tile (dark badges like Eredivisie vanish on
+// dark chrome — the tile keeps every logo readable) and an initial
+// fallback when remote art dies.
 function Crest({ name, crest, size = 'w-6 h-6' }) {
   const [dead, setDead] = useState(false);
   if (!crest || dead) {
@@ -70,7 +73,7 @@ function Crest({ name, crest, size = 'w-6 h-6' }) {
       alt=""
       loading="lazy"
       onError={() => setDead(true)}
-      className={`${size} object-contain flex-shrink-0`}
+      className={`${size} object-contain flex-shrink-0 rounded-full bg-white/[0.92] p-[3px]`}
     />
   );
 }
@@ -167,7 +170,7 @@ function DayPicker({ day, onChange }) {
             if (e.target.value) onChange(e.target.value);
           }}
           className="absolute inset-0 opacity-0 cursor-pointer"
-          style={{ colorScheme: 'dark' }}
+          style={{ colorScheme: 'dark', accentColor: 'var(--cine-accent)' }}
           aria-hidden="true"
           tabIndex={-1}
         />
@@ -347,7 +350,13 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
         </section>
       )}
 
-      {sum && sum.events.length > 0 && (
+      {sum === undefined ? (
+        <p className="text-xs text-white/60 py-6 text-center">Loading match info…</p>
+      ) : sum === null ? (
+        <p className="text-xs text-white/60 py-6 text-center">No extra info for this match.</p>
+      ) : (
+        <>
+          {sum.events.length > 0 && (
         <section className="space-y-2">
           <h3 className="cine-section-title">Events</h3>
           <div className="space-y-1.5">
@@ -424,6 +433,8 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
         <p className="text-[11px] text-white/45">
           {[sum.venue, (sum.broadcasts || []).join(' • ')].filter(Boolean).join(' • ')}
         </p>
+      )}
+        </>
       )}
     </div>
   );
@@ -1187,12 +1198,13 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                             <span className="font-bold text-white text-[15px] truncate text-right hover:underline">{m.home.name}</span>
                             <Crest name={m.home.name} crest={m.home.crest} size="w-7 h-7" />
                           </button>
-                          <span
-                            className="flex-shrink-0 w-16 text-center text-lg font-black text-white tabular-nums"
-                            aria-label={liveEv ? `Live score ${liveEv.home.score ?? 0} to ${liveEv.away.score ?? 0}` : m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
+                          <button
+                            onClick={() => setMatchPage({ m, hit })}
+                            className="flex-shrink-0 w-16 text-center text-lg font-black text-white tabular-nums cursor-pointer hover:text-[var(--cine-accent)] transition"
+                            aria-label={`Open ${m.home.name} versus ${m.away.name} match page`}
                           >
                             {liveEv ? `${liveEv.home.score ?? 0} - ${liveEv.away.score ?? 0}` : m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold text-sm">vs</span>}
-                          </span>
+                          </button>
                           <button
                             onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
                             className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
@@ -1223,13 +1235,6 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                               <Calculator className="w-3 h-3" /> Model
                             </button>
                           )}
-                          <button
-                            onClick={() => setMatchPage({ m, hit })}
-                            className="cine-icon-btn cine-icon-btn--xs flex-shrink-0"
-                            aria-label={`Open ${m.home.name} versus ${m.away.name} match page`}
-                          >
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
                             </div>
                             {modelOpen && (
                               <div className="mat-row px-4 py-3 space-y-2" aria-live="polite">
