@@ -514,8 +514,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
             className="cine-icon-btn cine-icon-btn--sm"
             title="Back to matches"
             aria-label="Back to matches"
-          >
-            <ArrowLeft className="w-4 h-4" />
+          >            <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-white truncate">{watching.title}</h2>
@@ -536,12 +535,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
               src={active.url}
               title={watching.title}
               className="w-full h-full border-0"
-              // NOTE: no sandbox attribute — verified headless that these
-              // stream providers render a "remove sandbox" detector page
-              // instead of video when sandboxed (same verdict as the main
-              // Player reached for Vidy/VidLink). Popup pressure is inherent
-              // to free restreams; it is ridden out, not blocked, exactly
-              // like the Player does.
+              sandbox="allow-scripts allow-same-origin allow-presentation"
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               allowFullScreen
             />
