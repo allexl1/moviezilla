@@ -496,7 +496,13 @@ team crest 64px with stat chips, player photo 96px with meta chips).
 Player page fix from the Torres catch: club line reads OUR fresh team
 first (stale third-party club ignored), plus club crest and country
 flag art (curated ISO map, unmapped nations show nothing). Proven on
-Raphinha (Barca crest, Brazil flag). Probe lesson: quota is 10/min shared with my own curls, pace
+Raphinha (Barca crest, Brazil flag).
+Stream fixes (headless-proven): football watch iframe drops sandbox
+(providers rendered a remove-sandbox detector wall instead of video —
+same verdict the main Player reached; popups ridden out, not blocked)
+and the Live now section finally sets its live flag (cards showed
+kickoff times under a LIVE header since day one). Delay core still
+needs a live window: feed URL shapes can only be inspected mid-match. Probe lesson: quota is 10/min shared with my own curls, pace
 runs 60s+ apart or read 429s that aren't real failures.
 Upstream lesson: same-day date windows return empty (end exclusive),
 fetch day..day+1 and filter. Headless-proven desktop + 390px

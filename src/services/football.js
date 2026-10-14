@@ -55,7 +55,8 @@ export const football = {
     const now = Date.now();
     const live = list
       .filter((m) => m.kickoffMs && m.kickoffMs <= now && now - m.kickoffMs <= LIVE_WINDOW_MS)
-      .sort((a, b) => a.kickoffMs - b.kickoffMs);
+      .sort((a, b) => a.kickoffMs - b.kickoffMs)
+      .map((m) => ({ ...m, live: true }));
     const seen = new Set(live.map((m) => m.id));
     const upcoming = list
       .filter((m) => !seen.has(m.id) && (!m.kickoffMs || m.kickoffMs > now - 30 * 60 * 1000))

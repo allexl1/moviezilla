@@ -536,7 +536,12 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
               src={active.url}
               title={watching.title}
               className="w-full h-full border-0"
-              sandbox="allow-scripts allow-same-origin allow-presentation"
+              // NOTE: no sandbox attribute — verified headless that these
+              // stream providers render a "remove sandbox" detector page
+              // instead of video when sandboxed (same verdict as the main
+              // Player reached for Vidy/VidLink). Popup pressure is inherent
+              // to free restreams; it is ridden out, not blocked, exactly
+              // like the Player does.
               allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
               allowFullScreen
             />
