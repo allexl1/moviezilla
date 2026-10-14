@@ -67,6 +67,31 @@ export function playerPhoto(name) {  const clean = String(name || '').trim();
   return job;
 }
 
+// Nationality → ISO for flag art (free flagcdn). Curated standard
+// ISO-3166 codes only — unmapped nations render no flag, never a
+// guessed one.
+const NATION_ISO = {
+  albania: 'al', algeria: 'dz', argentina: 'ar', australia: 'au', austria: 'at',
+  belgium: 'be', brazil: 'br', bulgaria: 'bg', cameroon: 'cm', canada: 'ca',
+  chile: 'cl', colombia: 'co', croatia: 'hr', czechia: 'cz', 'czech republic': 'cz',
+  denmark: 'dk', ecuador: 'ec', egypt: 'eg', england: 'gb-eng', finland: 'fi',
+  france: 'fr', germany: 'de', ghana: 'gh', greece: 'gr', hungary: 'hu',
+  iceland: 'is', iran: 'ir', ireland: 'ie', italy: 'it', 'ivory coast': 'ci',
+  japan: 'jp', mexico: 'mx', morocco: 'ma', netherlands: 'nl', nigeria: 'ng',
+  'northern ireland': 'gb-nir', norway: 'no', paraguay: 'py', peru: 'pe',
+  poland: 'pl', portugal: 'pt', qatar: 'qa', romania: 'ro', 'saudi arabia': 'sa',
+  scotland: 'gb-sct', senegal: 'sn', serbia: 'rs', slovakia: 'sk',
+  slovenia: 'si', 'south africa': 'za', 'south korea': 'kr', spain: 'es',
+  sweden: 'se', switzerland: 'ch', tunisia: 'tn', turkey: 'tr', ukraine: 'ua',
+  uruguay: 'uy', usa: 'us', 'united states': 'us', venezuela: 've',
+  wales: 'gb-wls',
+};
+
+export function flagUrlFor(nationality) {
+  const iso = NATION_ISO[String(nationality || '').trim().toLowerCase()];
+  return iso ? `https://flagcdn.com/w40/${iso}.png` : '';
+}
+
 // Player card from a name search (verified payload shapes only: photo,
 // club, position, birth date, nationality). Squads and lookups are
 // stale soup on free — search hits are fresh enough to show. Permanent

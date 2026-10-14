@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickPhoto, pickPlayerCard } from '../src/services/tsdb.js';
+import { pickPhoto, pickPlayerCard, flagUrlFor } from '../src/services/tsdb.js';
 describe('sports art picks', () => {
   it('prefers transparent cutouts over thumbs', () => {
     assert.equal(pickPhoto({ player: [{ strThumb: 't.jpg' }, { strCutout: 'c.png', strThumb: 't2.jpg' }] }), 'c.png');
@@ -27,5 +27,14 @@ describe('player card picks', () => {
     });
     assert.equal(pickPlayerCard({}), null);
     assert.equal(pickPlayerCard({ player: [{}] }), null);
+  });
+});
+
+describe('flag urls', () => {
+  it('maps verified nations, blanks the rest', () => {
+    assert.equal(flagUrlFor('Spain'), 'https://flagcdn.com/w40/es.png');
+    assert.equal(flagUrlFor('England'), 'https://flagcdn.com/w40/gb-eng.png');
+    assert.equal(flagUrlFor('Atlantis'), '');
+    assert.equal(flagUrlFor(''), '');
   });
 });

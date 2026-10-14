@@ -3,7 +3,7 @@ import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, Chevron
 import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor } from '../services/football';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
-import { playerPhoto, playerCard } from '../services/tsdb';
+import { playerPhoto, playerCard, flagUrlFor } from '../services/tsdb';
 import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
 import SegmentedControl from './ui/SegmentedControl';
@@ -51,12 +51,12 @@ function MatchCard({ match, onWatch }) {
 
 // Team crest with an initial-chip fallback (remote art dies silently;
 // a letter always renders — never a broken-image icon).
-function Crest({ name, crest }) {
+function Crest({ name, crest, size = 'w-6 h-6' }) {
   const [dead, setDead] = useState(false);
   if (!crest || dead) {
     return (
       <span
-        className="w-6 h-6 rounded-full bg-white/10 text-white/70 text-[10px] font-black flex items-center justify-center flex-shrink-0"
+        className={`${size} rounded-full bg-white/10 text-white/70 text-[10px] font-black flex items-center justify-center flex-shrink-0`}
         aria-hidden="true"
       >
         {(name || '?').slice(0, 1).toUpperCase()}
@@ -69,7 +69,7 @@ function Crest({ name, crest }) {
       alt=""
       loading="lazy"
       onError={() => setDead(true)}
-      className="w-6 h-6 object-contain flex-shrink-0"
+      className={`${size} object-contain flex-shrink-0`}
     />
   );
 }
@@ -185,20 +185,22 @@ function TeamView({ team, code, onOpenPlayer }) {
   }, [team.id, team.name, code]);
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         {team.crest ? (
-          <img src={team.crest} alt="" className="w-12 h-12 object-contain flex-shrink-0" />
+          <img src={team.crest} alt="" className="w-16 h-16 object-contain flex-shrink-0" />
         ) : (
-          <span className="w-12 h-12 rounded-full bg-white/10 text-white/70 text-lg font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+          <span className="w-16 h-16 rounded-full bg-white/10 text-white/70 text-2xl font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
             {(team.name || '?').slice(0, 1).toUpperCase()}
           </span>
         )}
         <div className="min-w-0">
-          <h3 className="text-lg font-extrabold text-white tracking-tight truncate">{team.name}</h3>
+          <h3 className="text-2xl font-extrabold text-white tracking-tight truncate">{team.name}</h3>
           {data?.row && (
-            <p className="text-[11px] text-white/55">
-              {data.row.pos}. • {data.row.points} pts • {data.row.won}W {data.row.draw}D {data.row.lost}L
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className="cine-chip cine-chip--neutral">Pos {data.row.pos}</span>
+              <span className="cine-chip cine-chip--neutral">{data.row.points} pts</span>
+              <span className="cine-chip cine-chip--neutral">{data.row.won}W {data.row.draw}D {data.row.lost}L</span>
+            </div>
           )}
         </div>
       </div>
@@ -214,7 +216,7 @@ function TeamView({ team, code, onOpenPlayer }) {
               {data.scorers.map((s) => (
                 <button
                   key={s.name}
-                  onClick={() => onOpenPlayer({ name: s.name, team: s.team, goals: s.goals })}
+                  onClick={() => onOpenPlayer({ name: s.name, team: s.team, goals: s.goals, crest: team.crest })}
                   className="mat-row w-full px-3 py-2 flex items-center gap-3 text-left cursor-pointer"
                   aria-label={`Open ${s.name}`}
                 >
@@ -260,7 +262,7 @@ function TeamView({ team, code, onOpenPlayer }) {
 // Player page: the verified search card (photo, club, position, birth,
 // nationality) plus season goals from our scorers when the caller knows
 // them. No squad lookups — free squad data is stale.
-function PlayerView({ name, team, goals }) {
+function PlayerView({ name, team, goals, crest }) {
   const [card, setCard] = useState(undefined);
   const [age, setAge] = useState(null);
   useEffect(() => {
@@ -278,17 +280,22 @@ function PlayerView({ name, team, goals }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         {card?.photo ? (
-          <img src={card.photo} alt="" className="w-20 h-20 rounded-full object-cover bg-white/5 flex-shrink-0" />
+          <img src={card.photo} alt="" className="w-24 h-24 rounded-full object-cover bg-white/5 flex-shrink-0" />
         ) : (
-          <span className="w-20 h-20 rounded-full bg-white/10 text-white/70 text-2xl font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+          <span className="w-24 h-24 rounded-full bg-white/10 text-white/70 text-3xl font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
             {(card?.name || name || '?').slice(0, 1).toUpperCase()}
           </span>
         )}
         <div className="min-w-0">
-          <h3 className="text-lg font-extrabold text-white tracking-tight truncate">{card?.name || name}</h3>
-          <p className="text-[11px] text-white/55 truncate">
-            {[card?.position || team, card && goals != null ? `${goals} goals this season` : null].filter(Boolean).join(' • ')}
-          </p>
+          <h3 className="text-2xl font-extrabold text-white tracking-tight truncate">{card?.name || name}</h3>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            {(card?.position || team) && (
+              <span className="cine-chip cine-chip--neutral">{card?.position || team}</span>
+            )}
+            {card && goals != null && (
+              <span className="cine-chip cine-chip--accent">{goals} goals</span>
+            )}
+          </div>
         </div>
       </div>
       {card === undefined ? (
@@ -297,11 +304,21 @@ function PlayerView({ name, team, goals }) {
         <p className="text-xs text-white/60 py-4 text-center">No profile found for this player.</p>
       ) : (
         <div className="mat-row p-3 space-y-1.5 text-xs">
-          {card.team && (
-            <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Club </span>{card.team}</p>
+          {(team || card?.team) && (
+            <p className="text-white/75 flex items-center gap-2">
+              <span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Club</span>
+              {crest && <img src={crest} alt="" className="w-5 h-5 object-contain" />}
+              {team || card?.team}
+            </p>
           )}
-          {card.nationality && (
-            <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Country </span>{card.nationality}</p>
+          {card?.nationality && (
+            <p className="text-white/75 flex items-center gap-2">
+              <span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Country</span>
+              {flagUrlFor(card.nationality) && (
+                <img src={flagUrlFor(card.nationality)} alt="" loading="lazy" className="w-5 h-auto rounded-[3px]" />
+              )}
+              {card.nationality}
+            </p>
           )}
           {age != null && Number.isFinite(age) && (
             <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Age </span>{age}</p>
@@ -749,9 +766,9 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                   if (group.length === 0) return null;
                   return (
                     <div key={c.code} className="space-y-2">
-                      <div className="flex items-center gap-2 pt-2">
-                        <Crest name={c.name} crest={group[0].m.competition.emblem} />
-                        <h3 className="text-sm font-bold text-white">{group[0].m.competition.name || c.name}</h3>
+                      <div className="flex items-center gap-2.5 pt-3">
+                        <Crest name={c.name} crest={group[0].m.competition.emblem} size="w-8 h-8" />
+                        <h3 className="text-base font-extrabold text-white tracking-tight">{group[0].m.competition.name || c.name}</h3>
                         <span className="flex-1" />
                         <button
                           onClick={() => {
@@ -788,22 +805,22 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                             className="flex-1 min-w-0 flex items-center justify-end gap-2 cursor-pointer"
                             aria-label={`Open ${m.home.name}`}
                           >
-                            <span className="font-semibold text-white text-sm truncate text-right hover:underline">{m.home.name}</span>
-                            <Crest name={m.home.name} crest={m.home.crest} />
+                            <span className="font-bold text-white text-[15px] truncate text-right hover:underline">{m.home.name}</span>
+                            <Crest name={m.home.name} crest={m.home.crest} size="w-7 h-7" />
                           </button>
                           <span
-                            className="flex-shrink-0 w-14 text-center text-sm font-black text-white tabular-nums"
+                            className="flex-shrink-0 w-16 text-center text-lg font-black text-white tabular-nums"
                             aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
                           >
-                            {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold">vs</span>}
+                            {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold text-sm">vs</span>}
                           </span>
                           <button
                             onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
                             className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
                             aria-label={`Open ${m.away.name}`}
                           >
-                            <Crest name={m.away.name} crest={m.away.crest} />
-                            <span className="font-semibold text-white text-sm truncate hover:underline">{m.away.name}</span>
+                            <Crest name={m.away.name} crest={m.away.crest} size="w-7 h-7" />
+                            <span className="font-bold text-white text-[15px] truncate hover:underline">{m.away.name}</span>
                           </button>
                           <span className="hidden xl:block w-28 flex-shrink-0 text-right text-[11px] text-white/40 truncate">
                             {roundLabel(m)}
@@ -1035,10 +1052,12 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                 <h2 className="cine-section-title">Top scorers</h2>
               </div>
               <div className="space-y-2">
-                {scorers.map((s, i) => (
+                {scorers.map((s, i) => {
+                  const sRow = (loaded.table?.total || []).find((r) => r.team.name === s.team);
+                  return (
                   <button
                     key={`${s.name}_${s.team}`}
-                    onClick={() => setProfile({ kind: 'player', name: s.name, team: s.team, goals: s.goals })}
+                    onClick={() => setProfile({ kind: 'player', name: s.name, team: s.team, goals: s.goals, crest: sRow?.team?.crest || '' })}
                     className="mat-row w-full px-4 py-2.5 flex items-center gap-3 text-left cursor-pointer"
                     aria-label={`Open ${s.name}`}
                   >
@@ -1050,7 +1069,8 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                     </span>
                     <span className="text-sm font-black text-white tabular-nums">{s.goals}</span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
@@ -1076,6 +1096,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
               name={profile.name}
               team={profile.team}
               goals={profile.goals}
+              crest={profile.crest}
             />
           )}
         </Modal>

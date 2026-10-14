@@ -490,7 +490,13 @@ results + next 5 from one cached team call. Player = verified search
 card (photo, club, position, country, age) + season goals. No squads:
 free squad data is stale soup (wrong clubs), lookup-by-id flaked —
 showing either as fact would lie. Headless-proven (City page, Haaland
-page). Probe lesson: quota is 10/min shared with my own curls, pace
+page). Density pass (landed): match rows and heroes scaled up (score
+20px black, names 15px bold, crests up, group heads with emblems,
+team crest 64px with stat chips, player photo 96px with meta chips).
+Player page fix from the Torres catch: club line reads OUR fresh team
+first (stale third-party club ignored), plus club crest and country
+flag art (curated ISO map, unmapped nations show nothing). Proven on
+Raphinha (Barca crest, Brazil flag). Probe lesson: quota is 10/min shared with my own curls, pace
 runs 60s+ apart or read 429s that aren't real failures.
 Upstream lesson: same-day date windows return empty (end exclusive),
 fetch day..day+1 and filter. Headless-proven desktop + 390px
