@@ -441,6 +441,12 @@ Accounts code half (landed, needs owner dashboard half): sendCode drops
 emailRedirectTo (localhost baked into the magic link), both AccountModal
 hints are code-first (headless-proven copy, screenshot). Owner half:
 Supabase dashboard Auth URL Configuration, Site URL to the live domain.
+Brevo dropped (account verification blocked) — free tier means magic
+link only, so the app handles link returns: Google OAuth as primary
+(owner: Cloud Console client id/secret + enable Google in Supabase),
+code boxes out, link-sent state in, return exchange + toasts in App,
+localhost keeps its redirect override. Headless-proven modal; the live
+tap (Google consent + link exchange + merge) is owner QA.
 Football keyless part (landed): last-working source per match persists
 (tap = works, reopen starts there, dead prefs fall back to 0;
 headless-proven write + single entry). Stops here for keys:

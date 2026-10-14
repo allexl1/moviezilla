@@ -3,6 +3,7 @@ import { tmdb } from './services/tmdb';
 import { storage, formatClock } from './services/storage';
 import { resolveMediaType, defaultSortFor } from './services/catalog';
 import { parseLocation, parseLocationSafe, buildLocation } from './services/routing';
+import { ensureAuth, takeAuthRedirectResult } from './services/account';
 import Navbar from './components/Navbar';
 import SearchModal from './components/SearchModal';
 import SettingsModal from './components/SettingsModal';
@@ -479,6 +480,17 @@ export default function App() {
   };
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
+
+  // Auth return landing (magic link / Google): the engine already
+  // exchanged + merged via ensureAuth — announce the outcome once.
+  useEffect(() => {
+    ensureAuth().then(() => {
+      const r = takeAuthRedirectResult();
+      if (r === 'signed-in') showToast('Signed in. Library syncing.');
+      else if (r === 'expired') showToast('That sign-in link expired. Send a new one.');
+      else if (r === 'error') showToast('Sign-in failed. Retry.');
+    }).catch(() => {});
   }, []);
 
   const handleSaveLetterboxd = (user) => {

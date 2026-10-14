@@ -43,6 +43,14 @@ async function initAuth() {
     emit();
     return;
   }
+  // Return landing first (magic link / Google): exchange the URL payload
+  // for a session before the initial getSession read, so the first read
+  // already sees the signed-in user and merge runs once, not twice.
+  try {
+    lastRedirectResult = await handleAuthRedirect();
+  } catch {
+    lastRedirectResult = 'error';
+  }
   try {
     const { data } = await sb.auth.getSession();
     currentUser = data?.session?.user || null;
@@ -80,6 +88,15 @@ let initPromise = null;
 export function ensureAuth() {
   if (!initPromise) initPromise = initAuth();
   return initPromise;
+}
+
+// One-shot outcome of the return landing for the App toast (initAuth
+// owns the exchange; UI just announces). Read-and-clear.
+let lastRedirectResult = null;
+export function takeAuthRedirectResult() {
+  const r = lastRedirectResult;
+  lastRedirectResult = null;
+  return r || 'none';
 }
 
 export function useAccount() {
@@ -140,20 +157,25 @@ export async function sendCode(email) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) throw new Error('Enter a valid email address.');
   const sb = getSupabase();
   if (!sb) throw new Error('Sync service is not configured.');
-  // Code-first flow: no emailRedirectTo (it baked localhost into the
-  // magic link in dev and our copy pushed the link as primary). The OTP
-  // code path never needed it; the link stays as Supabase default backup.
+  // Code-first flow: no emailRedirectTo in prod (it baked localhost
+  // into the magic link in dev and our copy pushed the link as primary).
+  // Localhost keeps its override so dev logins land back in dev — prod
+  // links always follow the dashboard Site URL.
+  const redirectOpt =
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? { emailRedirectTo: window.location.origin }
+      : {};
   const { error } = await sb.auth.signInWithOtp({
     email: clean,
     options: {
       shouldCreateUser: true,
+      ...redirectOpt,
     },
   });
   if (error) throw new Error(friendlyAuthError(error, 'Could not send the code.'));
 }
 
-export async function verifyCode(email, code) {
-  const clean = String(email || '').trim().toLowerCase();
+export async function verifyCode(email, code) {  const clean = String(email || '').trim().toLowerCase();
   const token = String(code || '').trim();
   if (token.length < 6) throw new Error('Enter the 6-digit code from the email.');
   const sb = getSupabase();
@@ -161,6 +183,57 @@ export async function verifyCode(email, code) {
   const { error } = await sb.auth.verifyOtp({ email: clean, token, type: 'email' });
   if (error) throw new Error(friendlyAuthError(error, 'Could not verify the code.'));
   // SIGNED_IN event drives merge + subscribers.
+}
+
+// Google sign-in (owner enables the provider in the dashboard with
+// their Cloud Console client id/secret — free tier, no SMTP, no
+// templates). Same redirect landing as magic links (handled below),
+// so one return path serves both.
+export async function signInWithGoogle() {
+  const sb = getSupabase();
+  if (!sb) throw new Error('Sync service is not configured.');
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  });
+  if (error) throw new Error(friendlyAuthError(error, 'Could not start Google sign-in.'));
+}
+
+// Auth return landing (magic link taps + Google OAuth): Supabase drops
+// us back on the site root with ?code= (PKCE) or token_hash + type.
+// Exchange it for a session, scrub the URL, report the outcome — the
+// SIGNED_IN listener above owns merge + UI from here. Call once on app
+// start; 'none' when the URL carries no auth payload.
+export async function handleAuthRedirect() {
+  let params;
+  try {
+    params = new URLSearchParams(window.location.search);
+  } catch {
+    return 'none';
+  }
+  const code = params.get('code');
+  const tokenHash = params.get('token_hash');
+  const type = params.get('type') || 'email';
+  if (!code && !tokenHash) return 'none';
+  const sb = getSupabase();
+  if (!sb) return 'none';
+  try {
+    const { error } = code
+      ? await sb.auth.exchangeCodeForSession(code)
+      : await sb.auth.verifyOtp({ token_hash: tokenHash, type });
+    try {
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch {
+      // cosmetic only
+    }
+    if (error) {
+      const msg = String(error.message || '');
+      return /expir|invalid/i.test(msg) ? 'expired' : 'error';
+    }
+    return 'signed-in';
+  } catch {
+    return 'error';
+  }
 }
 
 export async function signOut() {

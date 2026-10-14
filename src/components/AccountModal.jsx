@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { X, LogOut, RefreshCw, Lock } from 'lucide-react';
 import {
   useAccount,
   sendCode,
-  verifyCode,
+  signInWithGoogle,
   signOut,
   saveDisplayName,
   syncNow,
@@ -13,58 +13,16 @@ import Modal from './ui/Modal';
 import Input from './ui/Input';
 import SegmentedControl from './ui/SegmentedControl';
 
-// Segmented 6-digit code boxes (auth-convention pattern): one box per
-// digit, numeric keyboard, SMS/email autofill on the first box, paste
-// fills all, backspace walks back. Never type="number" (spinners, "e").
-function OtpBoxes({ code, onCode, disabled }) {
-  const refs = useRef([]);
-  const chars = (code + '      ').slice(0, 6).split('');
-  const focus = (i) => {
-    try {
-      const el = refs.current[Math.max(0, Math.min(5, i))];
-      el?.focus();
-      el?.select();
-    } catch {
-      // ignore
-    }
-  };
+// Google "G" (inline SVG, brand asset by necessity — no lucide glyph
+// exists for it; keep it multicolor per Google's brand rules).
+function GoogleMark() {
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2" role="group" aria-label="6-digit sign-in code">
-      {chars.map((ch, i) => (
-        <input
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          value={ch === ' ' ? '' : ch}
-          disabled={disabled}
-          inputMode="numeric"
-          autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          maxLength={1}
-          aria-label={`Digit ${i + 1} of 6`}
-          onChange={(e) => {
-            const hit = (e.target.value.match(/[0-9]/g) || []).pop() || ' ';
-            const next = [...chars];
-            next[i] = hit;
-            onCode(next.join(''));
-            if (hit !== ' ' && i < 5) setTimeout(() => focus(i + 1), 0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Backspace' && chars[i] === ' ') focus(i - 1);
-          }}
-          onPaste={(e) => {
-            e.preventDefault();
-            const t = ((e.clipboardData?.getData('text') || '').match(/[0-9]/g) || []).join('').slice(0, 6);
-            if (t) {
-              onCode((t + '      ').slice(0, 6));
-              focus(Math.min(t.length, 5));
-            }
-          }}
-          onFocus={(e) => e.target.select()}
-          className="w-10 h-12 sm:w-11 sm:h-[52px] text-center text-lg font-black text-white rounded-xl bg-white/[0.06] border border-white/15 focus:border-white/60 focus:outline-none transition disabled:opacity-50"
-        />
-      ))}
-    </div>
+    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.3h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.7z" />
+      <path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.2 0-5.9-2.1-6.8-5l-.1.1-3.7 2.9v.1C3.3 21.5 7.3 24 12 24z" />
+      <path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.6-2.8-.1.1C.5 8.6 0 10.2 0 12s.5 3.4 1.4 4.9l3.8-2.5z" />
+      <path fill="#EA4335" d="M12 4.6c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.3 0 3.3 2.5 1.4 6.1l3.8 2.9c.9-2.8 3.6-4.4 6.8-4.4z" />
+    </svg>
   );
 }
 
@@ -130,7 +88,6 @@ function AccountBody() {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [step, setStep] = useState('email');
-  const [code, setCode] = useState('      ');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
@@ -162,42 +119,28 @@ function AccountBody() {
     setError('');
     try {
       await sendCode(email);
-      setStep('code');
-      setCode('      ');
+      setStep('sent');
       setCooldown(30);
     } catch (err) {
-      setError(err.message || 'Could not send the code.');
+      setError(err.message || 'Could not send the link.');
     } finally {
       setBusy(false);
     }
   };
 
-  const verify = async () => {
-    const token = code.replace(/\s/g, '');
-    if (token.length !== 6 || busy) return;
+  const google = async () => {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
-      await verifyCode(email, token);
-      // SIGNED_IN flips the section to the signed-in view via useAccount.
+      await signInWithGoogle();
+      // Full-page redirect to Google from here; SIGNED_IN + merge
+      // happen on the return landing (handleAuthRedirect on app start).
     } catch (err) {
-      setError(err.message || 'Could not verify the code.');
-    } finally {
+      setError(err.message || 'Could not start Google sign-in.');
       setBusy(false);
     }
   };
-
-  // Gentle auto-submit shortly after the 6th digit (explicit Verify stays
-  // for reviewers — instant submit hides typos).
-  useEffect(() => {
-    if (step !== 'code' || busy) return;
-    if (code.replace(/\s/g, '').length !== 6) return;
-    const t = setTimeout(() => {
-      verify();
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, step, busy]);
 
   if (!ready) return null;
 
@@ -236,6 +179,18 @@ function AccountBody() {
 
         {step === 'email' ? (
           <div className="space-y-3">
+            <button
+              onClick={google}
+              disabled={busy}
+              className="cine-btn cine-btn-white h-12 px-6 text-[15px] w-full disabled:opacity-50 inline-flex items-center justify-center gap-2.5"
+            >
+              <GoogleMark /> Continue with Google
+            </button>
+            <div className="flex items-center gap-3 text-[11px] text-white/35" aria-hidden="true">
+              <span className="flex-1 h-px bg-white/10" />
+              <span>or email link</span>
+              <span className="flex-1 h-px bg-white/10" />
+            </div>
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -250,36 +205,26 @@ function AccountBody() {
             <button
               onClick={() => send(false)}
               disabled={busy}
-              className="cine-btn cine-btn-white h-12 px-6 text-[15px] w-full disabled:opacity-50"
+              className="cine-control-btn h-12 px-6 text-[15px] w-full disabled:opacity-50"
             >
               {busy ? 'Sending…' : signup ? 'Create account' : 'Log in'}
             </button>
             <p className="flex items-center justify-center gap-1.5 text-[11px] text-white/40">
-              <Lock className="w-3 h-3" /> No password. We email you a 6-digit code.
+              <Lock className="w-3 h-3" /> No password. We email you a sign-in link.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-center text-[13px] text-white/60">
-              Enter the 6-digit code we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span>
+              Tap the link we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span> to finish signing in on this device.
             </p>
-            <div className="flex justify-center">
-              <OtpBoxes code={code} onCode={setCode} disabled={busy} />
-            </div>
-            <button
-              onClick={verify}
-              disabled={busy}
-              className="cine-btn cine-btn-white h-12 px-6 text-[15px] w-full disabled:opacity-50"
-            >
-              {busy ? 'Verifying…' : signup ? 'Create account' : 'Log in'}
-            </button>
             <div className="flex items-center justify-center gap-3">
               <button
                 onClick={() => send(true)}
                 disabled={busy || cooldown > 0}
                 className="text-[12px] font-semibold text-white/60 hover:text-white transition cursor-pointer disabled:opacity-40"
               >
-                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend link'}
               </button>
               <span className="w-1 h-1 rounded-full bg-white/20" aria-hidden="true" />
               <button
