@@ -8,6 +8,7 @@ import rtHandler from './api/rt.js'
 import footballHandler from './api/football.js'
 import fdataHandler from './api/fdata.js'
 import tsdbHandler from './api/tsdb.js'
+import espnHandler from './api/espn.js'
 import gifHandler from './api/gif.js'
 
 // Serves the Vercel-style api/ handlers under `npm run dev` so the app
@@ -37,6 +38,7 @@ function devApi() {
         else if (pathname === '/football') handler = footballHandler
         else if (pathname === '/fdata') handler = fdataHandler
         else if (pathname === '/tsdb') handler = tsdbHandler
+        else if (pathname === '/espn') handler = espnHandler
         else if (pathname === '/gif') handler = gifHandler
         else if (pathname.startsWith('/letterboxd/')) {
           handler = letterboxdHandler

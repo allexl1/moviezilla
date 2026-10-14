@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
-import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor } from '../services/football';
+import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
+import { liveAcross, ESPN_SLUGS } from '../services/espn';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
 import { playerPhoto, playerCard, flagUrlFor } from '../services/tsdb';
@@ -357,6 +358,30 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
   const [railComp, setRailComp] = useState('all');
   const [dayLoaded, setDayLoaded] = useState({ key: null, rows: [], error: '' });
   const dayUpdating = dayLoaded.key !== day;
+
+  // ESPN live overlay (unofficial pipe, isolated): in-play minutes and
+  // scores land on day rows by two-side name match. Polls at 90s while
+  // the watch tab is open; the service batches 3 leagues per pass and
+  // caches a minute. A dead pipe empties the overlay, never the board.
+  const [espnLive, setEspnLive] = useState([]);
+  useEffect(() => {
+    if (comp !== 'watch') return;
+    let alive = true;
+    const load = () => {
+      const codes = [...new Set(dayLoaded.rows.map((r) => r.competition.code))];
+      const slugs = codes.map((c) => ESPN_SLUGS[c]).filter(Boolean);
+      if (slugs.length === 0) return Promise.resolve();
+      return liveAcross(slugs).then((events) => {
+        if (alive) setEspnLive(events);
+      }).catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 90000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [comp, day, dayLoaded.rows]);
   useEffect(() => {
     if (dayLoaded.key === day) return;
     let alive = true;
@@ -596,10 +621,21 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
   // confident matcher only — no match, no button. Unmatched streams
   // keep their cards below, so no coverage is ever lost.
   const streamPool = [...live, ...upcoming];
-  const dayRows = dayLoaded.rows.map((m) => ({ m, hit: findStreamFor(streamPool, m.home.name, m.away.name) }));
+  const findLive = (home, away) => espnLive.find((e) => sideHit(e.home.name, home) && sideHit(e.away.name, away)) || null;
+  const dayRows = dayLoaded.rows.map((m) => ({
+    m,
+    hit: findStreamFor(streamPool, m.home.name, m.away.name),
+    liveEv: findLive(m.home.name, m.away.name),
+  }));
   const hitTitles = new Set(dayRows.filter((r) => r.hit).map((r) => r.hit.title));
   const extraStreams = upcoming.filter((u) => !hitTitles.has(u.title));
-  const dayComps = FCOMPS.filter((c) => dayRows.some((r) => r.m.competition.code === c.code));
+  const dayComps = [];
+  for (const r of dayRows) {
+    const c = r.m.competition;
+    if (c.code && !dayComps.some((x) => x.code === c.code)) {
+      dayComps.push({ code: c.code, name: c.name || c.code, emblem: c.emblem || '' });
+    }
+  }
   const railComps = railComp === 'all' ? dayComps : dayComps.filter((c) => c.code === railComp);
   const visibleRows = (code) => dayRows.filter((r) => {
     if (r.m.competition.code !== code) return false;
@@ -769,18 +805,20 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                         <Crest name={c.name} crest={group[0].m.competition.emblem} size="w-8 h-8" />
                         <h3 className="text-base font-extrabold text-white tracking-tight">{group[0].m.competition.name || c.name}</h3>
                         <span className="flex-1" />
-                        <button
-                          onClick={() => {
-                            setComp(c.code);
-                            window.scrollTo(0, 0);
-                          }}
-                          className="text-[11px] font-bold text-white/50 hover:text-white transition cursor-pointer flex-shrink-0"
-                          aria-label={`Open ${c.name} table`}
-                        >
-                          Table
-                        </button>
+                        {FCOMPS.some((f) => f.code === c.code) && (
+                          <button
+                            onClick={() => {
+                              setComp(c.code);
+                              window.scrollTo(0, 0);
+                            }}
+                            className="text-[11px] font-bold text-white/50 hover:text-white transition cursor-pointer flex-shrink-0"
+                            aria-label={`Open ${c.name} table`}
+                          >
+                            Table
+                          </button>
+                        )}
                       </div>
-                      {group.map(({ m, hit }) => {
+                      {group.map(({ m, hit, liveEv }) => {
                         const modelOpen = modelId === m.id;
                         const modelDone = model?.id === m.id ? model : null;
                         const sched = !m.finished && !m.delayed;
@@ -791,7 +829,12 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                           <div key={m.id}>
                             <div className="mat-row px-3 py-2.5 flex items-center gap-2">
                           <span className="w-14 flex-shrink-0 text-[11px] font-bold">
-                            {m.finished ? (
+                            {liveEv ? (
+                              <span className="inline-flex items-center gap-1 text-red-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                                {liveEv.clock}
+                              </span>
+                            ) : m.finished ? (
                               <span className="text-white/55">FT</span>
                             ) : m.delayed ? (
                               <span className="text-[var(--cine-accent)]">Delayed</span>
@@ -809,9 +852,9 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                           </button>
                           <span
                             className="flex-shrink-0 w-16 text-center text-lg font-black text-white tabular-nums"
-                            aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
+                            aria-label={liveEv ? `Live score ${liveEv.home.score ?? 0} to ${liveEv.away.score ?? 0}` : m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
                           >
-                            {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold text-sm">vs</span>}
+                            {liveEv ? `${liveEv.home.score ?? 0} - ${liveEv.away.score ?? 0}` : m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold text-sm">vs</span>}
                           </span>
                           <button
                             onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}

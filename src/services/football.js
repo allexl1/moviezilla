@@ -164,9 +164,9 @@ export function clubKey(name) {
   return CLUB_ALIAS[folded] || folded;
 }
 
-function sideHit(streamSide, dataName) {
-  const a = clubKey(streamSide);
-  const b = clubKey(dataName);
+export function sideHit(aName, bName) {
+  const a = clubKey(aName);
+  const b = clubKey(bName);
   return Boolean(a && b && (a.includes(b) || b.includes(a)));
 }
 

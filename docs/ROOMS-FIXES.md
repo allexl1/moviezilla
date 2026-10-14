@@ -478,6 +478,8 @@ with emblems, FT/delayed badges, crests, matchday labels, Table links
 into comp tabs, client All/Watchable/Finished filters), Watch buttons
 on confident two-side stream matches (normalized matcher + alias list,
 unit-tested; unmatched streams keep cards below so nothing is lost).
+Rail covers every competition in the day feed, not just our 12 (Copa
+Libertadores renders with no Table link — no tab exists for it).
 F2 predictor (landed): pure Poisson module (home/away split averages,
 unit-tested, labeled Model with sample size, fun-estimate disclaimer,
 never AI/bets), Model buttons on scheduled day rows with inline bars
@@ -509,8 +511,13 @@ Upstream lesson: same-day date windows return empty (end exclusive),
 fetch day..day+1 and filter. Headless-proven desktop + 390px
 zero-overflow. No scraping anywhere: soccer365/FotMob/SofaScore all
 wall bots (live 403s); ESPN unofficial JSON verified working
-(scoreboard/teams/logos) as a possible live layer only on explicit
-owner yes.
+(scoreboard/teams/logos).
+ESPN live layer (landed, isolated api/espn.js + services/espn.js +
+row overlay — delete all three and nothing else notices): all 12 slugs
+plus Europa League verified live, browser CORS forces the server proxy,
+60s cache with 3-slug batches, live minutes + scores overlay matched
+rows with an honest LIVE badge. Live overlay itself needs a live match
+to prove (nothing in play tonight); unit + no-crash integration green.
 Account menu round 2 (landed, needs live eyes + `avatars` bucket):avatar upload (2MB cap, upsert per user, URL in user_metadata) with
 keyboard-reachable picker, sync row with saved/history counts,
 full-width sign out, danger zone with hold-to-confirm delete-my-data
