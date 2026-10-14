@@ -5,6 +5,9 @@ import {
   storage,
   progressLabel,
   formatFullDate,
+  getTombstones,
+  getProgressClearFlag,
+  setProgressClearFlag,
   WATCHED_PCT,
 } from '../src/services/storage.js';
 import { resetStore } from './helpers.js';
@@ -282,8 +285,7 @@ describe('episode + entry watched truth (history rewrite remains)', () => {
   });
 });
 
-describe('full history dates (history rewrite remains)', () => {
-  it('renders the exact day, US long form', () => {
+describe('full history dates (history rewrite remains)', () => {  it('renders the exact day, US long form', () => {
     assert.equal(formatFullDate(new Date('2026-09-19T12:00:00').getTime()), 'September 19, 2026');
     assert.equal(formatFullDate(NaN), '');
   });
@@ -311,5 +313,18 @@ describe('writer rule (voice-only playback)', () => {
       storage.decideSave({ voiced: true, voiceTime: 600, voiceDur: 2700, prevTime: 100, runtimeSec: 2700 }),
       { currentTime: 600, duration: 2700 }
     );
+  });
+});
+
+describe('local library wipe (delete-my-data)', () => {
+  it('clears progress, watchlist and tombstones in one shot', () => {
+    storage.saveProgress({ mediaId: 50, type: 'movie', currentTime: 600, duration: 7200, title: 'M', poster: '/m' });
+    storage.toggleWatchlist({ id: 50, title: 'M' });
+    setProgressClearFlag();
+    storage.wipeLocalLibrary();
+    assert.equal(storage.getAllContinueWatching().length, 0);
+    assert.deepEqual(storage.getWatchlist(), []);
+    assert.deepEqual(getTombstones(), { wl: {}, prog: {} });
+    assert.equal(getProgressClearFlag(), false);
   });
 });

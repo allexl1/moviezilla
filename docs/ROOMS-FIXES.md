@@ -456,6 +456,13 @@ git). Notes: football has no UI entry (route /football is dead —
 needs an owner call on where it lives); provider embeds show their
 sandbox-detection page + a minified third-party unhandled rejection
 (`cip0xy`, not our tree) under headless — environmental noise.
+Account menu round 2 (landed, needs live eyes + `avatars` bucket):
+avatar upload (2MB cap, upsert per user, URL in user_metadata) with
+keyboard-reachable picker, sync row with saved/history counts,
+full-width sign out, danger zone with hold-to-confirm delete-my-data
+(server rows + local wipe, then sign out; auth user survives — browsers
+cannot delete it). Signed-in view is owner QA (fake sessions don't fool
+the SDK); logged-out modal + gates + build proven headless.
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

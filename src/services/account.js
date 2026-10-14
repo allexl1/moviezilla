@@ -236,8 +236,51 @@ export async function handleAuthRedirect() {
   }
 }
 
-export async function signOut() {
-  try {
+// Avatar upload (owner creates the public `avatars` bucket first, same
+// pattern as room-chat). Image-only, 2MB cap, one file per user via
+// upsert; the public URL is stamped into auth user_metadata so every
+// device reads it. No processing pipeline on free tier — the UI crops.
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+export async function uploadAvatar(file) {
+  const sb = getSupabase();
+  if (!sb || !currentUser) throw new Error('Sign in first.');
+  if (!file || !String(file.type || '').startsWith('image/')) throw new Error('Pick an image file.');
+  if ((file.size || 0) > AVATAR_MAX_BYTES) throw new Error('Image too big. 2MB max.');
+  const ext = String(file.name || '').split('.').pop().toLowerCase();
+  const path = `${currentUser.id}.${['png', 'jpg', 'jpeg', 'webp'].includes(ext) ? ext : 'png'}`;
+  const { error: upErr } = await sb.storage.from('avatars').upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+  });
+  if (upErr) {
+    const msg = String(upErr.message || '');
+    if (/bucket|not found/i.test(msg)) throw new Error('Avatar space is not ready yet.');
+    throw new Error('Could not upload. Retry.');
+  }
+  const { data } = sb.storage.from('avatars').getPublicUrl(path);
+  const base = data?.publicUrl || '';
+  if (!base) throw new Error('Could not upload. Retry.');
+  const url = `${base}?t=${Date.now()}`;
+  const { error: metaErr } = await sb.auth.updateUser({ data: { avatar_url: url } });
+  if (metaErr) throw new Error('Uploaded, but the profile did not update. Retry.');
+  return url;
+}
+
+// Delete-my-data (danger zone): server library rows go first, then the
+// whole local library, then sign out. The auth user itself survives
+// (browsers cannot delete auth users — that needs a server function),
+// so signing back in starts from a clean slate.
+export async function deleteMyData() {
+  const sb = getSupabase();
+  if (!sb || !currentUser) throw new Error('Sign in first.');
+  const { error } = await sb.from('watch_states').delete().eq('user_id', currentUser.id);
+  if (error) throw new Error('Could not delete the server copy. Retry.');
+  storage.wipeLocalLibrary();
+  await signOut();
+}
+
+export async function signOut() {  try {
     await getSupabase()?.auth.signOut();
   } catch {
     // Offline sign-out: drop the local session view anyway.

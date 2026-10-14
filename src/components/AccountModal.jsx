@@ -8,10 +8,14 @@ import {
   saveDisplayName,
   syncNow,
   lastSyncedAt,
+  uploadAvatar,
+  deleteMyData,
 } from '../services/account';
+import { storage } from '../services/storage';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import SegmentedControl from './ui/SegmentedControl';
+import HoldButton from './ui/HoldButton';
 
 // Google "G" (inline SVG, brand asset by necessity — no lucide glyph
 // exists for it; keep it multicolor per Google's brand rules).
@@ -93,6 +97,11 @@ function AccountBody() {
   const [cooldown, setCooldown] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncLabel, setSyncLabel] = useState(() => syncLabelFor(lastSyncedAt()));
+  const [uploading, setUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [dangerError, setDangerError] = useState('');
 
   // Resend cooldown ticker.
   useEffect(() => {
@@ -249,34 +258,81 @@ function AccountBody() {
   }
 
   const initial = (displayName || user.email || '?').slice(0, 1).toUpperCase();
+  const avatarUrl = user.user_metadata?.avatar_url || '';
+
+  const onAvatarFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f || uploading) return;
+    setUploading(true);
+    setAvatarError('');
+    try {
+      await uploadAvatar(f);
+      // USER_UPDATED flips the photo via useAccount.
+    } catch (err) {
+      setAvatarError(err.message || 'Could not upload.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onDeleteData = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDangerError('');
+    try {
+      await deleteMyData();
+      // signOut flips to the logged-out view via useAccount.
+    } catch (err) {
+      setDangerError(err.message || 'Could not delete.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const wlCount = storage.getWatchlist().length;
+  const histCount = storage.getWatchHistory().length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <span
-          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0"
-          style={{
-            background: 'color-mix(in srgb, var(--cine-accent) 18%, transparent)',
-            color: 'var(--cine-accent)',
-            border: '1px solid color-mix(in srgb, var(--cine-accent) 40%, transparent)',
-          }}
-        >
-          {initial}
-        </span>
+        <label className="cursor-pointer flex-shrink-0 cine-has-tip focus-within:outline-2 focus-within:outline-white/60 focus-within:rounded-full" aria-label="Change avatar">
+          <input type="file" accept="image/*" className="sr-only" onChange={onAvatarFile} disabled={uploading} />
+          <span className="relative block w-10 h-10">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover" />
+            ) : (
+              <span
+                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-black"
+                style={{
+                  background: 'color-mix(in srgb, var(--cine-accent) 18%, transparent)',
+                  color: 'var(--cine-accent)',
+                  border: '1px solid color-mix(in srgb, var(--cine-accent) 40%, transparent)',
+                }}
+              >
+                {initial}
+              </span>
+            )}
+            {uploading && (
+              <span className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center" aria-hidden="true">
+                <span className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+              </span>
+            )}
+          </span>
+          <span className="cine-tip" aria-hidden="true">Change avatar</span>
+        </label>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-white truncate">{displayName || 'Your account'}</p>
           <p className="text-[11px] text-white/50 truncate">{user.email}</p>
         </div>
-        <button
-          onClick={() => signOut().catch(() => {})}
-          className="text-[12px] font-semibold text-white/50 hover:text-red-400 transition cursor-pointer flex items-center gap-1 flex-shrink-0"
-        >
-          <LogOut className="w-3.5 h-3.5" /> Sign out
-        </button>
       </div>
+      {avatarError && (
+        <p role="alert" className="text-[11px] font-semibold text-red-400/90">{avatarError}</p>
+      )}
       <NameEditor key={user.id} initial={displayName} />
       <div className="flex items-center justify-between gap-3 mat-row p-3">
         <p className="text-[11px] text-white/55">
-          {syncLabel}. Watchlist, watched and resume sync across devices.
+          {syncLabel} • {wlCount} saved • {histCount} in history. Watchlist, watched and resume sync across devices.
         </p>
         <button
           onClick={async () => {
@@ -296,6 +352,53 @@ function AccountBody() {
           <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? 'Syncing…' : 'Sync now'}
         </button>
+      </div>
+      <button
+        onClick={() => signOut().catch(() => {})}
+        className="cine-control-btn w-full h-11 text-sm"
+      >
+        <LogOut className="w-4 h-4" /> Sign out
+      </button>
+      <div className="rounded-2xl border border-red-500/25 p-3 space-y-2">
+        <p className="text-xs font-bold text-red-400">Danger zone</p>
+        {!showDelete ? (
+          <button
+            onClick={() => {
+              setShowDelete(true);
+              setDangerError('');
+            }}
+            className="cine-btn-danger cine-btn-danger rounded-full px-4 h-10 text-xs font-bold"
+          >
+            Delete my data
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] text-white/60">
+              Wipes your watchlist and history here and on the server, then signs out. Cannot be undone.
+            </p>
+            {dangerError && (
+              <p role="alert" className="text-[11px] font-semibold text-red-400/90">{dangerError}</p>
+            )}
+            <div className="flex items-center gap-2">
+              <HoldButton
+                onConfirm={onDeleteData}
+                className="cine-btn-danger cine-btn-danger rounded-full px-4 h-10 text-xs font-bold"
+                aria-label="Hold to delete all my data"
+              >
+                {deleting ? 'Deleting…' : 'Hold to delete'}
+              </HoldButton>
+              <button
+                onClick={() => {
+                  setShowDelete(false);
+                  setDangerError('');
+                }}
+                className="text-[12px] font-semibold text-white/50 hover:text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

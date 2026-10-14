@@ -525,6 +525,25 @@ export const storage = {
     return { second: 0, season, episode, duration: topDur, seriesWatched: false, source: 'zero' };
   },
 
+  // Full local library wipe (delete-my-data): progress, watchlist and
+  // tombstones go in one shot, the clear-history flag is dropped (it
+  // must not linger and nuke a future sign-in), and the shared bust
+  // signal re-renders open shelves. Server rows are deleted by the
+  // caller (account.js) before this runs.
+  wipeLocalLibrary() {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.PROGRESS);
+      localStorage.removeItem(STORAGE_KEYS.WATCHLIST);
+      localStorage.removeItem(SYNC_KEYS.TOMBS);
+    } catch {
+      // ignore
+    }
+    clearProgressClearFlag();
+    notifyWatchlist();
+    dispatchAccountDirty('progress');
+    dispatchAccountDirty('watchlist');
+  },
+
   // Server-newer row lands here: top-level clock adopts the server while
   // the device's per-server/per-episode refinements survive (slots are
   // device-specific — Vidy seconds mean nothing on a phone that only
