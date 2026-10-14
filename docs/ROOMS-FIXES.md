@@ -478,6 +478,12 @@ with emblems, FT/delayed badges, crests, matchday labels, Table links
 into comp tabs, client All/Watchable/Finished filters), Watch buttons
 on confident two-side stream matches (normalized matcher + alias list,
 unit-tested; unmatched streams keep cards below so nothing is lost).
+F2 predictor (landed): pure Poisson module (home/away split averages,
+unit-tested, labeled Model with sample size, fun-estimate disclaimer,
+never AI/bets), Model buttons on scheduled day rows with inline bars
+plus likely scorelines, zero quota when the table is cached, honest
+thin-data and error states. Headless-proven with Saturday fixtures
+(Everton-Chelsea 50/22/28).
 Upstream lesson: same-day date windows return empty (end exclusive),
 fetch day..day+1 and filter. Headless-proven desktop + 390px
 zero-overflow. No scraping anywhere: soccer365/FotMob/SofaScore all

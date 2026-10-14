@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
 import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor } from '../services/football';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
+import { leagueAverages, formOf, predictMatch } from '../services/predict';
 import { playerPhoto } from '../services/tsdb';
 import EmptyState from './ui/EmptyState';
 import SegmentedControl from './ui/SegmentedControl';
@@ -288,6 +289,34 @@ export default function FootballView({ onToast }) {
     }
   };
 
+  // Model panel (F2): Poisson over season form, computed on tap from
+  // the cached table (zero quota when cached). One open at a time;
+  // late resolves carry their match id so a stale answer never lands
+  // under a newer row. Scheduled rows only, finished needs no model.
+  const [modelId, setModelId] = useState(null);
+  const [model, setModel] = useState(null);
+  const openModel = async (m) => {
+    if (modelId === m.id) {
+      setModelId(null);
+      setModel(null);
+      return;
+    }
+    setModelId(m.id);
+    setModel(null);
+    try {
+      const t = await fdata.table(m.competition.code);
+      const data = predictMatch(
+        formOf(t.total, m.home.name),
+        formOf(t.total, m.away.name),
+        leagueAverages(t.home),
+        leagueAverages(t.away)
+      );
+      setModel(data ? { id: m.id, data } : { id: m.id, thin: true });
+    } catch {
+      setModel({ id: m.id, error: true });
+    }
+  };
+
   if (watching) {
     const active = streams[streamIdx];
     return (
@@ -565,8 +594,16 @@ export default function FootballView({ onToast }) {
                           Table
                         </button>
                       </div>
-                      {group.map(({ m, hit }) => (
-                        <div key={m.id} className="mat-row px-3 py-2.5 flex items-center gap-2">
+                      {group.map(({ m, hit }) => {
+                        const modelOpen = modelId === m.id;
+                        const modelDone = model?.id === m.id ? model : null;
+                        const sched = !m.finished && !m.delayed;
+                        const leader = modelDone?.data
+                          ? Math.max(modelDone.data.home, modelDone.data.draw, modelDone.data.away)
+                          : -1;
+                        return (
+                          <div key={m.id}>
+                            <div className="mat-row px-3 py-2.5 flex items-center gap-2">
                           <span className="w-14 flex-shrink-0 text-[11px] font-bold">
                             {m.finished ? (
                               <span className="text-white/55">FT</span>
@@ -602,8 +639,59 @@ export default function FootballView({ onToast }) {
                               <MonitorPlay className="w-3 h-3" /> Watch
                             </button>
                           )}
-                        </div>
-                      ))}
+                          {sched && (
+                            <button
+                              onClick={() => openModel(m)}
+                              className="cine-pill cine-pill--sm flex-shrink-0"
+                              aria-expanded={modelOpen}
+                              aria-label={`Model prediction for ${m.home.name} versus ${m.away.name}`}
+                            >
+                              <Calculator className="w-3 h-3" /> Model
+                            </button>
+                          )}
+                            </div>
+                            {modelOpen && (
+                              <div className="mat-row px-4 py-3 space-y-2" aria-live="polite">
+                                {!modelDone ? (
+                                  <p className="text-[11px] text-white/50">Loading model…</p>
+                                ) : modelDone.error ? (
+                                  <p className="text-[11px] text-white/50">Model unavailable right now.</p>
+                                ) : modelDone.thin ? (
+                                  <p className="text-[11px] text-white/50">Not enough form yet.</p>
+                                ) : (
+                                  <>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+                                      Model <span className="normal-case font-medium">estimate from {modelDone.data.sample} games each</span>
+                                    </p>
+                                    <div className="space-y-1.5">
+                                      {[
+                                        ['Home', modelDone.data.home],
+                                        ['Draw', modelDone.data.draw],
+                                        ['Away', modelDone.data.away],
+                                      ].map(([label, pct]) => (
+                                        <div key={label} className="flex items-center gap-2">
+                                          <span className="w-10 text-[11px] font-bold text-white/60">{label}</span>
+                                          <span className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden="true">
+                                            <span
+                                              className={`block h-full rounded-full ${pct === leader ? 'bg-[var(--cine-accent)]' : 'bg-white/30'}`}
+                                              style={{ width: `${pct}%` }}
+                                            />
+                                          </span>
+                                          <span className="w-10 text-right text-[11px] font-black text-white tabular-nums">{pct}%</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <p className="text-[11px] text-white/60">
+                                      Likely: {modelDone.data.scores.map((s) => `${s.h}-${s.a} (${s.pct}%)`).join(', ')}
+                                    </p>
+                                    <p className="text-[10px] text-white/35">Fun estimate, not betting advice.</p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })

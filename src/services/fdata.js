@@ -82,6 +82,8 @@ export function normTable(json) {
     won: t?.won ?? 0,
     draw: t?.draw ?? 0,
     lost: t?.lost ?? 0,
+    gf: t?.goalsFor ?? 0,
+    ga: t?.goalsAgainst ?? 0,
     gd: t?.goalDifference ?? 0,
     points: t?.points ?? 0,
     form: typeof t?.form === 'string' ? t.form.split(',').filter(Boolean) : [],
