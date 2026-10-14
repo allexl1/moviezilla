@@ -3,7 +3,8 @@ import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, Chevron
 import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor } from '../services/football';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
-import { playerPhoto } from '../services/tsdb';
+import { playerPhoto, playerCard } from '../services/tsdb';
+import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
 import SegmentedControl from './ui/SegmentedControl';
 
@@ -145,8 +146,173 @@ const DAY_FILTERS = [
   { id: 'finished', name: 'Finished' },
 ];
 
-export default function FootballView({ onToast }) {
-  const [live, setLive] = useState([]);
+// Team page (verified shapes only): table line + form from our
+// standings, club scorers from our scorers (with photos), season
+// results and fixtures from one cached team call. No squad lists —
+// free squad data is stale soup (players at wrong clubs), showing it
+// as fact would lie.
+function TeamView({ team, code, onOpenPlayer }) {
+  const [data, setData] = useState(undefined);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [t, ms] = await Promise.all([
+          fdata.table(code),
+          team.id ? fdata.teamMatches(team.id) : Promise.resolve([]),
+        ]);
+        let sc = [];
+        try {
+          sc = (await fdata.scorers(code)) || [];
+        } catch {
+          sc = [];
+        }
+        if (!alive) return;
+        const row = (t.total || []).find((r) => r.team.name === team.name);
+        setData({
+          row: row || null,
+          results: ms.filter((m) => m.finished).sort((a, b) => b.utc - a.utc).slice(0, 5),
+          fixtures: ms.filter((m) => !m.finished).sort((a, b) => a.utc - b.utc).slice(0, 5),
+          scorers: sc.filter((s) => s.team === team.name).slice(0, 5),
+        });
+      } catch {
+        if (alive) setData(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [team.id, team.name, code]);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        {team.crest ? (
+          <img src={team.crest} alt="" className="w-12 h-12 object-contain flex-shrink-0" />
+        ) : (
+          <span className="w-12 h-12 rounded-full bg-white/10 text-white/70 text-lg font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+            {(team.name || '?').slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <div className="min-w-0">
+          <h3 className="text-lg font-extrabold text-white tracking-tight truncate">{team.name}</h3>
+          {data?.row && (
+            <p className="text-[11px] text-white/55">
+              {data.row.pos}. • {data.row.points} pts • {data.row.won}W {data.row.draw}D {data.row.lost}L
+            </p>
+          )}
+        </div>
+      </div>
+      {data === undefined ? (
+        <p className="text-xs text-white/60 py-6 text-center">Loading club…</p>
+      ) : data === null ? (
+        <p className="text-xs text-white/60 py-6 text-center">Could not load this club right now.</p>
+      ) : (
+        <>
+          {data.scorers.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-white/45">Top scorers</h4>
+              {data.scorers.map((s) => (
+                <button
+                  key={s.name}
+                  onClick={() => onOpenPlayer({ name: s.name, team: s.team, goals: s.goals })}
+                  className="mat-row w-full px-3 py-2 flex items-center gap-3 text-left cursor-pointer"
+                  aria-label={`Open ${s.name}`}
+                >
+                  <ScorerPhoto key={s.name} name={s.name} />
+                  <span className="flex-1 min-w-0 text-sm font-bold text-white truncate">{s.name}</span>
+                  <span className="text-sm font-black text-white tabular-nums">{s.goals}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {data.results.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-white/45">Results</h4>
+              {data.results.map((m) => (
+                <div key={m.id} className="mat-row px-3 py-2 flex items-center gap-2 text-sm">
+                  <span className="flex-1 min-w-0 truncate text-white/85">
+                    {m.home.name} {m.home.score ?? 0} - {m.away.score ?? 0} {m.away.name}
+                  </span>
+                  <span className="text-[10px] font-bold text-white/40 flex-shrink-0">FT</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.fixtures.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-white/45">Upcoming</h4>
+              {data.fixtures.map((m) => (
+                <div key={m.id} className="mat-row px-3 py-2 flex items-center gap-2 text-sm">
+                  <span className="flex-1 min-w-0 truncate text-white/85">
+                    {m.home.name} vs {m.away.name}
+                  </span>
+                  <span className="text-[10px] font-bold text-white/40 flex-shrink-0">{formatTime(m.utc)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Player page: the verified search card (photo, club, position, birth,
+// nationality) plus season goals from our scorers when the caller knows
+// them. No squad lookups — free squad data is stale.
+function PlayerView({ name, team, goals }) {
+  const [card, setCard] = useState(undefined);
+  const [age, setAge] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    playerCard(name).then((c) => {
+      if (!alive) return;
+      setCard(c || null);
+      setAge(c?.born && Number.isFinite(Date.parse(c.born)) ? Math.floor((Date.now() - Date.parse(c.born)) / 31557600000) : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [name]);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        {card?.photo ? (
+          <img src={card.photo} alt="" className="w-20 h-20 rounded-full object-cover bg-white/5 flex-shrink-0" />
+        ) : (
+          <span className="w-20 h-20 rounded-full bg-white/10 text-white/70 text-2xl font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+            {(card?.name || name || '?').slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <div className="min-w-0">
+          <h3 className="text-lg font-extrabold text-white tracking-tight truncate">{card?.name || name}</h3>
+          <p className="text-[11px] text-white/55 truncate">
+            {[card?.position || team, card && goals != null ? `${goals} goals this season` : null].filter(Boolean).join(' • ')}
+          </p>
+        </div>
+      </div>
+      {card === undefined ? (
+        <p className="text-xs text-white/60 py-4 text-center">Loading player…</p>
+      ) : card === null ? (
+        <p className="text-xs text-white/60 py-4 text-center">No profile found for this player.</p>
+      ) : (
+        <div className="mat-row p-3 space-y-1.5 text-xs">
+          {card.team && (
+            <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Club </span>{card.team}</p>
+          )}
+          {card.nationality && (
+            <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Country </span>{card.nationality}</p>
+          )}
+          {age != null && Number.isFinite(age) && (
+            <p className="text-white/75"><span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Age </span>{age}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FootballView({ onToast }) {  const [live, setLive] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -295,6 +461,10 @@ export default function FootballView({ onToast }) {
   // under a newer row. Scheduled rows only, finished needs no model.
   const [modelId, setModelId] = useState(null);
   const [model, setModel] = useState(null);
+
+  // Team/player pages (modal): one open at a time, keyed remounts reset
+  // each view. Team carries its comp code for tables and matches.
+  const [profile, setProfile] = useState(null);
   const openModel = async (m) => {
     if (modelId === m.id) {
       setModelId(null);
@@ -613,20 +783,28 @@ export default function FootballView({ onToast }) {
                               <span className="text-white/60">{formatTime(m.utc)}</span>
                             )}
                           </span>
-                          <span className="flex-1 min-w-0 flex items-center justify-end gap-2">
-                            <span className="font-semibold text-white text-sm truncate text-right">{m.home.name}</span>
+                          <button
+                            onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
+                            className="flex-1 min-w-0 flex items-center justify-end gap-2 cursor-pointer"
+                            aria-label={`Open ${m.home.name}`}
+                          >
+                            <span className="font-semibold text-white text-sm truncate text-right hover:underline">{m.home.name}</span>
                             <Crest name={m.home.name} crest={m.home.crest} />
-                          </span>
+                          </button>
                           <span
                             className="flex-shrink-0 w-14 text-center text-sm font-black text-white tabular-nums"
                             aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
                           >
                             {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold">vs</span>}
                           </span>
-                          <span className="flex-1 min-w-0 flex items-center gap-2">
+                          <button
+                            onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
+                            className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
+                            aria-label={`Open ${m.away.name}`}
+                          >
                             <Crest name={m.away.name} crest={m.away.crest} />
-                            <span className="font-semibold text-white text-sm truncate">{m.away.name}</span>
-                          </span>
+                            <span className="font-semibold text-white text-sm truncate hover:underline">{m.away.name}</span>
+                          </button>
                           <span className="hidden xl:block w-28 flex-shrink-0 text-right text-[11px] text-white/40 truncate">
                             {roundLabel(m)}
                           </span>
@@ -758,10 +936,14 @@ export default function FootballView({ onToast }) {
                       <tr key={r.team.id || r.team.name} className="border-t border-white/[0.07] text-white/90">
                         <td className="py-2 pr-2 font-black text-white/50">{r.pos}</td>
                         <td className="py-2 pr-2">
-                          <span className="flex items-center gap-2 min-w-0">
+                          <button
+                            onClick={() => setProfile({ kind: 'team', code: comp, id: r.team.id, name: r.team.name, crest: r.team.crest })}
+                            className="flex items-center gap-2 min-w-0 cursor-pointer text-left"
+                            aria-label={`Open ${r.team.name}`}
+                          >
                             <Crest name={r.team.name} crest={r.team.crest} />
-                            <span className="font-semibold truncate">{r.team.name}</span>
-                          </span>
+                            <span className="font-semibold truncate hover:underline">{r.team.name}</span>
+                          </button>
                         </td>
                         <td className="py-2 px-1.5 text-right tabular-nums">{r.played}</td>
                         <td className="py-2 px-1.5 text-right tabular-nums hidden sm:table-cell">{r.won}</td>
@@ -818,17 +1000,25 @@ export default function FootballView({ onToast }) {
                     <span className="w-14 flex-shrink-0 text-[11px] font-bold text-white/60">
                       {fixtureLabel(m)}
                     </span>
-                    <span className="flex-1 min-w-0 flex items-center justify-end gap-2">
-                      <span className="font-semibold text-white text-sm truncate text-right">{m.home.name}</span>
+                    <button
+                      onClick={() => setProfile({ kind: 'team', code: comp, id: m.home.id, name: m.home.name, crest: m.home.crest })}
+                      className="flex-1 min-w-0 flex items-center justify-end gap-2 cursor-pointer"
+                      aria-label={`Open ${m.home.name}`}
+                    >
+                      <span className="font-semibold text-white text-sm truncate text-right hover:underline">{m.home.name}</span>
                       <Crest name={m.home.name} crest={m.home.crest} />
-                    </span>
+                    </button>
                     <span className="flex-shrink-0 min-w-12 text-center text-sm font-black text-white tabular-nums" aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}>
                       {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : 'vs'}
                     </span>
-                    <span className="flex-1 min-w-0 flex items-center gap-2">
+                    <button
+                      onClick={() => setProfile({ kind: 'team', code: comp, id: m.away.id, name: m.away.name, crest: m.away.crest })}
+                      className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
+                      aria-label={`Open ${m.away.name}`}
+                    >
                       <Crest name={m.away.name} crest={m.away.crest} />
-                      <span className="font-semibold text-white text-sm truncate">{m.away.name}</span>
-                    </span>
+                      <span className="font-semibold text-white text-sm truncate hover:underline">{m.away.name}</span>
+                    </button>
                     {m.delayed && (
                       <span className="cine-chip cine-chip--accent flex-shrink-0">Delayed</span>
                     )}
@@ -846,7 +1036,12 @@ export default function FootballView({ onToast }) {
               </div>
               <div className="space-y-2">
                 {scorers.map((s, i) => (
-                  <div key={`${s.name}_${s.team}`} className="mat-row px-4 py-2.5 flex items-center gap-3">
+                  <button
+                    key={`${s.name}_${s.team}`}
+                    onClick={() => setProfile({ kind: 'player', name: s.name, team: s.team, goals: s.goals })}
+                    className="mat-row w-full px-4 py-2.5 flex items-center gap-3 text-left cursor-pointer"
+                    aria-label={`Open ${s.name}`}
+                  >
                     <span className="w-6 flex-shrink-0 text-xs font-black text-white/40 tabular-nums">{i + 1}</span>
                     <ScorerPhoto key={s.name} name={s.name} />
                     <span className="flex-1 min-w-0">
@@ -854,12 +1049,36 @@ export default function FootballView({ onToast }) {
                       <span className="block text-[11px] text-white/50 truncate">{s.team}</span>
                     </span>
                     <span className="text-sm font-black text-white tabular-nums">{s.goals}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </section>
           )}
         </>
+      )}
+      {profile && (
+        <Modal
+          isOpen
+          onClose={() => setProfile(null)}
+          maxWidth="max-w-md"
+          label={profile.name}
+        >
+          {profile.kind === 'team' ? (
+            <TeamView
+              key={`t${profile.id || profile.name}`}
+              team={profile}
+              code={profile.code}
+              onOpenPlayer={(p) => setProfile({ kind: 'player', ...p })}
+            />
+          ) : (
+            <PlayerView
+              key={`p${profile.name}`}
+              name={profile.name}
+              team={profile.team}
+              goals={profile.goals}
+            />
+          )}
+        </Modal>
       )}
     </div>
   );

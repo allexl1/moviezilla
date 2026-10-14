@@ -49,8 +49,7 @@ async function fetchPhoto(name) {
   return pickPhoto(await res.json());
 }
 
-export function playerPhoto(name) {
-  const clean = String(name || '').trim();
+export function playerPhoto(name) {  const clean = String(name || '').trim();
   if (!clean) return Promise.resolve('');
   const hit = readPhotos()[clean];
   if (hit !== undefined) return Promise.resolve(hit);
@@ -65,5 +64,73 @@ export function playerPhoto(name) {
       flying.delete(clean);
     });
   flying.set(clean, job);
+  return job;
+}
+
+// Player card from a name search (verified payload shapes only: photo,
+// club, position, birth date, nationality). Squads and lookups are
+// stale soup on free — search hits are fresh enough to show. Permanent
+// cache like photos, separate map.
+const CARD_KEY = 'mz_tsdb_cards';
+
+function readCards() {
+  try {
+    const raw = localStorage.getItem(CARD_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function pickPlayerCard(payload) {
+  const list = Array.isArray(payload?.player) ? payload.player : [];
+  const p = list[0];
+  if (!p?.strPlayer) return null;
+  return {
+    name: p.strPlayer,
+    team: p.strTeam || '',
+    position: p.strPosition || '',
+    born: p.dateBorn || '',
+    nationality: p.strNationality || '',
+    photo: p.strCutout || p.strThumb || '',
+  };
+}
+
+const cardFlying = new Map();
+
+export function playerCard(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return Promise.resolve(null);
+  const hit = readCards()[clean];
+  if (hit !== undefined) return Promise.resolve(hit);
+  if (cardFlying.has(clean)) return cardFlying.get(clean);
+  const job = (async () => {
+    try {
+      const res = await fetch(`/api/tsdb?${new URLSearchParams({ path: 'searchplayers.php', p: clean })}`, {
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) return null;
+      return pickPlayerCard(await res.json());
+    } catch {
+      return null;
+    }
+  })()
+    .then((card) => {
+      try {
+        const all = readCards();
+        all[clean] = card;
+        const keys = Object.keys(all);
+        while (keys.length > PHOTO_MAX) delete all[keys.shift()];
+        localStorage.setItem(CARD_KEY, JSON.stringify(all));
+      } catch {
+        // cache is a nicety
+      }
+      return card;
+    })
+    .finally(() => {
+      cardFlying.delete(clean);
+    });
+  cardFlying.set(clean, job);
   return job;
 }

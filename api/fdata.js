@@ -16,6 +16,7 @@ const ALLOWED = [
   /^competitions\/[A-Z0-9]+\/matches$/,
   /^competitions\/[A-Z0-9]+\/scorers$/,
   /^teams\/\d+$/,
+  /^teams\/\d+\/matches$/,
 ];
 
 const TTL = [

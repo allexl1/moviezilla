@@ -118,11 +118,13 @@ export function normMatches(json) {
         emblem: m?.competition?.emblem || '',
       },
       home: {
+        id: m?.homeTeam?.id ?? 0,
         name: m?.homeTeam?.name || '',
         crest: m?.homeTeam?.crest || '',
         score: m?.score?.fullTime?.home,
       },
       away: {
+        id: m?.awayTeam?.id ?? 0,
         name: m?.awayTeam?.name || '',
         crest: m?.awayTeam?.crest || '',
         score: m?.score?.fullTime?.away,
@@ -159,6 +161,11 @@ export const fdata = {
   // Fixtures for a date window (YYYY-MM-DD). Past dates = results.
   async fixtures(code, from, to) {
     return normMatches(await proxyGet(`competitions/${code}/matches`, { dateFrom: from, dateTo: to }, 'fixtures'));
+  },
+  // Team season (results + fixtures, one call, cached like fixtures).
+  async teamMatches(teamId) {
+    if (!teamId) return [];
+    return normMatches(await proxyGet(`teams/${teamId}/matches`, {}, 'fixtures'));
   },
   // Top scorers; null when the free plan gates the endpoint.
   async scorers(code) {

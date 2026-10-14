@@ -484,6 +484,14 @@ never AI/bets), Model buttons on scheduled day rows with inline bars
 plus likely scorelines, zero quota when the table is cached, honest
 thin-data and error states. Headless-proven with Saturday fixtures
 (Everton-Chelsea 50/22/28).
+Team/player pages (landed): taps on standings, fixtures and scorers
+open modals. Team = table line, form, club scorers with photos, last 5
+results + next 5 from one cached team call. Player = verified search
+card (photo, club, position, country, age) + season goals. No squads:
+free squad data is stale soup (wrong clubs), lookup-by-id flaked —
+showing either as fact would lie. Headless-proven (City page, Haaland
+page). Probe lesson: quota is 10/min shared with my own curls, pace
+runs 60s+ apart or read 429s that aren't real failures.
 Upstream lesson: same-day date windows return empty (end exclusive),
 fetch day..day+1 and filter. Headless-proven desktop + 390px
 zero-overflow. No scraping anywhere: soccer365/FotMob/SofaScore all
