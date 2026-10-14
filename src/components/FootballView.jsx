@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay } from 'lucide-react';
+import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { football, FOOTBALL_MIRRORS, formatKickoff, getPreferredStream, setPreferredStream } from '../services/football';
+import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import EmptyState from './ui/EmptyState';
+import SegmentedControl from './ui/SegmentedControl';
 
 function MatchCard({ match, onWatch }) {
   return (
@@ -44,6 +46,63 @@ function MatchCard({ match, onWatch }) {
   );
 }
 
+// Team crest with an initial-chip fallback (remote art dies silently;
+// a letter always renders — never a broken-image icon).
+function Crest({ name, crest }) {
+  const [dead, setDead] = useState(false);
+  if (!crest || dead) {
+    return (
+      <span
+        className="w-6 h-6 rounded-full bg-white/10 text-white/70 text-[10px] font-black flex items-center justify-center flex-shrink-0"
+        aria-hidden="true"
+      >
+        {(name || '?').slice(0, 1).toUpperCase()}
+      </span>
+    );
+  }
+  return (
+    <img
+      src={crest}
+      alt=""
+      loading="lazy"
+      onError={() => setDead(true)}
+      className="w-6 h-6 object-contain flex-shrink-0"
+    />
+  );
+}
+
+function FormDots({ form }) {
+  if (!form || form.length === 0) return <span className="text-white/25">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1" aria-label={`Form ${form.join(', ')}`}>
+      {form.slice(-5).map((r, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className={`w-1.5 h-1.5 rounded-full ${
+            r === 'W' ? 'bg-[var(--cine-accent)]' : r === 'D' ? 'bg-white/40' : 'bg-red-400'
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
+const VENUES = [
+  { id: 'total', name: 'Total' },
+  { id: 'home', name: 'Home' },
+  { id: 'away', name: 'Away' },
+];
+
+function fixtureLabel(m) {
+  if (m.finished) return 'FT';
+  if (m.delayed) return 'Delayed';
+  if (m.status === 'POSTPONED') return 'Postponed';
+  if (m.status === 'SUSPENDED') return 'Suspended';
+  if (m.status === 'CANCELLED') return 'Cancelled';
+  return formatKickoff(m.utc);
+}
+
 export default function FootballView({ onToast }) {
   const [live, setLive] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
@@ -54,6 +113,18 @@ export default function FootballView({ onToast }) {
   const [streams, setStreams] = useState([]);
   const [streamIdx, setStreamIdx] = useState(0);
   const [streamsLoading, setStreamsLoading] = useState(false);
+  // Data tabs (free football-data.org key): watch = Streamed watchables,
+  // the rest are competition tables + fixtures + scorers.
+  const [comp, setComp] = useState('watch');
+  const [venue, setVenue] = useState('total');
+  const [day, setDay] = useState(() => isoDay());
+  // Loaded snapshot keyed by query (render-derived loading, never
+  // setState-in-effect): switching tabs keeps the old table visible
+  // under a small updating note instead of flashing skeletons.
+  const [loaded, setLoaded] = useState({ key: null, table: null, fixtures: [], scorers: null, error: '' });
+  const [dataRetry, setDataRetry] = useState(0);
+  const queryKey = `${comp}|${day}|${dataRetry}`;
+  const updating = comp !== 'watch' && loaded.key !== queryKey;
 
   // Auto-refresh the board every minute while open.
   useEffect(() => {
@@ -80,6 +151,43 @@ export default function FootballView({ onToast }) {
       clearInterval(timer);
     };
   }, [refreshKey]);
+
+  // Competition data: table + day fixtures load together, scorers rides
+  // along (null when the free plan gates it, so the section hides).
+  // One comp switch costs at most 3 cached calls against the 10/min quota.
+  // State writes happen only in async callbacks below, never in the body.
+  useEffect(() => {
+    if (comp === 'watch' || loaded.key === queryKey) return;
+    let alive = true;
+    (async () => {
+      try {
+        const [t, f] = await Promise.all([
+          fdata.table(comp),
+          fdata.fixtures(comp, day, day),
+        ]);
+        let s = null;
+        try {
+          s = await fdata.scorers(comp);
+        } catch {
+          s = null;
+        }
+        if (alive) setLoaded({ key: queryKey, table: t, fixtures: f, scorers: s, error: '' });
+      } catch (err) {
+        if (alive) {
+          setLoaded({
+            key: queryKey,
+            table: null,
+            fixtures: [],
+            scorers: null,
+            error: err?.rateLimited ? 'Football data is busy. Retry shortly.' : 'Could not load this competition.',
+          });
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [comp, day, dataRetry, loaded.key, queryKey]);
 
   const openMatch = async (match) => {
     setWatching(match);
@@ -193,13 +301,22 @@ export default function FootballView({ onToast }) {
     );
   }
 
+  const compName = comp === 'watch' ? '' : (FCOMPS.find((c) => c.code === comp)?.name || comp);
+  const table = loaded.table;
+  const fixtures = loaded.fixtures;
+  const scorers = loaded.scorers;
+  const showError = !updating && loaded.error;
+  const rows = table ? table[venue] || table.total : [];
+
   return (
     <div className="space-y-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex-shrink-0">
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">Football</h1>
           <p className="text-sm text-white/60 mt-1">
-            {live.length > 0 ? `${live.length} live now` : 'Upcoming matches, top leagues + UCL'}
+            {comp === 'watch'
+              ? (live.length > 0 ? `${live.length} live now` : 'Upcoming matches, top leagues + UCL')
+              : compName}
           </p>
         </div>
         <button
@@ -212,56 +329,228 @@ export default function FootballView({ onToast }) {
         </button>
       </div>
 
-      {loading ? (
-        <p className="text-center py-16 text-xs text-white/60">Loading matches…</p>
-      ) : failed ? (
+      {/* Competition tabs: Watch (streams) + the 12 free-data leagues. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Competitions">
+        <button
+          key="watch"
+          role="tab"
+          aria-selected={comp === 'watch'}
+          onClick={() => setComp('watch')}
+          className={`cine-pill cine-pill--sm flex-shrink-0${comp === 'watch' ? ' cine-pill--active' : ''}`}
+        >
+          Watch
+        </button>
+        {FCOMPS.map((c) => (
+          <button
+            key={c.code}
+            role="tab"
+            aria-selected={comp === c.code}
+            onClick={() => setComp(c.code)}
+            className={`cine-pill cine-pill--sm flex-shrink-0${comp === c.code ? ' cine-pill--active' : ''}`}
+          >
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      {comp === 'watch' ? (
+        loading ? (
+          <p className="text-center py-16 text-xs text-white/60">Loading matches…</p>
+        ) : failed ? (
+          <EmptyState
+            icon={<Trophy className="w-5 h-5" />}
+            title="Couldn't load matches"
+            description="The schedule feed is unreachable right now."
+            action={
+              <button onClick={() => setRefreshKey((k) => k + 1)} className="cine-control-btn">
+                Retry
+              </button>
+            }
+          />
+        ) : (
+          <>
+            {live.length > 0 && (
+              <section className="space-y-3">
+                <div className="cine-section-head">
+                  <h2 className="cine-section-title inline-flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-red-400" /> Live now
+                  </h2>
+                  <span className="text-xs text-white/60">{live.length} match{live.length === 1 ? '' : 'es'}</span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {live.map((m) => (
+                    <MatchCard key={m.id} match={m} onWatch={openMatch} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-3">
+              <div className="cine-section-head">
+                <h2 className="cine-section-title">Upcoming</h2>
+                <span className="text-xs text-white/60">{upcoming.length} match{upcoming.length === 1 ? '' : 'es'}</span>
+              </div>
+              {upcoming.length === 0 && live.length === 0 ? (
+                <EmptyState
+                  icon={<Trophy className="w-5 h-5" />}
+                  title="No matches listed"
+                  description="Nothing scheduled right now — check back closer to matchday."
+                />
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {upcoming.map((m) => (
+                    <MatchCard key={m.id} match={m} onWatch={openMatch} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )
+      ) : updating && !table ? (
+        <p className="text-center py-16 text-xs text-white/60">Loading {compName}…</p>
+      ) : showError ? (
         <EmptyState
           icon={<Trophy className="w-5 h-5" />}
-          title="Couldn't load matches"
-          description="The schedule feed is unreachable right now."
+          title="Couldn't load this competition"
+          description={loaded.error}
           action={
-            <button onClick={() => setRefreshKey((k) => k + 1)} className="cine-control-btn">
+            <button onClick={() => setDataRetry((r) => r + 1)} className="cine-control-btn">
               Retry
             </button>
           }
         />
       ) : (
         <>
-          {live.length > 0 && (
-            <section className="space-y-3">
-              <div className="cine-section-head">
-                <h2 className="cine-section-title inline-flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-red-400" /> Live now
-                </h2>
-                <span className="text-xs text-white/60">{live.length} match{live.length === 1 ? '' : 'es'}</span>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {live.map((m) => (
-                  <MatchCard key={m.id} match={m} onWatch={openMatch} />
-                ))}
-              </div>
-            </section>
-          )}
-
+          {/* Standings: real table, home/away splits, form dots. */}
           <section className="space-y-3">
             <div className="cine-section-head">
-              <h2 className="cine-section-title">Upcoming</h2>
-              <span className="text-xs text-white/60">{upcoming.length} match{upcoming.length === 1 ? '' : 'es'}</span>
+              <h2 className="cine-section-title">Standings</h2>
+              {updating && <span className="text-[11px] text-white/40">Updating…</span>}
+              <SegmentedControl options={VENUES} value={venue} onChange={setVenue} size="sm" />
             </div>
-            {upcoming.length === 0 && live.length === 0 ? (
-              <EmptyState
-                icon={<Trophy className="w-5 h-5" />}
-                title="No matches listed"
-                description="Nothing scheduled right now — check back closer to matchday."
-              />
+            {rows.length === 0 ? (
+              <p className="text-xs text-white/60 py-6 text-center">No table published for this competition yet.</p>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {upcoming.map((m) => (
-                  <MatchCard key={m.id} match={m} onWatch={openMatch} />
+              <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[10px] font-bold uppercase tracking-wider text-white/40 text-left">
+                      <th scope="col" className="py-2 pr-2 font-bold">#</th>
+                      <th scope="col" className="py-2 pr-2 font-bold">Team</th>
+                      <th scope="col" className="py-2 px-1.5 text-right font-bold">P</th>
+                      <th scope="col" className="py-2 px-1.5 text-right font-bold hidden sm:table-cell">W</th>
+                      <th scope="col" className="py-2 px-1.5 text-right font-bold hidden sm:table-cell">D</th>
+                      <th scope="col" className="py-2 px-1.5 text-right font-bold hidden sm:table-cell">L</th>
+                      <th scope="col" className="py-2 px-1.5 text-right font-bold hidden md:table-cell">GD</th>
+                      <th scope="col" className="py-2 pl-1.5 text-right font-bold">Pts</th>
+                      <th scope="col" className="py-2 pl-2 text-right font-bold hidden sm:table-cell">Form</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.team.id || r.team.name} className="border-t border-white/[0.07] text-white/90">
+                        <td className="py-2 pr-2 font-black text-white/50">{r.pos}</td>
+                        <td className="py-2 pr-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Crest name={r.team.name} crest={r.team.crest} />
+                            <span className="font-semibold truncate">{r.team.name}</span>
+                          </span>
+                        </td>
+                        <td className="py-2 px-1.5 text-right tabular-nums">{r.played}</td>
+                        <td className="py-2 px-1.5 text-right tabular-nums hidden sm:table-cell">{r.won}</td>
+                        <td className="py-2 px-1.5 text-right tabular-nums hidden sm:table-cell">{r.draw}</td>
+                        <td className="py-2 px-1.5 text-right tabular-nums hidden sm:table-cell">{r.lost}</td>
+                        <td className="py-2 px-1.5 text-right tabular-nums hidden md:table-cell">{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
+                        <td className="py-2 pl-1.5 text-right font-black text-white tabular-nums">{r.points}</td>
+                        <td className="py-2 pl-2 text-right hidden sm:table-cell"><FormDots form={r.form} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Fixtures: day pager, scores delayed on free data — badged, never live. */}
+          <section className="space-y-3">
+            <div className="cine-section-head">
+              <h2 className="cine-section-title inline-flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-white/60" /> Fixtures
+              </h2>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setDay((d) => shiftDayIso(d, -1))}
+                  className="cine-icon-btn cine-icon-btn--xs"
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setDay(isoDay())}
+                  className="cine-pill cine-pill--sm"
+                  aria-label="Back to today"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setDay((d) => shiftDayIso(d, 1))}
+                  className="cine-icon-btn cine-icon-btn--xs"
+                  aria-label="Next day"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-white/40">Scores delayed on free data — never presented as live.</p>
+            {fixtures.length === 0 ? (
+              <p className="text-xs text-white/60 py-6 text-center">No matches this day.</p>
+            ) : (
+              <div className="space-y-2">
+                {fixtures.map((m) => (
+                  <div key={m.id} className="mat-row px-4 py-3 flex items-center gap-3">
+                    <span className="w-14 flex-shrink-0 text-[11px] font-bold text-white/60">
+                      {fixtureLabel(m)}
+                    </span>
+                    <span className="flex-1 min-w-0 flex items-center justify-end gap-2">
+                      <span className="font-semibold text-white text-sm truncate text-right">{m.home.name}</span>
+                      <Crest name={m.home.name} crest={m.home.crest} />
+                    </span>
+                    <span className="flex-shrink-0 min-w-12 text-center text-sm font-black text-white tabular-nums" aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}>
+                      {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : 'vs'}
+                    </span>
+                    <span className="flex-1 min-w-0 flex items-center gap-2">
+                      <Crest name={m.away.name} crest={m.away.crest} />
+                      <span className="font-semibold text-white text-sm truncate">{m.away.name}</span>
+                    </span>
+                    {m.delayed && (
+                      <span className="cine-chip cine-chip--accent flex-shrink-0">Delayed</span>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
           </section>
+
+          {/* Scorers: bonus section, omitted when the free plan gates it. */}
+          {scorers && scorers.length > 0 && (
+            <section className="space-y-3">
+              <div className="cine-section-head">
+                <h2 className="cine-section-title">Top scorers</h2>
+              </div>
+              <div className="space-y-2">
+                {scorers.map((s, i) => (
+                  <div key={`${s.name}_${s.team}`} className="mat-row px-4 py-2.5 flex items-center gap-3">
+                    <span className="w-6 flex-shrink-0 text-xs font-black text-white/40 tabular-nums">{i + 1}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-bold text-white truncate">{s.name}</span>
+                      <span className="block text-[11px] text-white/50 truncate">{s.team}</span>
+                    </span>
+                    <span className="text-sm font-black text-white tabular-nums">{s.goals}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

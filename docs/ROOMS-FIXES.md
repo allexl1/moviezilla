@@ -456,8 +456,17 @@ git). Notes: football has no UI entry (route /football is dead —
 needs an owner call on where it lives); provider embeds show their
 sandbox-detection page + a minified third-party unhandled rejection
 (`cip0xy`, not our tree) under headless — environmental noise.
-Account menu round 2 (landed, needs live eyes + `avatars` bucket):
-avatar upload (2MB cap, upsert per user, URL in user_metadata) with
+Football keyed build (landed, key in .env.local + needs Vercel env):
+server-side /fdata proxy (key never in browser, allowlisted paths,
+quota-aware 429s per Daniel's header note), cached service (12h
+tables/scorers, 30min fixtures), comp tabs (Watch + 12), standings
+with total/home/away + form dots, fixtures with day pager + delayed
+badges (never live), crests with initial fallback, top scorers
+(free tier gates it nowhere — verified live). UI proven headless
+desktop + 390px zero-overflow; no Europa League on free (falls back
+to Streamed-only). Player ratings: none free-legit anywhere (Opta
+paid, SofaScore/FotMob proprietary) — top scorers instead.
+Account menu round 2 (landed, needs live eyes + `avatars` bucket):avatar upload (2MB cap, upsert per user, URL in user_metadata) with
 keyboard-reachable picker, sync row with saved/history counts,
 full-width sign out, danger zone with hold-to-confirm delete-my-data
 (server rows + local wipe, then sign out; auth user survives — browsers

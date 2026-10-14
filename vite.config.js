@@ -6,6 +6,7 @@ import tmdbImageHandler from './api/tmdb-image.js'
 import letterboxdHandler from './api/letterboxd/[username].js'
 import rtHandler from './api/rt.js'
 import footballHandler from './api/football.js'
+import fdataHandler from './api/fdata.js'
 import gifHandler from './api/gif.js'
 
 // Serves the Vercel-style api/ handlers under `npm run dev` so the app
@@ -33,6 +34,7 @@ function devApi() {
         else if (pathname === '/tmdb-image') handler = tmdbImageHandler
         else if (pathname === '/rt') handler = rtHandler
         else if (pathname === '/football') handler = footballHandler
+        else if (pathname === '/fdata') handler = fdataHandler
         else if (pathname === '/gif') handler = gifHandler
         else if (pathname.startsWith('/letterboxd/')) {
           handler = letterboxdHandler
