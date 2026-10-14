@@ -491,7 +491,12 @@ sticky score bar (Matchday rule), giant score/countdown hero, Watch,
 Model, goal/card/sub timeline, both squads, broadcasts plus venue,
 bookmaker odds only when offered. ESPN event resolved by day +
 two-side match; uncovered comps show the page without events.
-Headless-proven (Copa semi countdown).
+Headless-proven (Copa semi countdown). Fixes round: empty page was a
+stale dev server (api/espn.js + vite mount need restarts) plus missing
+loading states (added); score tap opens the page (chevron dropped);
+native calendar gets lime accent; crest images sit on light tiles
+(dark badges were invisible); ESPN slug for Copa Libertadores
+verified (conmebol.libertadores), Conference League has none.
 Team/player pages (landed): taps on standings, fixtures and scorers
 open modals. Team = table line, form, club scorers with photos, last 5
 results + next 5 from one cached team call. Player = verified search
