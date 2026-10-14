@@ -516,8 +516,14 @@ ESPN live layer (landed, isolated api/espn.js + services/espn.js +
 row overlay — delete all three and nothing else notices): all 12 slugs
 plus Europa League verified live, browser CORS forces the server proxy,
 60s cache with 3-slug batches, live minutes + scores overlay matched
-rows with an honest LIVE badge. Live overlay itself needs a live match
-to prove (nothing in play tonight); unit + no-crash integration green.
+rows with an honest LIVE badge. Summary pipe landed too (goals, cards,
+subs, squads, broadcasts, venue, bookmaker odds when offered — all
+verified live shapes, all defensive). Live overlay itself needs a live
+match to prove (nothing in play tonight); unit + no-crash integration
+green.
+Calendar (landed): yesterday+date, today+date in the middle pill which
+opens the native month picker, tomorrow+date. Shared by day view and
+comp fixtures.
 Account menu round 2 (landed, needs live eyes + `avatars` bucket):avatar upload (2MB cap, upsert per user, URL in user_metadata) with
 keyboard-reachable picker, sync row with saved/history counts,
 full-width sign out, danger zone with hold-to-confirm delete-my-data

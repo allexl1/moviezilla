@@ -69,8 +69,7 @@ async function fetchSlug(slug) {
     .filter(Boolean);
 }
 
-export async function liveAcross(slugs) {
-  const now = Date.now();
+export async function liveAcross(slugs) {  const now = Date.now();
   const cache = readCache();
   const out = [];
   const missing = [];
@@ -102,4 +101,116 @@ export async function liveAcross(slugs) {
     // cache is a nicety
   }
   return out;
+}
+
+// Match summary pipe (goals, cards, subs, squads, broadcasts, venue,
+// odds when the bookmakers offer them). Verified live shapes only —
+// every field is defensive, anything unrecognized drops out instead of
+// rendering wrong. 60s cache, one match page polls at 90s.
+const SUM_KEY = 'mz_espn_summary';
+const SUM_TTL = 60 * 1000;
+const SUM_MAX = 40;
+
+function readSumCache() {
+  try {
+    const raw = localStorage.getItem(SUM_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+// Key events → minute-tagged timeline rows (goals, cards, subs).
+export function normKeyEvents(json) {
+  const list = Array.isArray(json?.keyEvents) ? json.keyEvents : [];
+  const out = [];
+  for (const e of list) {
+    const kind = String(e?.type?.type || '').toLowerCase();
+    const isGoal = kind === 'goal';
+    const isCard = kind.includes('card');
+    const isSub = kind === 'substitution';
+    if (!isGoal && !isCard && !isSub) continue;
+    out.push({
+      minute: e?.clock?.displayValue || '',
+      kind: isGoal ? 'goal' : isCard ? 'card' : 'sub',
+      text: e?.shortText || e?.text || '',
+    });
+  }
+  return out;
+}
+
+// Squads: two groups in home/away order (matches the leaders ordering
+// seen live). Players carry shirt, position and headshot when present.
+export function normRosters(json) {
+  const groups = Array.isArray(json?.rosters) ? json.rosters : [];
+  return groups.slice(0, 2).map((g) => ({
+    players: (Array.isArray(g?.roster) ? g.roster : []).map((p) => ({
+      name: p?.displayName || '',
+      short: p?.shortDisplayName || '',
+      position: p?.position?.abbreviation || p?.position?.name || '',
+      jersey: p?.jersey ?? null,
+      photo: p?.headshot?.href || '',
+    })).filter((p) => p.name),
+  }));
+}
+
+export function normBroadcasts(json) {
+  const list = Array.isArray(json?.broadcasts) ? json.broadcasts : [];
+  return list
+    .map((b) => (typeof b === 'string' ? b : b?.name || b?.shortName || ''))
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+export function normVenue(json) {
+  const v = json?.gameInfo?.venue;
+  return typeof v === 'string' ? v : v?.fullName || v?.name || '';
+}
+
+// Bookmaker odds ride the summary when offered (hasOdds). Shown with
+// the provider name or not at all — never invented, never blended.
+export function normOdds(json) {
+  if (!json?.hasOdds) return null;
+  const d = (Array.isArray(json?.odds) ? json.odds : [])[0] || {};
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 1 ? Math.round(n * 100) / 100 : null;
+  };
+  const home = num(d.homeTeamOdds ?? d.moneyline);
+  const draw = num(d.drawOdds);
+  const away = num(d.awayTeamOdds);
+  if (home == null && draw == null && away == null) return null;
+  return { provider: d.provider?.name || '', home, draw, away };
+}
+
+export async function matchSummary(slug, eventId) {
+  if (!slug || !eventId) return null;
+  const key = `${slug}:${eventId}`;
+  const now = Date.now();
+  const cache = readSumCache();
+  const hit = cache[key];
+  if (hit && now - (hit.at || 0) < SUM_TTL) return hit.data;
+  const res = await fetch(`/api/espn?${new URLSearchParams({ path: `soccer/${slug}/summary`, event: String(eventId) })}`, {
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) throw new Error(`summary failed: ${res.status}`);
+  const json = await res.json();
+  const data = {
+    events: normKeyEvents(json),
+    rosters: normRosters(json),
+    broadcasts: normBroadcasts(json),
+    venue: normVenue(json),
+    odds: normOdds(json),
+  };
+  try {
+    cache[key] = { at: now, data };
+    const keys = Object.keys(cache).slice(-SUM_MAX);
+    const next = {};
+    for (const k of keys) next[k] = cache[k];
+    localStorage.setItem(SUM_KEY, JSON.stringify(next));
+  } catch {
+    // cache is a nicety
+  }
+  return data;
 }

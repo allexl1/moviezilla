@@ -10,11 +10,12 @@ const API = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const ALLOWED = [
   /^soccer\/[a-z0-9.]+\/scoreboard$/,
+  /^soccer\/[a-z0-9.]+\/summary$/,
 ];
 
 export default async function handler(req, res) {
   try {
-    const { path } = req.query;
+    const { path, ...queryParams } = req.query;
 
     if (!path || typeof path !== 'string') {
       return res.status(400).json({ error: 'Invalid or missing path' });
@@ -29,7 +30,10 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'ESPN path not allowed' });
     }
 
-    const targetUrl = `${API}/${cleanPath}`;
+    // Only the event id rides along (summary endpoint); everything else
+    // is dropped so callers can't reshape upstream queries.
+    const qs = queryParams.event ? `?event=${encodeURIComponent(String(queryParams.event)).slice(0, 24)}` : '';
+    const targetUrl = `${API}/${cleanPath}${qs}`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10000);
     let r;

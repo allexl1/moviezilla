@@ -124,6 +124,67 @@ const VENUES = [
   { id: 'away', name: 'Away' },
 ];
 
+// Day stepper with a real calendar in the middle: side buttons step
+// days showing their dates, the middle pill opens the native date
+// picker (a transparent input over the label — real month view on
+// every platform, zero custom calendar code to maintain).
+function shortDay(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
+}
+
+function longDay(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function DayPicker({ day, onChange }) {
+  const today = isoDay();
+  const prev = shiftDayIso(day, -1);
+  const next = shiftDayIso(day, 1);
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => onChange(prev)}
+        className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+        aria-label={`Previous day, ${longDay(prev)}`}
+      >
+        <ChevronLeft className="w-3.5 h-3.5" />
+        <span className="cine-tip" aria-hidden="true">{longDay(prev)}</span>
+      </button>
+      <span className="text-[11px] font-bold text-white/45 hidden sm:block">{shortDay(prev)}</span>
+      <label
+        className="relative cine-pill cine-pill--sm flex-shrink-0 cursor-pointer overflow-hidden"
+        aria-label={day === today ? `Today, ${longDay(day)}. Activate to pick a date.` : `${longDay(day)}. Activate to pick a date.`}
+      >
+        <span aria-hidden="true">{day === today ? `Today, ${longDay(day).split(', ')[1] || longDay(day)}` : longDay(day)}</span>
+        <input
+          type="date"
+          value={day}
+          onChange={(e) => {
+            if (e.target.value) onChange(e.target.value);
+          }}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+          style={{ colorScheme: 'dark' }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      </label>
+      <span className="text-[11px] font-bold text-white/45 hidden sm:block">{shortDay(next)}</span>
+      <button
+        onClick={() => onChange(next)}
+        className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+        aria-label={`Next day, ${longDay(next)}`}
+      >
+        <ChevronRight className="w-3.5 h-3.5" />
+        <span className="cine-tip" aria-hidden="true">{longDay(next)}</span>
+      </button>
+    </div>
+  );
+}
+
 function fixtureLabel(m) {
   if (m.finished) return 'FT';
   if (m.delayed) return 'Delayed';
@@ -728,29 +789,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
             <section className="space-y-3">
               <div className="cine-section-head">
                 <h2 className="cine-section-title">Matches</h2>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setDay((d) => shiftDayIso(d, -1))}
-                    className="cine-icon-btn cine-icon-btn--xs"
-                    aria-label="Previous day"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDay(isoDay())}
-                    className="cine-pill cine-pill--sm"
-                    aria-label="Back to today"
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setDay((d) => shiftDayIso(d, 1))}
-                    className="cine-icon-btn cine-icon-btn--xs"
-                    aria-label="Next day"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <DayPicker day={day} onChange={setDay} />
               </div>
               <SegmentedControl options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} size="sm" />
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Leagues">
@@ -1025,31 +1064,9 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
               <h2 className="cine-section-title inline-flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-white/60" /> Fixtures
               </h2>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setDay((d) => shiftDayIso(d, -1))}
-                  className="cine-icon-btn cine-icon-btn--xs"
-                  aria-label="Previous day"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setDay(isoDay())}
-                  className="cine-pill cine-pill--sm"
-                  aria-label="Back to today"
-                >
-                  Today
-                </button>
-                <button
-                  onClick={() => setDay((d) => shiftDayIso(d, 1))}
-                  className="cine-icon-btn cine-icon-btn--xs"
-                  aria-label="Next day"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <DayPicker day={day} onChange={setDay} />
             </div>
-            <p className="text-[11px] text-white/40">Scores delayed on free data — never presented as live.</p>
+            <p className="text-[11px] text-white/40">Scores delayed on free data, never presented as live.</p>
             {fixtures.length === 0 ? (
               <p className="text-xs text-white/60 py-6 text-center">No matches this day.</p>
             ) : (
