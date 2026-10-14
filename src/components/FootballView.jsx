@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay } from 'lucide-react';
-import { football, FOOTBALL_MIRRORS, formatKickoff } from '../services/football';
+import { football, FOOTBALL_MIRRORS, formatKickoff, getPreferredStream, setPreferredStream } from '../services/football';
 import EmptyState from './ui/EmptyState';
 
 function MatchCard({ match, onWatch }) {
@@ -100,6 +100,11 @@ export default function FootballView({ onToast }) {
         }
       }
       setStreams(all);
+      // Reopen on the last-working source when it's still listed —
+      // otherwise index 0, same as before.
+      const pref = getPreferredStream(match.id);
+      const prefIdx = pref ? all.findIndex((st) => st.via === pref.via && (st.n ?? 0) === (pref.n ?? 0)) : -1;
+      setStreamIdx(prefIdx >= 0 ? prefIdx : 0);
       if (all.length === 0) onToast?.('No playable streams for this match right now');
     } finally {
       setStreamsLoading(false);
@@ -154,7 +159,10 @@ export default function FootballView({ onToast }) {
             {streams.map((s, i) => (
               <button
                 key={`${s.via}_${s.n}_${i}`}
-                onClick={() => setStreamIdx(i)}
+                onClick={() => {
+                  setStreamIdx(i);
+                  setPreferredStream(watching.id, s);
+                }}
                 aria-pressed={i === streamIdx}
                 className={`cine-pill${i === streamIdx ? ' cine-pill--active' : ''}`}
               >

@@ -437,6 +437,19 @@ need live proof (sandbox embeds are DNS-dead, voice unfakeable).
 Round 5 (41/41 tests): owner call, CW shows everything played — the
 30s/5s gates plus tvEstablished are deleted, only pure 0s opens stay
 out (headless-proven with a seeded 0:14 row).
+Accounts code half (landed, needs owner dashboard half): sendCode drops
+emailRedirectTo (localhost baked into the magic link), both AccountModal
+hints are code-first (headless-proven copy, screenshot). Owner half:
+Supabase dashboard Auth URL Configuration, Site URL to the live domain.
+Football keyless part (landed): last-working source per match persists
+(tap = works, reopen starts there, dead prefs fall back to 0;
+headless-proven write + single entry). Stops here for keys:
+competition tabs, tables, fixtures, calendar and crests all need the
+football-data.org key (owner signup, .env.local + Vercel env, never
+git). Notes: football has no UI entry (route /football is dead —
+needs an owner call on where it lives); provider embeds show their
+sandbox-detection page + a minified third-party unhandled rejection
+(`cip0xy`, not our tree) under headless — environmental noise.
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

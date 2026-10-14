@@ -88,6 +88,45 @@ export const FOOTBALL_MIRRORS = [
   { name: 'Gooool365', url: 'https://gooool365.com/' },
 ];
 
+// Last-working source per match (delay spec step 2): the user tapping a
+// stream pill means "this one works" — that preference survives across
+// opens. Keyed by match id, matched on via + stream number (URLs rotate,
+// names don't). Capped so the map can't grow forever. No playback
+// detection is possible (cross-origin iframe never reports), so an
+// explicit tap is the only signal — opening never writes, only reads.
+const STREAM_PREF_KEY = 'mz_football_stream_pref';
+const STREAM_PREF_MAX = 50;
+
+function readStreamPrefs() {
+  try {
+    const raw = localStorage.getItem(STREAM_PREF_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getPreferredStream(matchId) {
+  if (!matchId) return null;
+  const pref = readStreamPrefs()[String(matchId)];
+  return pref && pref.via ? pref : null;
+}
+
+export function setPreferredStream(matchId, stream) {
+  if (!matchId || !stream?.via) return;
+  try {
+    const all = readStreamPrefs();
+    all[String(matchId)] = { via: stream.via, n: stream.n ?? 0, at: Date.now() };
+    const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0)).slice(0, STREAM_PREF_MAX);
+    const next = {};
+    for (const k of keys) next[k] = all[k];
+    localStorage.setItem(STREAM_PREF_KEY, JSON.stringify(next));
+  } catch {
+    // preference is a nicety, never blocks watching
+  }
+}
+
 export function formatKickoff(ms) {
   if (!ms) return '';
   const d = new Date(ms);
