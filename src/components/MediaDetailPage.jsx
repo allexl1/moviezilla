@@ -792,7 +792,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
                 setIsWatchlist(!isWatchlist);
                 onToast?.(added ? 'Added to Watchlist' : 'Removed from Watchlist');
               }}
-              className="cine-btn-circle cine-has-tip"
+              className="cine-icon-btn cine-icon-btn--on-art cine-has-tip"
 
               aria-label={isWatchlist ? 'Remove from List' : 'Add to Watchlist'}
             >
@@ -805,7 +805,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             {onWatchTogether && (
               <button
                 onClick={() => onWatchTogether(media, details)}
-                className="cine-btn-circle cine-has-tip"
+                className="cine-icon-btn cine-icon-btn--on-art cine-has-tip"
 
                 aria-label="Watch together in a room"
               >
@@ -817,7 +817,7 @@ export default function MediaDetailPage({ media, mediaType, onPlay, onSelectMedi
             {mediaType === 'tv' && (
               <button
                 onClick={toggleSeriesWatched}
-                className={`cine-btn-circle cine-has-tip${seriesDone ? ' text-[var(--cine-accent)]' : ''}`}
+                className="cine-icon-btn cine-icon-btn--on-art cine-has-tip"
 
                 aria-label={seriesDone ? 'Series watched, tap to undo' : 'Mark series watched'}
                 aria-pressed={seriesDone}

@@ -783,39 +783,6 @@ body.mz-vt .mz-page-fade {
   100% { --cine-sheen-angle: 105deg; }
 }
 
-/* Circle / Icon button */
-.cine-btn-circle {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--cine-radius-full);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top-color: rgba(255, 255, 255, 0.20);
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
-    rgba(12, 12, 16, 0.55);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 16px 40px rgba(0, 0, 0, 0.5);
-  color: var(--cine-text-primary);
-  backdrop-filter: blur(28px) saturate(150%);
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.cine-btn-circle:hover {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
-    rgba(20, 20, 26, 0.60);
-  border-color: rgba(255, 255, 255, 0.16);
-  border-top-color: rgba(255, 255, 255, 0.28);
-  transform: scale(1.06);
-}
-
 /* ─── Control Bar Scale (Apple HIG: 40px targets, one recipe everywhere) ───
    Player chrome, drawers, pickers and modal chrome all use these two.
    Navbar keeps its own denser scale by design — do not "fix" it toward this. */
@@ -879,6 +846,34 @@ body.mz-vt .mz-page-fade {
 
 .cine-icon-btn:active {
   transform: scale(0.96);
+}
+
+/* On-artwork icon button (detail hero circles ONLY): the universal
+   icon geometry plus a dark glass chip, because flat-transparent
+   ghosts out over bright frames (screenshot-proven). Same tokens as
+   the old circle, hero-scoped so dark chrome keeps the flat system.
+   Press state comes from the base :active above (untouched). */
+.cine-icon-btn.cine-icon-btn--on-art {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 16, 0.55);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.cine-icon-btn.cine-icon-btn--on-art:hover {
+  background: rgba(20, 20, 26, 0.60);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Series done: accent lives here, not in a Tailwind tint (unlayered
+   author CSS beats layered utilities — a text-[...] class on a cine-*
+   button is silently dead). aria-pressed is the state, set in JSX. */
+.cine-icon-btn.cine-icon-btn--on-art[aria-pressed="true"] {
+  color: var(--cine-accent);
 }
 
 /* Compact icon button for dense list rows (history/search actions).
@@ -2650,7 +2645,7 @@ body.mz-refract .cine-btn-ghost,
 body.mz-refract .cine-btn-accent,
 body.mz-refract .cine-control-btn,
 body.mz-refract .cine-icon-btn,
-body.mz-refract .cine-btn-circle,
+body.mz-refract .cine-icon-btn--on-art,
 body.mz-refract .cine-duo-btn,
 body.mz-refract .cine-input,
 body.mz-refract .cine-cw-play-btn,
@@ -3675,7 +3670,7 @@ body.mz-max-power .cine-soon-hover {
   .cine-btn-primary,
   .cine-btn-ghost,
   .cine-btn-accent,
-  .cine-btn-circle,
+  .cine-icon-btn--on-art,
   .cine-select,
   .cine-input,
   .cine-provider-pill,
@@ -3708,7 +3703,7 @@ body.mz-max-power .cine-soon-hover {
   .cine-btn-primary,
   .cine-btn-ghost,
   .cine-btn-accent,
-  .cine-btn-circle,
+  .cine-icon-btn--on-art,
   .cine-chip--glass,
   .cine-pill,
   .cine-react,

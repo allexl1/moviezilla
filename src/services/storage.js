@@ -418,6 +418,25 @@ export const storage = {
     return true;
   },
 
+  // Writer rule (playback rewrite): history takes ONLY provider-verified
+  // seconds. No voice on this frame means no write — a voice-less server
+  // holds the stopped point instead of counting wall time, and a stalled
+  // frame accrues nothing. Zero never clobbers a real point; rooms
+  // additionally never move backwards. Pure (unit-tested): the Player
+  // feeds it refs, storage decides. Returns the stamp or null.
+  decideSave({ voiced, voiceTime, voiceDur, prevTime, runtimeSec = 0, isRoom = false } = {}) {
+    if (!voiced) return null;
+    const t = Math.max(0, Math.floor(Number(voiceTime) || 0));
+    const d = Math.max(0, Math.floor(Number(voiceDur) || 0));
+    const prev = Math.max(0, Math.floor(Number(prevTime) || 0));
+    if (t <= 0 && d <= 0) return null;
+    if (t <= 0 && prev > 0) return null;
+    if (isRoom && prev - t > 5) return null;
+    const run = Math.max(0, Math.floor(Number(runtimeSec) || 0));
+    if (run > 60 && t >= run * 0.95) return { currentTime: run, duration: run };
+    return { currentTime: t, duration: d };
+  },
+
   // Single resume resolver (history rewrite, folds old A1): every
   // announcer and the player open ask here, never raw slots. Ranking:
   // finished series restarts at 0; finished episodes restart at 0;

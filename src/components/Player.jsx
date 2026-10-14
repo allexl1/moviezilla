@@ -60,9 +60,11 @@ function buildEmbedUrl({ server, mediaId, isTv, season, episode, resumeTime }) {
       : `https://vidy.st/movie/${mediaId}`;
     const params = new URLSearchParams({ color: '95FF50', progress: String(t) });
     if (isTv) {
-      params.set('nextEpisode', 'true');
+      // episodeSelector only: the provider must NEVER self-navigate.
+      // We used to arm its autoplay-next too, and it changed episodes
+      // under us while our chrome still said S1E1. Single driver now:
+      // us (auto-advance on voiced ended), the provider just plays.
       params.set('episodeSelector', 'true');
-      params.set('autoplayNextEpisode', 'true');
     }
     return `${base}?${params.toString()}`;
   }
@@ -138,6 +140,19 @@ export default function Player({ media, details, onClose, onPosition = null, roo
   // Debounce for provider 'pause' → room lock: buffer/seek blips resolve
   // with a 'play' inside ~1.5s and cancel; a held pause locks the room.
   const pauseEventTimer = useRef(null);
+  // Pending auto-advance after a voiced ended (solo tv only): fired by
+  // timer, cancelled by unmount, episode/server change, or the user
+  // taking over (play/seek). A stale fire must never yank a new episode.
+  const autoNextTimer = useRef(null);
+  const cancelAutoNext = () => {
+    if (autoNextTimer.current) {
+      clearTimeout(autoNextTimer.current);
+      autoNextTimer.current = null;
+    }
+  };
+  // Stable mirror for the auto-follow timer (declared early so the
+  // message handler can call it; assigned after handleSelectEpisode).
+  const handleSelectEpisodeRef = useRef(null);
 
   // Floating chat follows new messages while open.
   useEffect(() => {
@@ -249,70 +264,58 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     genres: (details?.genres || []).map((g) => g.id),
   });
 
-  // Best-known playback state, written on a heartbeat + on close.
-  // Source priority: real provider postMessage > wall-clock estimate.
-  // Never overwrite a real timestamp with 0 (mount/unmount races).
+  // Heartbeat + close writer (playback rewrite): storage takes the last
+  // PROVIDER-voiced second through the shared rule, never the wall
+  // estimate. A voice-less server (vaplayer) or a stalled frame writes
+  // nothing — the stopped point holds instead of counting phantom time.
   const saveNowRef = useRef(() => {});
   saveNowRef.current = () => {
     if (!mediaId) return;
-    const p = pos();
+    const pm = playbackRef.current;
     const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
-    if (p.time <= 0 && (prev?.currentTime || 0) > 0) return;
-    // Room mode: never write from the wall estimate alone. An idle room
-    // player (provider silent) must not overwrite a real resume point
-    // with seconds it never played (a 7:00 resume wiped by 0:05 of
-    // sitting in the room). Only provider-verified time may write.
-    if (framed && !p.voiced) return;
-    // Room mode: never move the resume point backwards. Joining a fresh
-    // room at 0:00 (or rejoining mid-title) must not erase where I
-    // stopped; forward progress still records. 5s tolerance for noise.
-    if (framed && (prev?.currentTime || 0) - p.time > 5) return;
-    // Don't spam History with 0s opens: first meaningful save happens
-    // after ~5s of actual watching (see heartbeat below).
-    if (p.time <= 0 && !p.voiced && activeMsRef.current < 4000) return;
-    // Peek rule: a brand-new title needs 5 real seconds (or provider
-    // playback evidence) before it earns a history row at all.
-    if (!prev && p.time < 5 && !p.voiced) return;
-    // Runtime-anchored completion is VOICE-GATED (history rewrite): a
-    // silent wall clock may resume but must never finish on its own —
-    // that exact snap deleted shows from Continue Watching. Manual eye
-    // and provider-voiced finishes still complete.
-    const runtimeSec = Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60);
-    let saveTime = p.time;
-    let saveDur = p.duration;
-    if (runtimeSec > 60 && p.time >= runtimeSec * 0.95 && p.voiced) {
-      saveTime = runtimeSec;
-      saveDur = runtimeSec;
-    }
+    const stamp = storage.decideSave({
+      voiced: pmSeenRef.current,
+      voiceTime: pm.currentTime,
+      voiceDur: pm.duration,
+      prevTime: prev?.currentTime || 0,
+      runtimeSec: Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60),
+      isRoom: framed,
+    });
+    if (!stamp) return;
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
       season: currentSeason,
       episode: currentEpisode,
-      currentTime: saveTime,
-      duration: saveDur,
+      currentTime: stamp.currentTime,
+      duration: stamp.duration,
       server,
       ...buildMeta(),
     });
   };
 
-  // Voice evidence from the provider (ticks or ended): the only path
-  // that may advance the stored point beyond the wall estimate, and the
-  // only path (with the manual eye) that may complete a title. The
-  // handler resolves what to save; this applies the never-clobber guard
-  // and writes. Voice ticks count as playback evidence, so the peek
-  // rule doesn't apply here.
+  // Voice evidence from the provider (ticks or ended): same shared rule,
+  // voiced by construction. Voice ticks count as playback evidence, so
+  // the peek rule doesn't apply here.
   const saveVoice = (saveT, saveDur) => {
     if (!mediaId) return;
     const prev = storage.getProgress(isTv ? 'tv' : 'movie', mediaId);
-    if (saveT <= 0 && (prev?.currentTime || 0) > 0) return;
+    const stamp = storage.decideSave({
+      voiced: true,
+      voiceTime: saveT,
+      voiceDur: saveDur,
+      prevTime: prev?.currentTime || 0,
+      runtimeSec: Math.round((details?.runtime || details?.episode_run_time?.[0] || 0) * 60),
+      isRoom: framed,
+    });
+    if (!stamp) return;
     storage.saveProgress({
       mediaId,
       type: isTv ? 'tv' : 'movie',
       season: currentSeason,
       episode: currentEpisode,
-      currentTime: Math.floor(saveT),
-      duration: Math.floor(saveDur),
+      currentTime: stamp.currentTime,
+      duration: stamp.duration,
       server,
       ...buildMeta(),
     });
@@ -704,6 +707,9 @@ export default function Player({ media, details, onClose, onPosition = null, roo
             }
           }
           if (type === 'play') {
+            // User took over inside the auto-follow grace window
+            // (replay via provider chrome): the pending advance dies.
+            cancelAutoNext();
             pausedProvRef.current = false;
             lastTickRef.current = Date.now();
             activeMsRef.current = 0;
@@ -717,7 +723,10 @@ export default function Player({ media, details, onClose, onPosition = null, roo
           const isEnd = type === 'ended' || type === 'complete';
           if (t > 0 || isEnd) {
             const est = pos().time;
-            if (type === 'seeked') frameSeekSeenRef.current = true;
+            if (type === 'seeked') {
+              frameSeekSeenRef.current = true;
+              cancelAutoNext();
+            }
             if (!convergedRef.current && !isEnd) {
               if (type === 'seeked' || t >= est - 30 || Date.now() > convergeUntilRef.current) {
                 // Genuine-restart check (history rewrite): the window
@@ -803,7 +812,34 @@ export default function Player({ media, details, onClose, onPosition = null, roo
                 // never block the write path for a mark
               }
             }
-            // Throttled persist: same second or <8s since last write skips
+            // Auto-follow (owner call: episodes start instantly). A
+            // provider-voiced ended on a KNOWN non-finale episode flows
+            // into the next one through the same path as tapping Next —
+            // no separate advance mechanism. Solo tv only: rooms are
+            // host-driven, movies have no next. Unknown catalog never
+            // auto-drives (an optimistic E+1 could open a void) — the
+            // manual Next button stays the path there. The provider no
+            // longer self-navigates (see URL builder), so nothing fights
+            // the takeover; a user play/seek inside the grace window
+            // cancels it (they took over).
+            if (isEnd && doSave && isTv && !framed && !roomLocked) {
+              try {
+                const counts = storage.getSeasonCounts(mediaId);
+                const known = Math.floor(Number(counts?.seasons?.[currentSeason]) || 0) > 0;
+                const nx = known
+                  ? storage.nextEpisode({ mediaId, season: currentSeason, episode: currentEpisode, totalSeasons: details?.number_of_seasons || 0 })
+                  : null;
+                cancelAutoNext();
+                if (nx) {
+                  autoNextTimer.current = setTimeout(() => {
+                    autoNextTimer.current = null;
+                    handleSelectEpisodeRef.current?.(nx.season, nx.episode);
+                  }, 2000);
+                }
+              } catch {
+                // never block the write path for a follow
+              }
+            }
             // the full-map stringify (was: every provider tick, ~1/sec).
             // Voice is the only path that advances storage past the wall
             // estimate — and the only path (with the manual eye) that may
@@ -829,10 +865,14 @@ export default function Player({ media, details, onClose, onPosition = null, roo
         clearTimeout(pauseEventTimer.current);
         pauseEventTimer.current = null;
       }
+      // Same for a pending auto-follow: unmount/episode change kills it.
+      cancelAutoNext();
     };
   }, [mediaId, isTv, currentSeason, currentEpisode, details, media]);
 
   const handleSelectEpisode = (seasonNum, episodeNum) => {
+    // A manual pick during a pending auto-follow wins; the timer dies.
+    cancelAutoNext();
     // Stamp the old episode's position before switching.
     saveNowRef.current();
     // The new episode takes over the top-level immediately: finishing
@@ -872,7 +912,12 @@ export default function Player({ media, details, onClose, onPosition = null, roo
     setKey((prev) => prev + 1);
   };
 
+  // Stable mirror assignment (see declaration above): the ended handler
+  // arms a timer that outlives its render's closure.
+  handleSelectEpisodeRef.current = handleSelectEpisode;
+
   const handleServerChange = (newServer) => {
+    cancelAutoNext();
     saveNowRef.current();
     const at = pos().time;
     setServer(newServer);
@@ -969,21 +1014,6 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               <span>Episodes</span>
             </button>
           )}
-          {nextEp && (
-            <button
-              onClick={() => {
-                markChromeTouched();
-                handleSelectEpisode(nextEp.season, nextEp.episode);
-              }}
-              className="cine-control-btn cine-has-tip"
-              aria-label={`Next episode: Season ${nextEp.season} Episode ${nextEp.episode}`}
-            >
-              <SkipForward className="w-4 h-4" />
-              <span>Next</span>
-              <span className="cine-tip cine-tip--below" aria-hidden="true">S{nextEp.season} E{nextEp.episode}</span>
-            </button>
-          )}
-
           <ServerSwitcher
             currentServer={server}
             onSelectServer={handleServerChange}
@@ -995,6 +1025,20 @@ export default function Player({ media, details, onClose, onPosition = null, roo
               }
             }}
           />
+          {nextEp && (
+            <button
+              onClick={() => {
+                markChromeTouched();
+                handleSelectEpisode(nextEp.season, nextEp.episode);
+              }}
+              className="cine-control-btn cine-has-tip"
+              aria-label="Go to the next episode"
+            >
+              <SkipForward className="w-4 h-4" />
+              <span>Next</span>
+              <span className="cine-tip cine-tip--below" aria-hidden="true">Go to the next episode</span>
+            </button>
+          )}
 
           <button
             onClick={() => {

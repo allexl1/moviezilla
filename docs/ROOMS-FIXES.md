@@ -418,6 +418,22 @@ Exit-player clicks fail headless when the chrome auto-hides —
 synthetic Escape (cancelable:true) or a key poke recovers it.
 Remains now: live 2-device proof (receive, real photo render,
 delete-file, feel) + owner feel pass on Next/series-eye.
+Landed round 4 (42/42 tests): voice-only writer — history takes
+provider-verified seconds only (`decideSave`, unit-tested, both writers
+routed through it), so vaplayer holds the stopped point instead of
+counting wall time and stalled frames accrue nothing (this also
+supersedes the old "manual Next only" rule below: owner call
+AUTO-FOLLOW — a voiced ended on a known non-finale episode flows into
+the next one through the Next path after a 2s grace, user play/seek or
+unmount cancels; provider self-navigation params removed so one driver
+exists; unknown catalog never auto-drives, vaplayer never voices so it
+stays manual-only there). Hero circles mapped onto the universal icon
+token with a hero-scoped on-art chip (flat ghosted over bright frames,
+screenshot-proven) + the dead Tailwind accent tint moved into CSS
+(unlayered author CSS beats layered utilities — it never applied).
+Headless green for everything provable (order/hover asserts, drawer
+Current icon, chip desktop + 390px zero-overflow); voice + follow
+need live proof (sandbox embeds are DNS-dead, voice unfakeable).
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

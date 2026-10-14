@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, ListVideo, ChevronDown, Crosshair } from 'lucide-react';
+import { X, Check, ListVideo, ChevronDown, LocateFixed } from 'lucide-react';
 import { tmdb, FALLBACK_POSTER } from '../services/tmdb';
 import { storage } from '../services/storage';
 
@@ -132,12 +132,12 @@ export default function EpisodeDrawer({
             {activeSeason !== currentSeason && (
               <button
                 onClick={() => setActiveSeason(currentSeason)}
-                className="cine-pill cine-pill--sm"
-                
-                aria-label="Jump to current episode"
+                className="cine-icon-btn cine-icon-btn--xs cine-has-tip"
+
+                aria-label="Go to the current episode"
               >
-                <Crosshair className="w-3 h-3" />
-                Current
+                <LocateFixed className="w-3.5 h-3.5" />
+                <span className="cine-tip" aria-hidden="true">Go to the current episode</span>
               </button>
             )}
           </div>

@@ -301,3 +301,28 @@ describe('full history dates (history rewrite remains)', () => {
     assert.equal(formatFullDate(NaN), '');
   });
 });
+
+describe('writer rule (voice-only playback)', () => {
+  it('writes nothing without provider voice', () => {
+    assert.equal(storage.decideSave({ voiced: false, voiceTime: 600, voiceDur: 2700, prevTime: 100 }), null);
+    assert.equal(storage.decideSave({}), null);
+  });
+  it('writes nothing verified-nothing, never clobbers with zero', () => {
+    assert.equal(storage.decideSave({ voiced: true, voiceTime: 0, voiceDur: 0, prevTime: 0 }), null);
+    assert.equal(storage.decideSave({ voiced: true, voiceTime: 0, voiceDur: 2700, prevTime: 600 }), null);
+  });
+  it('rooms never move backwards, solo keeps latest-wins', () => {
+    assert.equal(storage.decideSave({ voiced: true, voiceTime: 100, voiceDur: 2700, prevTime: 600, isRoom: true }), null);
+    assert.deepEqual(storage.decideSave({ voiced: true, voiceTime: 100, voiceDur: 2700, prevTime: 600 }), { currentTime: 100, duration: 2700 });
+  });
+  it('snaps voiced finishes to runtime, passes plain points through', () => {
+    assert.deepEqual(
+      storage.decideSave({ voiced: true, voiceTime: 2600, voiceDur: 2700, prevTime: 0, runtimeSec: 2700 }),
+      { currentTime: 2700, duration: 2700 }
+    );
+    assert.deepEqual(
+      storage.decideSave({ voiced: true, voiceTime: 600, voiceDur: 2700, prevTime: 100, runtimeSec: 2700 }),
+      { currentTime: 600, duration: 2700 }
+    );
+  });
+});
