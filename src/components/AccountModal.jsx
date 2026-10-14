@@ -255,14 +255,13 @@ function AccountBody() {
               {busy ? 'Sending…' : signup ? 'Create account' : 'Log in'}
             </button>
             <p className="flex items-center justify-center gap-1.5 text-[11px] text-white/40">
-              <Lock className="w-3 h-3" /> No password. Tap the link in the email to sign in instantly.
+              <Lock className="w-3 h-3" /> No password. We email you a 6-digit code.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <p className="text-center text-[13px] text-white/60">
-              Tap the link we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span>
-              {`, or enter the 6-digit code below`}
+              Enter the 6-digit code we sent to <span className="font-bold text-white/90">{email || 'your inbox'}</span>
             </p>
             <div className="flex justify-center">
               <OtpBoxes code={code} onCode={setCode} disabled={busy} />

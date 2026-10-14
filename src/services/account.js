@@ -140,11 +140,13 @@ export async function sendCode(email) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) throw new Error('Enter a valid email address.');
   const sb = getSupabase();
   if (!sb) throw new Error('Sync service is not configured.');
+  // Code-first flow: no emailRedirectTo (it baked localhost into the
+  // magic link in dev and our copy pushed the link as primary). The OTP
+  // code path never needed it; the link stays as Supabase default backup.
   const { error } = await sb.auth.signInWithOtp({
     email: clean,
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: window.location.origin,
     },
   });
   if (error) throw new Error(friendlyAuthError(error, 'Could not send the code.'));
