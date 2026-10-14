@@ -11,6 +11,7 @@ const API = 'https://api.football-data.org/v4';
 
 const ALLOWED = [
   /^competitions$/,
+  /^matches$/,
   /^competitions\/[A-Z0-9]+\/standings$/,
   /^competitions\/[A-Z0-9]+\/matches$/,
   /^competitions\/[A-Z0-9]+\/scorers$/,

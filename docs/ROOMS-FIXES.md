@@ -473,6 +473,17 @@ permanent client photo cache + in-flight dedupe, cutout-preferred
 picks, initial-chip fallback. Headless-proven on PL scorers (9/10 real
 faces). Next: Poisson predictor from finished-match data + Apple-dense
 pass, both keyless.
+F1 match center (landed): one-call day view grouped by league (rail
+with emblems, FT/delayed badges, crests, matchday labels, Table links
+into comp tabs, client All/Watchable/Finished filters), Watch buttons
+on confident two-side stream matches (normalized matcher + alias list,
+unit-tested; unmatched streams keep cards below so nothing is lost).
+Upstream lesson: same-day date windows return empty (end exclusive),
+fetch day..day+1 and filter. Headless-proven desktop + 390px
+zero-overflow. No scraping anywhere: soccer365/FotMob/SofaScore all
+wall bots (live 403s); ESPN unofficial JSON verified working
+(scoreboard/teams/logos) as a possible live layer only on explicit
+owner yes.
 Account menu round 2 (landed, needs live eyes + `avatars` bucket):avatar upload (2MB cap, upsert per user, URL in user_metadata) with
 keyboard-reachable picker, sync row with saved/history counts,
 full-width sign out, danger zone with hold-to-confirm delete-my-data

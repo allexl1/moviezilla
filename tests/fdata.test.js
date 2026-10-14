@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { normTable, normMatches, normScorers, isoDay, shiftDayIso } from '../src/services/fdata.js';
+import { normTable, normMatches, normScorers, isoDay, shiftDayIso, filterUtcDay } from '../src/services/fdata.js';
+import { clubKey, findStreamFor } from '../src/services/football.js';
 
 describe('fdata standings truth', () => {
   const json = {
@@ -58,5 +59,45 @@ describe('fdata scorers + dates', () => {
     assert.equal(shiftDayIso('2026-10-14', 1), '2026-10-15');
     assert.equal(shiftDayIso('2026-10-14', -1), '2026-10-13');
     assert.match(isoDay(), /^\d{4}-\d{2}-\d{2}$/);
+  });
+  it('keeps only the requested UTC day', () => {
+    const rows = [
+      { utc: Date.parse('2026-10-14T18:45:00Z') },
+      { utc: Date.parse('2026-10-15T00:30:00Z') },
+      { utc: 0 },
+    ];
+    assert.equal(filterUtcDay(rows, '2026-10-14').length, 1);
+  });
+});
+
+describe('day view competition + stream matching', () => {
+  it('carries the competition on every row', () => {
+    const [m] = normMatches({
+      matches: [{
+        id: 9, utcDate: '2026-10-14T18:45:00Z', status: 'FINISHED',
+        competition: { code: 'CL', name: 'UEFA Champions League', emblem: 'https://x/CL.png' },
+        homeTeam: { name: 'A' }, awayTeam: { name: 'B' }, score: { fullTime: { home: 1, away: 0 } },
+      }],
+    });
+    assert.deepEqual(m.competition, { code: 'CL', name: 'UEFA Champions League', emblem: 'https://x/CL.png' });
+  });
+  it('normalizes club noise and aliases', () => {
+    assert.equal(clubKey('FC Porto'), 'porto');
+    assert.equal(clubKey('Fenerbahçe SK'), 'fenerbahce');
+    assert.equal(clubKey('FK Bodø/Glimt'), 'bodo glimt');
+    assert.equal(clubKey('Man City'), 'manchester city');
+    assert.equal(clubKey('PSG'), 'paris saint germain');
+  });
+  it('matches both sides confidently or not at all', () => {
+    const streams = [
+      { title: 'Man City vs PSG' },
+      { title: 'Real Betis vs Porto' },
+      { title: 'Goals Show Xtra (TNT)' },
+    ];
+    assert.equal(findStreamFor(streams, 'Manchester City FC', 'Paris Saint-Germain FC').title, 'Man City vs PSG');
+    assert.equal(findStreamFor(streams, 'Real Betis Balompié', 'FC Porto').title, 'Real Betis vs Porto');
+    assert.equal(findStreamFor(streams, 'AS Roma', 'Real Madrid CF'), null);
+    assert.equal(findStreamFor(streams, 'Manchester City FC', 'Real Madrid CF'), null);
+    assert.equal(findStreamFor([], 'A', 'B'), null);
   });
 });

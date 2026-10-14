@@ -110,6 +110,11 @@ export function normMatches(json) {
       matchday: m?.matchday ?? null,
       delayed: liveish,
       finished: status === 'FINISHED',
+      competition: {
+        code: m?.competition?.code || '',
+        name: m?.competition?.name || '',
+        emblem: m?.competition?.emblem || '',
+      },
       home: {
         name: m?.homeTeam?.name || '',
         crest: m?.homeTeam?.crest || '',
@@ -140,6 +145,15 @@ export const fdata = {
   async table(code) {
     return normTable(await proxyGet(`competitions/${code}/standings`, {}, 'table'));
   },
+  // Whole-day view (one call for all competitions): the upstream date
+  // window end is exclusive (same-day ranges come back empty), so fetch
+  // day..day+1 and keep the requested UTC day client-side.
+  async dayAll(day) {
+    const rows = normMatches(
+      await proxyGet('matches', { dateFrom: day, dateTo: shiftDayIso(day, 1) }, 'fixtures')
+    );
+    return filterUtcDay(rows, day);
+  },
   // Fixtures for a date window (YYYY-MM-DD). Past dates = results.
   async fixtures(code, from, to) {
     return normMatches(await proxyGet(`competitions/${code}/matches`, { dateFrom: from, dateTo: to }, 'fixtures'));
@@ -154,6 +168,15 @@ export const fdata = {
     }
   },
 };
+
+// Keep rows whose UTC calendar day matches (dayAll fetches day..day+1
+// because the upstream window end is exclusive).
+export function filterUtcDay(rows, day) {
+  return (rows || []).filter((m) => {
+    if (!m?.utc) return false;
+    return new Date(m.utc).toISOString().slice(0, 10) === day;
+  });
+}
 
 export function isoDay(d = new Date()) {
   const y = d.getFullYear();

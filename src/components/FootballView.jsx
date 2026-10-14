@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { football, FOOTBALL_MIRRORS, formatKickoff, getPreferredStream, setPreferredStream } from '../services/football';
+import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, getPreferredStream, setPreferredStream, findStreamFor } from '../services/football';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { playerPhoto } from '../services/tsdb';
 import EmptyState from './ui/EmptyState';
@@ -127,8 +127,22 @@ function fixtureLabel(m) {
   if (m.status === 'POSTPONED') return 'Postponed';
   if (m.status === 'SUSPENDED') return 'Suspended';
   if (m.status === 'CANCELLED') return 'Cancelled';
-  return formatKickoff(m.utc);
+  return formatTime(m.utc);
 }
+
+// Round column (soccer365 anatomy): matchday number wins, else the
+// stage humanized. One label per row, never invented.
+function roundLabel(m) {
+  if (m.matchday) return `Matchday ${m.matchday}`;
+  const s = String(m.stage || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return s || '';
+}
+
+const DAY_FILTERS = [
+  { id: 'all', name: 'All' },
+  { id: 'watchable', name: 'Watchable' },
+  { id: 'finished', name: 'Finished' },
+];
 
 export default function FootballView({ onToast }) {
   const [live, setLive] = useState([]);
@@ -152,6 +166,34 @@ export default function FootballView({ onToast }) {
   const [dataRetry, setDataRetry] = useState(0);
   const queryKey = `${comp}|${day}|${dataRetry}`;
   const updating = comp !== 'watch' && loaded.key !== queryKey;
+
+  // Day view (F1 match center): one call covers all competitions, rows
+  // group client-side by league. Same render-derived loading as above.
+  const [dayFilter, setDayFilter] = useState('all');
+  const [railComp, setRailComp] = useState('all');
+  const [dayLoaded, setDayLoaded] = useState({ key: null, rows: [], error: '' });
+  const dayUpdating = dayLoaded.key !== day;
+  useEffect(() => {
+    if (dayLoaded.key === day) return;
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await fdata.dayAll(day);
+        if (alive) setDayLoaded({ key: day, rows, error: '' });
+      } catch (err) {
+        if (alive) {
+          setDayLoaded({
+            key: day,
+            rows: [],
+            error: err?.rateLimited ? 'Scores are busy. Retry shortly.' : 'Could not load matches.',
+          });
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [day, dayLoaded.key]);
 
   // Auto-refresh the board every minute while open.
   useEffect(() => {
@@ -335,6 +377,23 @@ export default function FootballView({ onToast }) {
   const showError = !updating && loaded.error;
   const rows = table ? table[venue] || table.total : [];
 
+  // Day view assembly (F1): Streamed watchables meet data rows on the
+  // confident matcher only — no match, no button. Unmatched streams
+  // keep their cards below, so no coverage is ever lost.
+  const streamPool = [...live, ...upcoming];
+  const dayRows = dayLoaded.rows.map((m) => ({ m, hit: findStreamFor(streamPool, m.home.name, m.away.name) }));
+  const hitTitles = new Set(dayRows.filter((r) => r.hit).map((r) => r.hit.title));
+  const extraStreams = upcoming.filter((u) => !hitTitles.has(u.title));
+  const dayComps = FCOMPS.filter((c) => dayRows.some((r) => r.m.competition.code === c.code));
+  const railComps = railComp === 'all' ? dayComps : dayComps.filter((c) => c.code === railComp);
+  const visibleRows = (code) => dayRows.filter((r) => {
+    if (r.m.competition.code !== code) return false;
+    if (dayFilter === 'finished' && !r.m.finished) return false;
+    if (dayFilter === 'watchable' && !r.hit) return false;
+    return true;
+  });
+  const visibleCount = railComps.reduce((n, c) => n + visibleRows(c.code).length, 0);
+
   return (
     <div className="space-y-10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -412,25 +471,158 @@ export default function FootballView({ onToast }) {
               </section>
             )}
 
+            {/* Day view (F1 match center): date pager, client filters,
+                league rail, rows grouped by league. One fetch per day,
+                filters never refetch. */}
             <section className="space-y-3">
               <div className="cine-section-head">
-                <h2 className="cine-section-title">Upcoming</h2>
-                <span className="text-xs text-white/60">{upcoming.length} match{upcoming.length === 1 ? '' : 'es'}</span>
+                <h2 className="cine-section-title">Matches</h2>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setDay((d) => shiftDayIso(d, -1))}
+                    className="cine-icon-btn cine-icon-btn--xs"
+                    aria-label="Previous day"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDay(isoDay())}
+                    className="cine-pill cine-pill--sm"
+                    aria-label="Back to today"
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => setDay((d) => shiftDayIso(d, 1))}
+                    className="cine-icon-btn cine-icon-btn--xs"
+                    aria-label="Next day"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              {upcoming.length === 0 && live.length === 0 ? (
+              <SegmentedControl options={DAY_FILTERS} value={dayFilter} onChange={setDayFilter} size="sm" />
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Leagues">
+                <button
+                  role="tab"
+                  aria-selected={railComp === 'all'}
+                  onClick={() => setRailComp('all')}
+                  className={`cine-pill cine-pill--sm flex-shrink-0${railComp === 'all' ? ' cine-pill--active' : ''}`}
+                >
+                  All
+                </button>
+                {dayComps.map((c) => {
+                  const emb = dayRows.find((r) => r.m.competition.code === c.code)?.m.competition.emblem || '';
+                  return (
+                    <button
+                      key={c.code}
+                      role="tab"
+                      aria-selected={railComp === c.code}
+                      onClick={() => setRailComp(railComp === c.code ? 'all' : c.code)}
+                      className={`cine-pill cine-pill--sm flex-shrink-0${railComp === c.code ? ' cine-pill--active' : ''}`}
+                    >
+                      <Crest name={c.name} crest={emb} />
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {dayUpdating && dayRows.length === 0 ? (
+                <p className="text-center py-10 text-xs text-white/60">Loading matches…</p>
+              ) : dayLoaded.error ? (
                 <EmptyState
                   icon={<Trophy className="w-5 h-5" />}
-                  title="No matches listed"
-                  description="Nothing scheduled right now — check back closer to matchday."
+                  title="Couldn't load matches"
+                  description={dayLoaded.error}
+                  action={
+                    <button onClick={() => setDayLoaded((d) => ({ ...d, key: null }))} className="cine-control-btn">
+                      Retry
+                    </button>
+                  }
                 />
+              ) : visibleCount === 0 ? (
+                <p className="text-xs text-white/60 py-6 text-center">
+                  {dayRows.length === 0 ? 'No matches this day.' : 'Nothing under this filter.'}
+                </p>
               ) : (
+                railComps.map((c) => {
+                  const group = visibleRows(c.code);
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={c.code} className="space-y-2">
+                      <div className="flex items-center gap-2 pt-2">
+                        <Crest name={c.name} crest={group[0].m.competition.emblem} />
+                        <h3 className="text-sm font-bold text-white">{group[0].m.competition.name || c.name}</h3>
+                        <span className="flex-1" />
+                        <button
+                          onClick={() => {
+                            setComp(c.code);
+                            window.scrollTo(0, 0);
+                          }}
+                          className="text-[11px] font-bold text-white/50 hover:text-white transition cursor-pointer flex-shrink-0"
+                          aria-label={`Open ${c.name} table`}
+                        >
+                          Table
+                        </button>
+                      </div>
+                      {group.map(({ m, hit }) => (
+                        <div key={m.id} className="mat-row px-3 py-2.5 flex items-center gap-2">
+                          <span className="w-14 flex-shrink-0 text-[11px] font-bold">
+                            {m.finished ? (
+                              <span className="text-white/55">FT</span>
+                            ) : m.delayed ? (
+                              <span className="text-[var(--cine-accent)]">Delayed</span>
+                            ) : (
+                              <span className="text-white/60">{formatTime(m.utc)}</span>
+                            )}
+                          </span>
+                          <span className="flex-1 min-w-0 flex items-center justify-end gap-2">
+                            <span className="font-semibold text-white text-sm truncate text-right">{m.home.name}</span>
+                            <Crest name={m.home.name} crest={m.home.crest} />
+                          </span>
+                          <span
+                            className="flex-shrink-0 w-14 text-center text-sm font-black text-white tabular-nums"
+                            aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}
+                          >
+                            {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold">vs</span>}
+                          </span>
+                          <span className="flex-1 min-w-0 flex items-center gap-2">
+                            <Crest name={m.away.name} crest={m.away.crest} />
+                            <span className="font-semibold text-white text-sm truncate">{m.away.name}</span>
+                          </span>
+                          <span className="hidden xl:block w-28 flex-shrink-0 text-right text-[11px] text-white/40 truncate">
+                            {roundLabel(m)}
+                          </span>
+                          {hit && (
+                            <button
+                              onClick={() => openMatch(hit)}
+                              className="cine-pill cine-pill--sm flex-shrink-0"
+                              aria-label={`Watch ${m.home.name} versus ${m.away.name}`}
+                            >
+                              <MonitorPlay className="w-3 h-3" /> Watch
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })
+              )}
+            </section>
+
+            {extraStreams.length > 0 && (
+              <section className="space-y-3">
+                <div className="cine-section-head">
+                  <h2 className="cine-section-title">More streams</h2>
+                  <span className="text-xs text-white/60">{extraStreams.length} match{extraStreams.length === 1 ? '' : 'es'}</span>
+                </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {upcoming.map((m) => (
+                  {extraStreams.map((m) => (
                     <MatchCard key={m.id} match={m} onWatch={openMatch} />
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+            )}
           </>
         )
       ) : updating && !table ? (
