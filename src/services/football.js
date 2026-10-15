@@ -183,6 +183,22 @@ export function findStreamFor(streamMatches, homeName, awayName) {
   return null;
 }
 
+// Short display name (scoreboard rows read crest + short name on
+// every reference): strip the same club-suffix noise the matcher
+// folds, from both ends. Display-only, always a subset of the real
+// name, never invented.
+const NAME_ARTICLES = new Set(['fc', 'afc', 'sc', 'cf', 'fk', 'sk', 'šk', 'ac', 'as', 'ss', 'us', 'ec', 'cd', 'ud', 'rc', 'bk', 'pae']);
+
+export function shortName(name) {
+  const words = String(name || '').split(/\s+/).filter(Boolean);
+  let lo = 0;
+  let hi = words.length;
+  while (lo < hi && NAME_ARTICLES.has(words[lo].toLowerCase().replace(/\./g, ''))) lo += 1;
+  while (hi > lo && NAME_ARTICLES.has(words[hi - 1].toLowerCase().replace(/\./g, ''))) hi -= 1;
+  const out = words.slice(lo, hi).join(' ');
+  return out || String(name || '');
+}
+
 export function formatKickoff(ms) {  if (!ms) return '';
   const d = new Date(ms);
   const now = new Date();

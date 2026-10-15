@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { normTable, normMatches, normScorers, isoDay, shiftDayIso, filterUtcDay } from '../src/services/fdata.js';
-import { clubKey, findStreamFor } from '../src/services/football.js';
+import { clubKey, findStreamFor, shortName } from '../src/services/football.js';
 
 describe('fdata standings truth', () => {
   const json = {
@@ -89,6 +89,16 @@ describe('day view competition + stream matching', () => {
     assert.equal(clubKey('FK Bodø/Glimt'), 'bodo glimt');
     assert.equal(clubKey('Man City'), 'manchester city');
     assert.equal(clubKey('PSG'), 'paris saint germain');
+  });
+  it('shortens names without inventing any', () => {
+    assert.equal(shortName('Manchester City FC'), 'Manchester City');
+    assert.equal(shortName('FC Porto'), 'Porto');
+    assert.equal(shortName('AS Roma'), 'Roma');
+    assert.equal(shortName('AC Milan'), 'Milan');
+    assert.equal(shortName('SE Palmeiras'), 'SE Palmeiras');
+    assert.equal(shortName('PAE AEK'), 'AEK');
+    assert.equal(shortName('Bodø/Glimt'), 'Bodø/Glimt');
+    assert.equal(shortName('Inter'), 'Inter');
   });
   it('matches both sides confidently or not at all', () => {
     const streams = [

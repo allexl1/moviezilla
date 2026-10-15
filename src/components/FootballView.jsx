@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
-import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, countdownTo, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
+import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, countdownTo, shortName, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
 import { liveAcross, matchEventId, matchEventAny, matchSummary, ESPN_SLUGS } from '../services/espn';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
@@ -387,6 +387,24 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
   // button (it could only ever show an error there).
   const covered = FCOMPS.some((c) => c.code === m.competition.code);
   const sched = covered && !m.finished && !m.delayed && !live;
+  // Season form for both sides (one cached table call, zero quota
+  // once cached — the OneFootball form-guide pattern, W/D/L dots).
+  const [form, setForm] = useState(null);
+  useEffect(() => {
+    if (!covered) return;
+    let alive = true;
+    fdata.table(m.competition.code).then((t) => {
+      if (!alive) return;
+      const rows = (t && t.total) || [];
+      setForm({
+        home: rows.find((r) => r.team.name === m.home.name) || null,
+        away: rows.find((r) => r.team.name === m.away.name) || null,
+      });
+    }).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [covered, m.competition.code, m.home.name, m.away.name]);
   const mpOpen = modelApi.modelId === m.id;
   const mpDone = modelApi.model?.id === m.id ? modelApi.model : null;
   const centerScore = live
@@ -554,6 +572,33 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
                     <span className="flex-1" />
                     <span className="bg-white/30" style={{ width: `${share(r.away)}%` }} />
                   </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {form && (form.home || form.away) && (
+        <section className="space-y-2">
+          <h3 className="cine-section-title">Form</h3>
+          <div className="mat-row px-4 py-3 space-y-2">
+            {[
+              [m.home, form.home],
+              [m.away, form.away],
+            ].map(([side, row]) => (
+              <div key={side.name} className="flex items-center gap-2.5">
+                <Crest name={side.name} crest={side.crest} size="w-6 h-6" />
+                <span className="flex-1 min-w-0 text-xs font-bold text-white truncate">{shortName(side.name)}</span>
+                {row ? (
+                  <>
+                    <FormDots form={row.form} />
+                    <span className="text-[11px] font-bold text-white/40 tabular-nums flex-shrink-0">
+                      {row.pos} · {row.points} pts
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[11px] text-white/30">—</span>
                 )}
               </div>
             ))}
@@ -1213,6 +1258,9 @@ function streamFixture(s) {
     hit: findStreamFor(streamPool, m.home.name, m.away.name),
     liveEv: findLive(m.home.name, m.away.name),
   }));
+  // Competition emblems ride the loaded day rows (zero quota): tabs
+  // show them when the day carries them, plain names otherwise.
+  const compEmblem = (code) => dayLoaded.rows.find((r) => r.competition.code === code)?.competition.emblem || '';
   const hitTitles = new Set(dayRows.filter((r) => r.hit).map((r) => r.hit.title));
   const extraStreams = upcoming.filter((u) => !hitTitles.has(u.title));
   const dayComps = [];
@@ -1271,6 +1319,7 @@ function streamFixture(s) {
             onClick={() => setComp(c.code)}
             className={`cine-pill cine-pill--sm flex-shrink-0${comp === c.code ? ' cine-pill--active' : ''}`}
           >
+            {compEmblem(c.code) && <Crest name={c.name} crest={compEmblem(c.code)} />}
             {c.name}
           </button>
         ))}
@@ -1365,9 +1414,13 @@ function streamFixture(s) {
                   if (group.length === 0) return null;
                   return (
                     <div key={c.code} className="space-y-2">
-                      <div className="flex items-center gap-2.5 pt-3">
+                      <div className="flex items-center gap-2.5 pt-4">
                         <Crest name={c.name} crest={group[0].m.competition.emblem} size="w-8 h-8" />
-                        <h3 className="text-base font-extrabold text-white tracking-tight">{group[0].m.competition.name || c.name}</h3>
+                        <h3 className="text-lg font-extrabold text-white tracking-tight">{group[0].m.competition.name || c.name}</h3>
+                        {roundLabel(group[0].m) && (
+                          <span className="cine-chip cine-chip--neutral flex-shrink-0">{roundLabel(group[0].m)}</span>
+                        )}
+                        <span className="text-[11px] font-bold text-white/35 tabular-nums flex-shrink-0">{group.length}</span>
                         <span className="flex-1" />
                         {FCOMPS.some((f) => f.code === c.code) && (
                           <button
@@ -1424,7 +1477,7 @@ function streamFixture(s) {
                             className="flex-1 min-w-0 flex items-center justify-end gap-2 cursor-pointer"
                             aria-label={`Open ${m.home.name}`}
                           >
-                            <span className="font-bold text-white text-[15px] truncate text-right hover:underline">{m.home.name}</span>
+                            <span className="font-bold text-white text-[15px] truncate text-right hover:underline">{shortName(m.home.name)}</span>
                             <Crest name={m.home.name} crest={m.home.crest} size="w-7 h-7" />
                           </button>
                           <button
@@ -1446,11 +1499,8 @@ function streamFixture(s) {
                             aria-label={`Open ${m.away.name}`}
                           >
                             <Crest name={m.away.name} crest={m.away.crest} size="w-7 h-7" />
-                            <span className="font-bold text-white text-[15px] truncate hover:underline">{m.away.name}</span>
+                            <span className="font-bold text-white text-[15px] truncate hover:underline">{shortName(m.away.name)}</span>
                           </button>
-                          <span className="hidden xl:block w-28 flex-shrink-0 text-right text-[11px] text-white/40 truncate">
-                            {roundLabel(m)}
-                          </span>
                           {hit && (
                             <button
                               onClick={(e) => {

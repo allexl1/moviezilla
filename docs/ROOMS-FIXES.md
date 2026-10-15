@@ -587,6 +587,28 @@ chevrons, Monday-first grid, dimmed edge days tappable, white
 selected day like every selected pill, ringed today, Today button,
 Escape/backdrop close). Date picking proven mobile (Wed 14 Oct
 lands UCL rows, zero overflow).
+Full redesign from 10 verified sources (landed, headless-proven
+desktop + 390px zero-overflow, suite 68/68). Sources loaded and read
+this session: BBC Sport home, OneFootball home, OneFootball matches,
+BBC scores-fixtures, OneFootball Fluminense-Palmeiras match page, BBC
+Fluminense-Palmeiras live page, LiveScore, UEFA comp hub, BeSoccer
+livescore, Sky Sports fixtures. (ESPN web empty, Dribbble empty,
+Mobbin login-walled, Exa rate-limited, FotMob/SofaScore/soccer365
+bot-wall 403s — all refused as unseen.) Adopted: crest + short-name
+rows with centered score voice, whole row to match page, live
+score + minute rows, comp groups with emblem + stage chip + count +
+table link, date strip + month popover, ALL/WATCHABLE/FINISHED
+filters, tabbed-section match page order (events, stats, form,
+squads, info), per-team form guides, short names as display-only
+subsets (suffix strip incl. PAE/SK variants, unit-tested), comp tabs
+with zero-quota emblems from loaded day rows. Refused: purple glow
+(white-primary violation), zone-tinted tables (rules vary, would
+lie), news rail (no free source), favorites system (all 10 have it
+but it needs a storage design + owner call first), prediction poll
+(our Poisson Model stays, never bets language). Ratings exist
+nowhere free, stated on-page nowhere. Upstream gaps honored: CL
+table form is null (dots honestly show none), Conference League has
+no verified ESPN slug (left out of the sweep).
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 
