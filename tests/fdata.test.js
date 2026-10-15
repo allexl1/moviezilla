@@ -84,6 +84,8 @@ describe('day view competition + stream matching', () => {
   it('normalizes club noise and aliases', () => {
     assert.equal(clubKey('FC Porto'), 'porto');
     assert.equal(clubKey('Fenerbahçe SK'), 'fenerbahce');
+    assert.equal(clubKey('D.C. United'), 'dc united');
+    assert.equal(clubKey('Red Bull New York'), 'new york red bulls');
     assert.equal(clubKey('FK Bodø/Glimt'), 'bodo glimt');
     assert.equal(clubKey('Man City'), 'manchester city');
     assert.equal(clubKey('PSG'), 'paris saint germain');

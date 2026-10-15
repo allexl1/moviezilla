@@ -555,6 +555,38 @@ clubs now show a real page (proven: Fluminense CLI modal went from
 "Could not load" to 5 results + 5 fixtures, no table line, no
 scorers). CLI standings 502 as expected (not on free), team season
 200. Antislop mode this session: during (session override).
+Match page data round (landed, headless-proven): the empty page was
+the dates-scoped scoreboard (verified live: dates= param returns zero
+events, the plain current-round board carries the round). Resolve now
+reads the plain board. Pages gained a Team stats section (possession
+dual bar plus shots/on-target/corners/fouls/offsides/saves/
+interceptions/passes/tackles from boxscore, home/away order verified
+against fixture names) and a header-live fallback (status + scores
+ride the summary). Rosters fixed to the real shape (athletes nest
+under `athlete`, no headshots on this pipe, position SUB marks bench,
+starters sort first). Penalty goals misread as red cards fixed
+('penalty---scored' contains the letters "red", exact kinds now).
+Whole day rows tap to the match page (team/Watch/Model buttons stop
+propagation, keyboard Enter/Space works); comp fixture scores open it
+too. Stream cards (Live now, More streams) open real match pages via
+an ESPN sweep over 20 verified slugs (added usa.1 mex.1 arg.1
+sudamericana tur.1 sco.1; conference unverified, left out), proven on
+DC United vs NY Red Bulls (live 42', 1-0, events, stats). Sweep needed
+two matcher fixes: dots glue abbreviations (D.C. United) plus a Red
+Bull New York alias. League audit: the free day feed emits our 12
+codes plus CLI only, every one already slug-mapped. No ratings exist
+on any free pipe (Opta paid, club/league apps proprietary), so pages
+show everything else ESPN gives. Suite 67/67.
+Crest + calendar round (landed, headless-proven desktop + 390px):
+tiles stay light (inverting dark logos to white would bleach every
+colored crest, and no automatic rule separates the two) but are
+square with padding now — the circle cropped wide emblems (UCL
+starball). Team header and player-club crests tiled too. Native date
+picker replaced with a Moviezilla month popover (glass panel, icon
+chevrons, Monday-first grid, dimmed edge days tappable, white
+selected day like every selected pill, ringed today, Today button,
+Escape/backdrop close). Date picking proven mobile (Wed 14 Oct
+lands UCL rows, zero overflow).
 
 ## Incoming (friend test session — batches 1+2 filed above as P3/P0/P6)
 

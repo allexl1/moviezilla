@@ -143,11 +143,15 @@ const CLUB_ALIAS = {
   'spurs': 'tottenham hotspur',
   'inter': 'internazionale',
   'west ham': 'west ham united',
+  'red bull new york': 'new york red bulls',
 };
 
 export function clubKey(name) {
   const folded = String(name || '')
     .toLowerCase()
+    // Dots glue abbreviations ("D.C. United" must read "dc united",
+    // not "d c united"), so drop them before the noise pass.
+    .replace(/\./g, '')
     .replace(/[øœ]/g, 'o')
     .replace(/æ/g, 'ae')
     .replace(/[åä]/g, 'a')

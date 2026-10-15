@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, ArrowLeft, RefreshCw, Radio, ExternalLink, MonitorPlay, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
 import { football, FOOTBALL_MIRRORS, formatKickoff, formatTime, countdownTo, getPreferredStream, setPreferredStream, findStreamFor, sideHit } from '../services/football';
-import { liveAcross, matchEventId, matchSummary, ESPN_SLUGS } from '../services/espn';
+import { liveAcross, matchEventId, matchEventAny, matchSummary, ESPN_SLUGS } from '../services/espn';
 import { fdata, FCOMPS, isoDay, shiftDayIso } from '../services/fdata';
 import { leagueAverages, formOf, predictMatch } from '../services/predict';
 import { playerPhoto, playerCard, flagUrlFor } from '../services/tsdb';
@@ -9,10 +9,19 @@ import Modal from './ui/Modal';
 import EmptyState from './ui/EmptyState';
 import SegmentedControl from './ui/SegmentedControl';
 
-function MatchCard({ match, onWatch }) {
+function MatchCard({ match, onOpen }) {
   return (
     <div
-      onClick={() => onWatch(match)}
+      onClick={() => onOpen(match)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(match);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${match.title} match page`}
       className="mat-row p-4 cursor-pointer space-y-2.5"
     >
       <div className="flex items-center justify-between gap-2">
@@ -38,18 +47,18 @@ function MatchCard({ match, onWatch }) {
           {match.sources.length} source{match.sources.length === 1 ? '' : 's'}
         </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--cine-accent)]">
-          <MonitorPlay className="w-3.5 h-3.5" /> Watch
+          <ChevronRight className="w-3.5 h-3.5" /> Details
         </span>
       </div>
     </div>
   );
 }
 
-// Team crest with an initial-chip fallback (remote art dies silently;
-// a letter always renders — never a broken-image icon).
-// Team crest with a light tile (dark badges like Eredivisie vanish on
-// dark chrome — the tile keeps every logo readable) and an initial
-// fallback when remote art dies.
+// Team crest on a light squarish tile (dark badges like Eredivisie
+// vanish on dark chrome, so the tile stays; the tile is square with
+// padding because the old circle cropped wide emblems like the UCL
+// starball). Dead art falls back to an initial chip, never a broken
+// icon.
 function Crest({ name, crest, size = 'w-6 h-6' }) {
   const [dead, setDead] = useState(false);
   if (!crest || dead) {
@@ -68,7 +77,7 @@ function Crest({ name, crest, size = 'w-6 h-6' }) {
       alt=""
       loading="lazy"
       onError={() => setDead(true)}
-      className={`${size} object-contain flex-shrink-0 rounded-full bg-white/[0.92] p-[3px]`}
+      className={`${size} object-contain flex-shrink-0 rounded-[7px] bg-white/[0.92] p-1`}
     />
   );
 }
@@ -122,10 +131,49 @@ const VENUES = [
   { id: 'away', name: 'Away' },
 ];
 
+// Day stepper with a Moviezilla month popover in the middle (cine
+// panel, icon buttons, white selected day like every selected pill).
+// Monday-first grid, dimmed edge days stay tappable, Escape and the
+// backdrop close it.
+function monthCells(viewYm) {
+  const [y, mo] = String(viewYm).split('-').map(Number);
+  const first = new Date(y, mo - 1, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const daysIn = new Date(y, mo, 0).getDate();
+  const daysPrev = new Date(y, mo - 1, 0).getDate();
+  const cells = [];
+  for (let i = lead; i > 0; i -= 1) {
+    const dt = new Date(y, mo - 2, daysPrev - i + 1);
+    cells.push({ key: `p${i}`, iso: isoDay(dt), outside: true, label: dt.getDate() });
+  }
+  for (let d = 1; d <= daysIn; d += 1) {
+    const dt = new Date(y, mo - 1, d);
+    cells.push({ key: `c${d}`, iso: isoDay(dt), outside: false, label: d });
+  }
+  let n = 1;
+  while (cells.length % 7 !== 0) {
+    const dt = new Date(y, mo, n);
+    cells.push({ key: `n${n}`, iso: isoDay(dt), outside: true, label: n });
+    n += 1;
+  }
+  return cells;
+}
+
+function monthTitle(viewYm) {
+  const [y, mo] = String(viewYm).split('-').map(Number);
+  return new Date(y, mo - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+}
+
+function shiftViewYm(viewYm, delta) {
+  const [y, mo] = String(viewYm).split('-').map(Number);
+  const d = new Date(y, mo - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // Day stepper with a real calendar in the middle: side buttons step
-// days showing their dates, the middle pill opens the native date
-// picker (a transparent input over the label — real month view on
-// every platform, zero custom calendar code to maintain).
+// days showing their dates, the middle pill opens the month popover
+// above (a transparent input over the label used to open the native
+// picker — replaced so the calendar speaks the app language).
 function shortDay(iso) {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return '';
@@ -142,6 +190,27 @@ function DayPicker({ day, onChange }) {
   const today = isoDay();
   const prev = shiftDayIso(day, -1);
   const next = shiftDayIso(day, 1);
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState(() => day.slice(0, 7));
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+  const openCal = () => {
+    setView(day.slice(0, 7));
+    setOpen(true);
+  };
+  const pick = (iso) => {
+    setOpen(false);
+    onChange(iso);
+  };
   return (
     <div className="flex items-center gap-1.5">
       <button
@@ -153,23 +222,82 @@ function DayPicker({ day, onChange }) {
         <span className="cine-tip" aria-hidden="true">{longDay(prev)}</span>
       </button>
       <span className="text-[11px] font-bold text-white/45 hidden sm:block">{shortDay(prev)}</span>
-      <label
-        className="relative cine-pill cine-pill--sm flex-shrink-0 cursor-pointer overflow-hidden"
-        aria-label={day === today ? `Today, ${longDay(day)}. Activate to pick a date.` : `${longDay(day)}. Activate to pick a date.`}
-      >
-        <span aria-hidden="true">{day === today ? `Today, ${longDay(day).split(', ')[1] || longDay(day)}` : longDay(day)}</span>
-        <input
-          type="date"
-          value={day}
-          onChange={(e) => {
-            if (e.target.value) onChange(e.target.value);
-          }}
-          className="absolute inset-0 opacity-0 cursor-pointer"
-          style={{ colorScheme: 'dark', accentColor: 'var(--cine-accent)' }}
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-      </label>
+      <span className="relative flex-shrink-0">
+        <button
+          onClick={() => (open ? setOpen(false) : openCal())}
+          className="cine-pill cine-pill--sm"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label={day === today ? `Today, ${longDay(day)}. Activate to pick a date.` : `${longDay(day)}. Activate to pick a date.`}
+        >
+          <Calendar className="w-3 h-3" />
+          <span aria-hidden="true">{day === today ? `Today, ${longDay(day).split(', ')[1] || longDay(day)}` : longDay(day)}</span>
+        </button>
+        {open && (
+          <>
+            <span className="fixed inset-0 z-20 cursor-default" onClick={() => setOpen(false)} aria-hidden="true" />
+            <span
+              role="dialog"
+              aria-label="Pick a date"
+              className="absolute right-0 top-full mt-2 z-30 w-64 rounded-3xl cine-glass-panel p-3 space-y-2"
+            >
+              <span className="flex items-center gap-1">
+                <button
+                  onClick={() => setView(shiftViewYm(view, -1))}
+                  className="cine-icon-btn cine-icon-btn--xs"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="flex-1 text-center text-sm font-extrabold text-white">{monthTitle(view)}</span>
+                <button
+                  onClick={() => setView(shiftViewYm(view, 1))}
+                  className="cine-icon-btn cine-icon-btn--xs"
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </span>
+              <span className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white/35" aria-hidden="true">
+                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((w) => (
+                  <span key={w} className="py-1">{w}</span>
+                ))}
+              </span>
+              <span className="grid grid-cols-7 gap-0.5">
+                {monthCells(view).map((c) => {
+                  const selected = c.iso === day;
+                  const isToday = c.iso === today;
+                  return (
+                    <button
+                      key={c.key}
+                      onClick={() => pick(c.iso)}
+                      aria-label={c.iso === today ? `Today, ${c.iso}` : c.iso}
+                      aria-pressed={selected}
+                      className={`w-8 h-8 mx-auto rounded-full text-xs tabular-nums transition cursor-pointer ${
+                        selected
+                          ? 'bg-[var(--cine-white)] text-[var(--cine-bg)] font-black'
+                          : c.outside
+                            ? 'text-white/30 hover:text-white font-semibold'
+                            : isToday
+                              ? 'text-white font-bold ring-1 ring-white/50 hover:bg-white/10'
+                              : 'text-white/75 font-semibold hover:bg-white/10'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </span>
+              <button
+                onClick={() => pick(today)}
+                className="cine-pill cine-pill--sm w-full justify-center"
+              >
+                Today
+              </button>
+            </span>
+          </>
+        )}
+      </span>
       <span className="text-[11px] font-bold text-white/45 hidden sm:block">{shortDay(next)}</span>
       <button
         onClick={() => onChange(next)}
@@ -189,21 +317,29 @@ function DayPicker({ day, onChange }) {
 // no odds section. Scheduled matches show countdown + model, live
 // shows the minute, finished shows FT.
 function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
-  const slug = ESPN_SLUGS[m.competition.code] || '';
-  const [sum, setSum] = useState(() => (slug ? undefined : null));
+  const directSlug = ESPN_SLUGS[m.competition.code] || '';
+  const needsResolve = Boolean(directSlug || m.sweep);
+  const [sum, setSum] = useState(() => (needsResolve ? undefined : null));
+  const [resolved, setResolved] = useState(null);
   useEffect(() => {
-    if (!slug) return;
+    if (!needsResolve) return;
     let alive = true;
     (async () => {
       try {
-        const dayIso = new Date(m.utc).toISOString().slice(0, 10);
-        const id = await matchEventId(slug, m.home.name, m.away.name, dayIso);
+        let r = null;
+        if (directSlug) {
+          const id = await matchEventId(directSlug, m.home.name, m.away.name);
+          if (id) r = { slug: directSlug, id };
+        } else {
+          r = await matchEventAny(m.home.name, m.away.name);
+        }
         if (!alive) return;
-        if (!id) {
+        if (!r) {
           setSum(null);
           return;
         }
-        const s = await matchSummary(slug, id);
+        setResolved(r);
+        const s = await matchSummary(r.slug, r.id, m.home.name, m.away.name);
         if (alive) setSum(s);
       } catch {
         if (alive) setSum(null);
@@ -212,16 +348,24 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
     return () => {
       alive = false;
     };
-  }, [slug, m.id, m.home.name, m.away.name, m.utc]);
+  }, [needsResolve, directSlug, m.sweep, m.id, m.home.name, m.away.name, m.utc]);
   useEffect(() => {
-    if (!slug) return;
+    if (!needsResolve) return;
     const t = setInterval(() => {
       (async () => {
         try {
-          const dayIso = new Date(m.utc).toISOString().slice(0, 10);
-          const id = await matchEventId(slug, m.home.name, m.away.name, dayIso);
-          if (!id) return;
-          const s = await matchSummary(slug, id);
+          let r = resolved;
+          if (!r) {
+            if (directSlug) {
+              const id = await matchEventId(directSlug, m.home.name, m.away.name);
+              if (id) r = { slug: directSlug, id };
+            } else {
+              r = await matchEventAny(m.home.name, m.away.name);
+            }
+            if (!r) return;
+            setResolved(r);
+          }
+          const s = await matchSummary(r.slug, r.id, m.home.name, m.away.name);
           setSum(s);
         } catch {
           // keep the last good snapshot
@@ -229,17 +373,24 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
       })();
     }, 90000);
     return () => clearInterval(t);
-  }, [slug, m.id, m.home.name, m.away.name, m.utc]);
+  }, [needsResolve, directSlug, resolved, m.sweep, m.id, m.home.name, m.away.name, m.utc]);
 
-  const countdown = !m.finished && !liveEv ? countdownTo(m.utc) : null;
+  // Live truth: the day overlay first, the summary header second (it
+  // carries state + scores, which is how stream pages go live without
+  // an overlay row).
+  const headerLive = sum && sum.header && sum.header.state === 'in'
+    ? { clock: sum.header.clock, home: sum.header.home, away: sum.header.away }
+    : null;
+  const live = liveEv || headerLive;
+  const countdown = !m.finished && !live ? countdownTo(m.utc) : null;
   // Model needs a season table, so uncovered competitions get no
   // button (it could only ever show an error there).
   const covered = FCOMPS.some((c) => c.code === m.competition.code);
-  const sched = covered && !m.finished && !m.delayed && !liveEv;
+  const sched = covered && !m.finished && !m.delayed && !live;
   const mpOpen = modelApi.modelId === m.id;
   const mpDone = modelApi.model?.id === m.id ? modelApi.model : null;
-  const centerScore = liveEv
-    ? `${liveEv.home.score ?? 0} - ${liveEv.away.score ?? 0}`
+  const centerScore = live
+    ? `${live.home.score ?? 0} - ${live.away.score ?? 0}`
     : m.finished || m.delayed
       ? `${m.home.score ?? 0} - ${m.away.score ?? 0}`
       : null;
@@ -271,10 +422,10 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
           </span>
           <span className="flex-1 min-w-0 font-bold text-white text-sm truncate">{m.away.name}</span>
           <Crest name={m.away.name} crest={m.away.crest} size="w-7 h-7" />
-          {liveEv && (
+          {live && (
             <span className="inline-flex items-center gap-1 text-[11px] font-black text-red-400 flex-shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
-              {liveEv.clock}
+              {live.clock}
             </span>
           )}
         </div>
@@ -287,13 +438,17 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
             <Crest name={m.home.name} crest={m.home.crest} size="w-14 h-14" />
           </span>
           <div>
-            <button
-              onClick={() => onOpenTeam({ code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
-              className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
-              aria-label={`Open ${m.home.name}`}
-            >
-              {m.home.name}
-            </button>
+            {m.competition.code ? (
+              <button
+                onClick={() => onOpenTeam({ code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
+                className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
+                aria-label={`Open ${m.home.name}`}
+              >
+                {m.home.name}
+              </button>
+            ) : (
+              <span className="font-bold text-white text-sm md:text-base">{m.home.name}</span>
+            )}
           </div>
         </div>
         <div className="flex-shrink-0 text-center space-y-1">
@@ -305,7 +460,7 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
             <p className="text-xl font-black text-white">{formatTime(m.utc)}</p>
           )}
           <p className="text-[11px] font-bold text-white/55">
-            {liveEv ? `Live • ${liveEv.clock}` : m.finished ? 'Full time' : m.delayed ? 'Delayed' : formatKickoff(m.utc)}
+            {live ? `Live • ${live.clock}` : m.finished ? 'Full time' : m.delayed ? 'Delayed' : m.streamLive ? 'Live now' : formatKickoff(m.utc)}
           </p>
         </div>
         <div className="flex-1 min-w-0 text-center space-y-2">
@@ -313,13 +468,17 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
             <Crest name={m.away.name} crest={m.away.crest} size="w-14 h-14" />
           </span>
           <div>
-            <button
-              onClick={() => onOpenTeam({ code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
-              className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
-              aria-label={`Open ${m.away.name}`}
-            >
-              {m.away.name}
-            </button>
+            {m.competition.code ? (
+              <button
+                onClick={() => onOpenTeam({ code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
+                className="font-bold text-white text-sm md:text-base hover:underline cursor-pointer"
+                aria-label={`Open ${m.away.name}`}
+              >
+                {m.away.name}
+              </button>
+            ) : (
+              <span className="font-bold text-white text-sm md:text-base">{m.away.name}</span>
+            )}
           </div>
         </div>
       </div>
@@ -378,6 +537,30 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
         </section>
       )}
 
+      {sum && sum.stats && (
+        <section className="space-y-2">
+          <h3 className="cine-section-title">Team stats</h3>
+          <div className="mat-row px-4 py-3 space-y-2.5">
+            {sum.stats.rows.map((r) => (
+              <div key={r.label} className="space-y-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="flex-1 text-left font-black text-white tabular-nums">{r.home ?? '—'}</span>
+                  <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider text-white/40">{r.label}</span>
+                  <span className="flex-1 text-right font-black text-white tabular-nums">{r.away ?? '—'}</span>
+                </div>
+                {r.label === 'Possession' && (
+                  <div className="flex h-1.5 rounded-full overflow-hidden bg-white/10" aria-hidden="true">
+                    <span className="bg-white/70" style={{ width: `${share(r.home)}%` }} />
+                    <span className="flex-1" />
+                    <span className="bg-white/30" style={{ width: `${share(r.away)}%` }} />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {sum && sum.rosters.length > 0 && (
         <section className="space-y-3">
           <h3 className="cine-section-title">Squads</h3>
@@ -389,13 +572,9 @@ function MatchView({ m, hit, liveEv, onBack, onWatch, onOpenTeam, modelApi }) {
                 </h4>
                 {g.players.map((p, pi) => (
                   <div key={`${p.name}_${pi}`} className="mat-row px-3 py-1.5 flex items-center gap-2.5">
-                    {p.photo ? (
-                      <img src={p.photo} alt="" loading="lazy" className="w-7 h-7 rounded-full object-cover bg-white/5 flex-shrink-0" />
-                    ) : (
-                      <span className="w-7 h-7 rounded-full bg-white/10 text-white/60 text-[10px] font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
-                        {(p.short || p.name || '?').slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
+                    <span className="w-7 h-7 rounded-full bg-white/10 text-white/60 text-[10px] font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                      {(p.short || p.name || '?').slice(0, 1).toUpperCase()}
+                    </span>
                     {p.jersey != null && (
                       <span className="w-6 flex-shrink-0 text-[11px] font-black text-white/40 tabular-nums">{p.jersey}</span>
                     )}
@@ -449,6 +628,13 @@ function fixtureLabel(m) {
   if (m.status === 'SUSPENDED') return 'Suspended';
   if (m.status === 'CANCELLED') return 'Cancelled';
   return formatTime(m.utc);
+}
+
+// Possession "35.8" → bar share, clamped. Unparseable reads 50/50.
+function share(v) {
+  const n = Number.parseFloat(v);
+  if (!Number.isFinite(n)) return 50;
+  return Math.min(100, Math.max(0, n));
 }
 
 // Round column (soccer365 anatomy): matchday number wins, else the
@@ -542,7 +728,7 @@ function TeamView({ team, code, onOpenPlayer }) {
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         {team.crest ? (
-          <img src={team.crest} alt="" className="w-16 h-16 object-contain flex-shrink-0" />
+          <img src={team.crest} alt="" className="w-16 h-16 object-contain flex-shrink-0 rounded-2xl bg-white/[0.92] p-1.5" />
         ) : (
           <span className="w-16 h-16 rounded-full bg-white/10 text-white/70 text-2xl font-black flex items-center justify-center flex-shrink-0" aria-hidden="true">
             {(team.name || '?').slice(0, 1).toUpperCase()}
@@ -662,7 +848,7 @@ function PlayerView({ name, team, goals, crest }) {
           {(team || card?.team) && (
             <p className="text-white/75 flex items-center gap-2">
               <span className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Club</span>
-              {crest && <img src={crest} alt="" className="w-5 h-5 object-contain" />}
+              {crest && <img src={crest} alt="" className="w-5 h-5 object-contain rounded-[4px] bg-white/[0.92] p-[2px]" />}
               {team || card?.team}
             </p>
           )}
@@ -820,6 +1006,33 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
       alive = false;
     };
   }, [comp, day, dataRetry, loaded.key, queryKey]);
+
+// Stream-only matches carry no data fixture, so the page builds a
+// thin one: names + kickoff + league from the feed, everything else
+// resolves through the ESPN sweep after open.
+function streamFixture(s) {
+  const sides = String(s?.title || '').split(' vs ');
+  const home = s?.home || sides[0] || '';
+  const away = s?.away || sides[1] || '';
+  return {
+    id: `stream_${s?.id || `${home}_${away}`}`,
+    utc: s?.kickoffMs || 0,
+    status: s?.live ? 'IN_PLAY' : 'SCHEDULED',
+    stage: '',
+    matchday: null,
+    delayed: false,
+    finished: false,
+    streamLive: Boolean(s?.live),
+    sweep: true,
+    competition: { code: '', name: s?.league || (s?.live ? 'Live' : 'Upcoming'), emblem: '' },
+    home: { id: 0, name: home, crest: '', score: null },
+    away: { id: 0, name: away, crest: '', score: null },
+  };
+}
+
+  const openStreamPage = (s) => {
+    setMatchPage({ m: streamFixture(s), hit: s });
+  };
 
   const openMatch = async (match) => {
     setWatching(match);
@@ -1089,7 +1302,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {live.map((m) => (
-                    <MatchCard key={m.id} match={m} onWatch={openMatch} />
+                    <MatchCard key={m.id} match={m} onOpen={openStreamPage} />
                   ))}
                 </div>
               </section>
@@ -1176,7 +1389,19 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                         const sched = FCOMPS.some((c) => c.code === m.competition.code) && !m.finished && !m.delayed && !liveEv;
                         return (
                           <div key={m.id}>
-                            <div className="mat-row px-3 py-2.5 flex items-center gap-2">
+                            <div
+                              className="mat-row px-3 py-2.5 flex items-center gap-2 cursor-pointer"
+                              onClick={() => setMatchPage({ m, hit })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setMatchPage({ m, hit });
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Open ${m.home.name} versus ${m.away.name} match page`}
+                            >
                           <span className="w-14 flex-shrink-0 text-[11px] font-bold">
                             {liveEv ? (
                               <span className="inline-flex items-center gap-1 text-red-400">
@@ -1192,7 +1417,10 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                             )}
                           </span>
                           <button
-                            onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfile({ kind: 'team', code: m.competition.code, id: m.home.id, name: m.home.name, crest: m.home.crest });
+                            }}
                             className="flex-1 min-w-0 flex items-center justify-end gap-2 cursor-pointer"
                             aria-label={`Open ${m.home.name}`}
                           >
@@ -1200,14 +1428,20 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                             <Crest name={m.home.name} crest={m.home.crest} size="w-7 h-7" />
                           </button>
                           <button
-                            onClick={() => setMatchPage({ m, hit })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMatchPage({ m, hit });
+                            }}
                             className="flex-shrink-0 w-16 text-center text-lg font-black text-white tabular-nums cursor-pointer hover:text-[var(--cine-accent)] transition"
                             aria-label={`Open ${m.home.name} versus ${m.away.name} match page`}
                           >
                             {liveEv ? `${liveEv.home.score ?? 0} - ${liveEv.away.score ?? 0}` : m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : <span className="text-white/35 font-semibold text-sm">vs</span>}
                           </button>
                           <button
-                            onClick={() => setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest });
+                            }}
                             className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
                             aria-label={`Open ${m.away.name}`}
                           >
@@ -1219,7 +1453,10 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                           </span>
                           {hit && (
                             <button
-                              onClick={() => openMatch(hit)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openMatch(hit);
+                              }}
                               className="cine-pill cine-pill--sm flex-shrink-0"
                               aria-label={`Watch ${m.home.name} versus ${m.away.name}`}
                             >
@@ -1228,7 +1465,10 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                           )}
                           {sched && (
                             <button
-                              onClick={() => openModel(m)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openModel(m);
+                              }}
                               className="cine-pill cine-pill--sm flex-shrink-0"
                               aria-expanded={modelOpen}
                               aria-label={`Model prediction for ${m.home.name} versus ${m.away.name}`}
@@ -1259,7 +1499,7 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {extraStreams.map((m) => (
-                    <MatchCard key={m.id} match={m} onWatch={openMatch} />
+                    <MatchCard key={m.id} match={m} onOpen={openStreamPage} />
                   ))}
                 </div>
               </section>
@@ -1361,14 +1601,21 @@ export default function FootballView({ onToast }) {  const [live, setLive] = use
                       <span className="font-semibold text-white text-sm truncate text-right hover:underline">{m.home.name}</span>
                       <Crest name={m.home.name} crest={m.home.crest} />
                     </button>
-                    <span className="flex-shrink-0 min-w-12 text-center text-sm font-black text-white tabular-nums" aria-label={m.finished || m.delayed ? `Score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : 'Versus'}>
-                      {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : 'vs'}
-                    </span>
                     <button
-                      onClick={() => setProfile({ kind: 'team', code: comp, id: m.away.id, name: m.away.name, crest: m.away.crest })}
-                      className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
-                      aria-label={`Open ${m.away.name}`}
+                      onClick={() => setMatchPage({ m, hit: null })}
+                      className="flex-shrink-0 min-w-12 text-center text-sm font-black text-white tabular-nums cursor-pointer hover:text-[var(--cine-accent)] transition"
+                      aria-label={m.finished || m.delayed ? `Open match page, score ${m.home.score ?? 0} to ${m.away.score ?? 0}` : `Open ${m.home.name} versus ${m.away.name} match page`}
                     >
+                      {m.finished || m.delayed ? `${m.home.score ?? 0} - ${m.away.score ?? 0}` : 'vs'}
+                    </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfile({ kind: 'team', code: m.competition.code, id: m.away.id, name: m.away.name, crest: m.away.crest });
+                            }}
+                            className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer text-left"
+                            aria-label={`Open ${m.away.name}`}
+                          >
                       <Crest name={m.away.name} crest={m.away.crest} />
                       <span className="font-semibold text-white text-sm truncate hover:underline">{m.away.name}</span>
                     </button>
